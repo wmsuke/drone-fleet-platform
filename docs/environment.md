@@ -12,22 +12,22 @@ cp .env.example .env
 
 `.env.example`にはローカル開発用のダミー値だけを置く。コピー後の`.env`はGitの管理対象外であり、必要に応じて各自の環境で値を変更する。
 
-現在の変数は、後続のDocker Composeと各サービスの実装で使用するローカル構成の初期値である。現時点のworkspaceはこれらを読み込まない。
+現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。現時点のworkspaceはこれらを読み込まないため、設定だけでサービスが起動することを意味しない。
 
 ## 設定項目
 
-| 変数 | 用途 | サンプル値 |
-|---|---|---|
-| `POSTGRES_HOST` | PostgreSQLのホスト名 | `postgres` |
-| `POSTGRES_PORT` | PostgreSQLのTCPポート | `5432` |
-| `POSTGRES_DB` | PostgreSQLのデータベース名 | `drone_fleet` |
-| `POSTGRES_USER` | PostgreSQLのユーザー名 | `drone_fleet` |
-| `POSTGRES_PASSWORD` | PostgreSQLのパスワード | `local-development-only` |
-| `MQTT_HOST` | MQTTブローカーのホスト名 | `mosquitto` |
-| `MQTT_PORT` | MQTTブローカーのTCPポート | `1883` |
-| `DRONE_COUNT` | シミュレータが起動する仮想ドローン数 | `10` |
+| 変数 | 用途 |
+|---|---|
+| `POSTGRES_HOST` | PostgreSQLのホスト名 |
+| `POSTGRES_PORT` | PostgreSQLのTCPポート |
+| `POSTGRES_DB` | PostgreSQLのデータベース名 |
+| `POSTGRES_USER` | PostgreSQLのユーザー名 |
+| `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
+| `MQTT_HOST` | MQTTブローカーのホスト名 |
+| `MQTT_PORT` | MQTTブローカーのTCPポート |
+| `DRONE_COUNT` | シミュレータが起動する仮想ドローン数 |
 
-サンプルのホスト名`postgres`と`mosquitto`は、Docker Compose内で使用するサービス名を想定している。ホストOSからサービスを直接起動する場合は、接続可能なホスト名へ変更する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
+値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルのホスト名`postgres`と`mosquitto`は、Docker Compose内で使用するサービス名を想定している。ホストOSからサービスを直接起動する場合は、コピーした`.env`で接続可能なホスト名へ変更する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
 
 ## 秘密情報の扱い
 
