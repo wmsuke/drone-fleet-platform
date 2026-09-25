@@ -27,12 +27,12 @@ pnpm check
 
 個別のコマンドは次のとおり。
 
-| コマンド | 内容 |
-|---|---|
-| `pnpm lint` | ESLintとPrettierによる静的検査 |
-| `pnpm typecheck` | 全workspaceの型チェック |
-| `pnpm test` | Vitestによるテスト |
-| `pnpm build` | 全workspaceのビルド |
+| コマンド         | 内容                           |
+| ---------------- | ------------------------------ |
+| `pnpm lint`      | ESLintとPrettierによる静的検査 |
+| `pnpm typecheck` | 全workspaceの型チェック        |
+| `pnpm test`      | Vitestによるテスト             |
+| `pnpm build`     | 全workspaceのビルド            |
 
 アプリの起動方法は実装後に記載する。ローカル環境では、`docker compose up`で全サービスを起動できる構成を目指す。
 
