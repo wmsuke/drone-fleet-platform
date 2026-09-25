@@ -25,6 +25,14 @@ pnpm install
 pnpm check
 ```
 
+ローカルサービス用の環境変数は、サンプルをコピーして準備する。
+
+```bash
+cp .env.example .env
+```
+
+サンプル値はローカル開発専用であり、現在のworkspaceはまだこれらの変数を読み込まない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
+
 個別のコマンドは次のとおり。
 
 | コマンド         | 内容                           |
@@ -43,4 +51,5 @@ Phase 0ではテスト対象の機能がまだないため、テストが0件で
 - [システム構成](docs/architecture.md)
 - [通信仕様](docs/protocol.md)
 - [ロードマップ](docs/roadmap.md)
+- [環境変数と秘密情報](docs/environment.md)
 - [開発ルール](AGENTS.md)
