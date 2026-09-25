@@ -15,9 +15,26 @@
 - 機体一覧と詳細の表示
 - 遠隔コマンドの送信と受領確認
 
-## 起動方法
+## 開発環境
 
-アプリの実装後に記載する。ローカル環境では、`docker compose up`で全サービスを起動できる構成を目指す。
+Node.js 22以上とpnpm 10以上を使用する。依存関係をインストールした後、リポジトリのルートで共通の検証コマンドを実行できる。
+
+```bash
+corepack enable
+pnpm install
+pnpm check
+```
+
+個別のコマンドは次のとおり。
+
+| コマンド | 内容 |
+|---|---|
+| `pnpm lint` | ESLintとPrettierによる静的検査 |
+| `pnpm typecheck` | 全workspaceの型チェック |
+| `pnpm test` | Vitestによるテスト |
+| `pnpm build` | 全workspaceのビルド |
+
+アプリの起動方法は実装後に記載する。ローカル環境では、`docker compose up`で全サービスを起動できる構成を目指す。
 
 ## 設計と開発計画
 
