@@ -18,15 +18,16 @@ cp .env.example .env
 
 | 変数 | 用途 | サンプル値 |
 |---|---|---|
+| `POSTGRES_HOST` | PostgreSQLのホスト名 | `postgres` |
+| `POSTGRES_PORT` | PostgreSQLのTCPポート | `5432` |
 | `POSTGRES_DB` | PostgreSQLのデータベース名 | `drone_fleet` |
 | `POSTGRES_USER` | PostgreSQLのユーザー名 | `drone_fleet` |
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード | `local-development-only` |
-| `DATABASE_URL` | APIとMQTT受信処理が使用するPostgreSQL接続先 | `postgresql://drone_fleet:local-development-only@postgres:5432/drone_fleet` |
 | `MQTT_HOST` | MQTTブローカーのホスト名 | `mosquitto` |
 | `MQTT_PORT` | MQTTブローカーのTCPポート | `1883` |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローン数 | `10` |
 
-サンプルのホスト名`postgres`と`mosquitto`は、Docker Compose内で使用するサービス名を想定している。ホストOSからサービスを直接起動する場合は、接続可能なホスト名へ変更する。
+サンプルのホスト名`postgres`と`mosquitto`は、Docker Compose内で使用するサービス名を想定している。ホストOSからサービスを直接起動する場合は、接続可能なホスト名へ変更する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
 
 ## 秘密情報の扱い
 
