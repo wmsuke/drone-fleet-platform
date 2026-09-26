@@ -44,7 +44,36 @@ cp .env.example .env
 
 Phase 0ではテスト対象の機能がまだないため、テストが0件でも`pnpm test`は成功する。これは開発コマンドを実行できることを確認するための一時的な扱いであり、各workspaceの機能がテスト済みであることを意味しない。機能を実装するIssueでは、外部から確認できる振る舞いのテストを追加する。
 
-アプリの起動方法は実装後に記載する。ローカル環境では、`docker compose up`で全サービスを起動できる構成を目指す。
+## ローカルMQTTブローカー
+
+Docker ComposeでMosquittoを起動する。現在のCompose構成は開発基盤用のMQTTブローカーのみを含む。
+
+```bash
+docker compose up -d mqtt
+docker compose ps
+```
+
+ローカル開発だけで利用するため、`localhost:1883`で匿名接続を許可している。外部へ公開した環境では使用しない。
+
+送受信を確認するには、最初のターミナルで購読を開始する。
+
+```bash
+docker compose exec mqtt mosquitto_sub -h localhost -t fleet/test
+```
+
+別のターミナルからメッセージを送信すると、購読側に`hello`が表示される。
+
+```bash
+docker compose exec mqtt mosquitto_pub -h localhost -t fleet/test -m hello
+```
+
+確認後はブローカーを停止する。保存データも削除する場合は`--volumes`を付ける。
+
+```bash
+docker compose down
+```
+
+アプリの起動方法は実装後に記載する。Phase 1では、`docker compose up`で全サービスを起動できる構成を目指す。
 
 ## 設計と開発計画
 
