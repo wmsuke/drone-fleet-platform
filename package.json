@@ -2,6 +2,7 @@
   "name": "drone-fleet-platform",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "ドローンの状態監視と遠隔コマンドを扱うデバイス管理基盤",
   "packageManager": "pnpm@10.28.1",
   "engines": {

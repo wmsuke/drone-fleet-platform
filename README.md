@@ -82,3 +82,7 @@ docker compose down
 - [ロードマップ](docs/roadmap.md)
 - [環境変数と秘密情報](docs/environment.md)
 - [開発ルール](AGENTS.md)
+
+## ライセンス
+
+このプロジェクトは[MIT License](LICENSE)の下で公開している。
