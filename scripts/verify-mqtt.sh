@@ -12,32 +12,44 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-readonly topic="fleet/test"
-readonly payload="mqtt-roundtrip-ok"
+readonly topic="fleet/test/verify-$$"
+readonly payload="mqtt-roundtrip-ok-$$"
 output_file="$(mktemp)"
+started_mqtt=false
+retained_message=false
 
 cleanup() {
-  docker compose down >/dev/null
+  status=$?
+
+  if [[ "${retained_message}" == true ]]; then
+    docker compose exec -T mqtt \
+      mosquitto_pub -h localhost -p 1883 -t "${topic}" -r -n \
+      >/dev/null 2>&1 || true
+  fi
+  if [[ "${started_mqtt}" == true ]]; then
+    docker compose stop mqtt >/dev/null 2>&1 || true
+  fi
   rm -f "${output_file}"
+
+  exit "${status}"
 }
 
 trap cleanup EXIT
 
-echo "Mosquittoを起動しています。"
-docker compose up -d --wait mqtt
+if ! docker compose ps --status running --services mqtt | grep -Fxq mqtt; then
+  echo "Mosquittoを起動しています。"
+  started_mqtt=true
+  docker compose up -d --wait mqtt
+fi
 
 echo "${topic} の送受信を確認しています。"
 docker compose exec -T mqtt \
+  mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}" -r
+retained_message=true
+
+if ! docker compose exec -T mqtt \
   mosquitto_sub -h localhost -p 1883 -t "${topic}" -C 1 -W 10 \
-  >"${output_file}" &
-subscriber_pid=$!
-
-# mosquitto_subが購読を開始してからメッセージを送信する。
-sleep 1
-docker compose exec -T mqtt \
-  mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}"
-
-if ! wait "${subscriber_pid}"; then
+  >"${output_file}"; then
   echo "MQTTメッセージを受信できませんでした。" >&2
   exit 1
 fi
