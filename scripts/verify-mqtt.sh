@@ -16,6 +16,7 @@ readonly topic="fleet/test/verify-$$"
 readonly payload="mqtt-roundtrip-ok-$$"
 output_file="$(mktemp)"
 retained_message=false
+published=false
 
 cleanup() {
   status=$?
@@ -33,12 +34,24 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Mosquittoを起動しています。"
-docker compose up -d --wait mqtt
+docker compose up -d mqtt
 
 echo "${topic} の送受信を確認しています。"
-docker compose exec -T mqtt \
-  mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}" -r
-retained_message=true
+for _ in {1..10}; do
+  if docker compose exec -T mqtt \
+    mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}" -r \
+    >/dev/null 2>&1; then
+    retained_message=true
+    published=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "${published}" != true ]]; then
+  echo "Mosquittoの起動を確認できませんでした。" >&2
+  exit 1
+fi
 
 if ! docker compose exec -T mqtt \
   mosquitto_sub -h localhost -p 1883 -t "${topic}" -C 1 -W 10 \
