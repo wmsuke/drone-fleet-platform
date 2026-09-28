@@ -78,6 +78,10 @@ infra/
 └── local/
 
 docs/
+├── adr/
+│   ├── 0001-monorepo.md
+│   ├── 0002-mqtt-protocol.md
+│   └── 0003-database.md
 ├── architecture.md
 ├── environment.md
 ├── protocol.md
@@ -88,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-これはPhase 0終盤の現在の構成である。`apps`と`packages`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`infra/terraform`はPhase 2、`docs/adr`は初期ADRの作成時に追加する。
+これはPhase 0終盤の現在の構成である。`apps`と`packages`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -244,3 +248,9 @@ Phase 2ではAWS IoT Coreへの接続を追加する。
 - 運用ログを使ったAIによる調査支援
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
+
+## 関連ADR
+
+- [ADR 0001: pnpmでTypeScriptのモノレポを構成する](adr/0001-monorepo.md)
+- [ADR 0002: デバイスとの通信にMQTTを使う](adr/0002-mqtt-protocol.md)
+- [ADR 0003: 初期の保存先にPostgreSQLを使う](adr/0003-database.md)
