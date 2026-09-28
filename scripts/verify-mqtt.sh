@@ -15,16 +15,15 @@ fi
 readonly topic="fleet/test/verify-$$"
 readonly payload="mqtt-roundtrip-ok-$$"
 output_file="$(mktemp)"
-retained_message=false
-published=false
+subscriber_pid=""
+broker_ready=false
 
 cleanup() {
   status=$?
 
-  if [[ "${retained_message}" == true ]]; then
-    docker compose exec -T mqtt \
-      mosquitto_pub -h localhost -p 1883 -t "${topic}" -r -n \
-      >/dev/null 2>&1 || true
+  if [[ -n "${subscriber_pid}" ]] && kill -0 "${subscriber_pid}" 2>/dev/null; then
+    kill "${subscriber_pid}" 2>/dev/null || true
+    wait "${subscriber_pid}" 2>/dev/null || true
   fi
   rm -f "${output_file}"
 
@@ -36,29 +35,41 @@ trap cleanup EXIT
 echo "Mosquittoを起動しています。"
 docker compose up -d mqtt
 
-echo "${topic} の送受信を確認しています。"
+echo "Mosquittoの起動を待っています。"
 for _ in {1..10}; do
   if docker compose exec -T mqtt \
-    mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}" -r \
+    mosquitto_pub -h localhost -p 1883 -t "${topic}/readiness" -m ready \
     >/dev/null 2>&1; then
-    retained_message=true
-    published=true
+    broker_ready=true
     break
   fi
   sleep 1
 done
 
-if [[ "${published}" != true ]]; then
+if [[ "${broker_ready}" != true ]]; then
   echo "Mosquittoの起動を確認できませんでした。" >&2
   exit 1
 fi
 
-if ! docker compose exec -T mqtt \
+echo "${topic} の購読を開始しています。"
+docker compose exec -T mqtt \
   mosquitto_sub -h localhost -p 1883 -t "${topic}" -C 1 -W 10 \
-  >"${output_file}"; then
+  >"${output_file}" &
+subscriber_pid=$!
+
+# mosquitto_subがブローカーへ購読を登録するまで送信を待つ。
+sleep 1
+
+echo "${topic} へメッセージを送信しています。"
+docker compose exec -T mqtt \
+  mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}"
+
+if ! wait "${subscriber_pid}"; then
+  subscriber_pid=""
   echo "MQTTメッセージを受信できませんでした。" >&2
   exit 1
 fi
+subscriber_pid=""
 
 received="$(cat "${output_file}")"
 if [[ "${received}" != "${payload}" ]]; then
