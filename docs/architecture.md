@@ -88,7 +88,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-これはPhase 0終盤の現在の構成である。`apps`と`packages`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`infra/terraform`はPhase 2、`docs/adr`は初期ADRの作成時に追加する。
+これはPhase 0終盤の現在の構成である。`apps`、`packages/protocol`、`packages/database`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`packages/config`の共通TypeScript設定はPhase 0で実装済みである。`infra/terraform`はPhase 2、`docs/adr`は初期ADRの作成時に追加する。
 
 ### apps/api
 
@@ -150,7 +150,7 @@ Phase 1で、DBスキーマ、接続処理、マイグレーションを配置�
 
 ### packages/config
 
-TypeScriptなどの共通設定を配置する。各アプリ固有の設定は各アプリで管理する。
+Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-fleet/config/tsconfig.base.json`を継承し、固有の設定は各workspaceで管理する。
 
 ### infra
 
