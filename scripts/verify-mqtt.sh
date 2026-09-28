@@ -17,7 +17,6 @@ readonly payload="mqtt-roundtrip-ok-$$"
 output_file="$(mktemp)"
 subscriber_pid=""
 broker_ready=false
-message_received=false
 
 cleanup() {
   status=$?
@@ -66,7 +65,6 @@ for _ in {1..10}; do
   sleep 1
 
   if [[ -s "${output_file}" ]]; then
-    message_received=true
     break
   fi
 done
@@ -78,12 +76,12 @@ if ! wait "${subscriber_pid}"; then
 fi
 subscriber_pid=""
 
-if [[ "${message_received}" != true ]]; then
+received="$(cat "${output_file}")"
+if [[ -z "${received}" ]]; then
   echo "MQTTメッセージを制限時間内に受信できませんでした。" >&2
   exit 1
 fi
 
-received="$(cat "${output_file}")"
 if [[ "${received}" != "${payload}" ]]; then
   echo "受信したメッセージが一致しません: ${received}" >&2
   exit 1
