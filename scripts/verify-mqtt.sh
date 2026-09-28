@@ -17,6 +17,7 @@ readonly payload="mqtt-roundtrip-ok-$$"
 output_file="$(mktemp)"
 subscriber_pid=""
 broker_ready=false
+message_received=false
 
 cleanup() {
   status=$?
@@ -53,16 +54,22 @@ fi
 
 echo "${topic} の購読を開始しています。"
 docker compose exec -T mqtt \
-  mosquitto_sub -h localhost -p 1883 -t "${topic}" -C 1 -W 10 \
+  mosquitto_sub -h localhost -p 1883 -t "${topic}" -C 1 -W 15 \
   >"${output_file}" &
 subscriber_pid=$!
 
-# mosquitto_subがブローカーへ購読を登録するまで送信を待つ。
-sleep 1
-
 echo "${topic} へメッセージを送信しています。"
-docker compose exec -T mqtt \
-  mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}"
+for _ in {1..10}; do
+  docker compose exec -T mqtt \
+    mosquitto_pub -h localhost -p 1883 -t "${topic}" -m "${payload}" \
+    >/dev/null 2>&1 || true
+  sleep 1
+
+  if [[ -s "${output_file}" ]]; then
+    message_received=true
+    break
+  fi
+done
 
 if ! wait "${subscriber_pid}"; then
   subscriber_pid=""
@@ -70,6 +77,11 @@ if ! wait "${subscriber_pid}"; then
   exit 1
 fi
 subscriber_pid=""
+
+if [[ "${message_received}" != true ]]; then
+  echo "MQTTメッセージを制限時間内に受信できませんでした。" >&2
+  exit 1
+fi
 
 received="$(cat "${output_file}")"
 if [[ "${received}" != "${payload}" ]]; then
