@@ -6,15 +6,17 @@
 
 ## 開発状況
 
-開発基盤を整えるPhase 0は完了した。現在は次の範囲を利用できる。
+開発基盤を整えるPhase 0は完了し、Phase 1の機能実装を進めている。現在は次の範囲を利用できる。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
 - GitHub Actionsによる品質チェックとシークレット検査
 - Docker Composeで動かすローカル開発用Mosquitto
 - MQTTの送受信検証
+- MQTTトピックとPhase 1メッセージの型・実行時検証
+- 仮想ドローン1台からの接続状態とテレメトリ送信
 
-各アプリと`packages/protocol`、`packages/database`はまだプレースホルダーである。仮想ドローン、テレメトリ受信・保存、HTTP API、ダッシュボード、遠隔コマンドはPhase 1で実装する。現時点では画面や全サービスの起動手順はない。
+`apps/api`、`apps/telemetry-ingestor`、`apps/dashboard`、`packages/database`はまだプレースホルダーである。複数台の仮想ドローン、テレメトリの受信・保存、HTTP API、ダッシュボード、遠隔コマンドは後続Issueで実装する。現時点では画面や全サービスの一括起動手順はない。
 
 ## 開発環境
 
@@ -50,7 +52,7 @@ pnpm check
 cp .env.example .env
 ```
 
-サンプル値はローカル開発専用であり、Phase 0のコードはこれらの変数を読み込まない。そのため、MQTTの送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
+サンプル値はローカル開発専用である。シミュレータは起動時に`.env`からMQTT接続先、deviceId、送信間隔を読み込む。ブローカー単体の送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
 
 個別のコマンドは次のとおり。
 
@@ -65,7 +67,7 @@ cp .env.example .env
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
-Phase 0ではテスト対象の機能がまだないため、テストが0件でも`pnpm test`は成功する。これは開発コマンドを実行できることを確認するための一時的な扱いであり、各workspaceの機能がテスト済みであることを意味しない。機能を実装するIssueでは、外部から確認できる振る舞いのテストを追加する。
+`pnpm test`は通信仕様とシミュレータの単体テストを実行する。未実装workspaceにはまだテストがない。
 
 ### Phase 0の確認結果
 
@@ -118,6 +120,31 @@ docker compose exec mqtt mosquitto_sub -h localhost -t fleet/test
 docker compose exec mqtt mosquitto_pub -h localhost -t fleet/test -m hello
 ```
 
+### 仮想ドローン1台の起動
+
+`.env.example`をコピーし、Mosquittoを起動する。
+
+```bash
+cp .env.example .env
+docker compose up -d mqtt
+```
+
+最初のターミナルで対象機体の接続状態とテレメトリを購読する。
+
+```bash
+docker compose exec mqtt mosquitto_sub -v -h localhost \
+  -t 'fleet/v1/devices/drone-001/#'
+```
+
+別のターミナルでシミュレータを起動する。起動直後にONLINEとテレメトリを送信し、以後は約5秒ごとにテレメトリを送信する。
+
+```bash
+pnpm --filter @drone-fleet/simulator... build
+node --env-file=.env apps/simulator/dist/index.js
+```
+
+シミュレータを`Ctrl+C`で終了すると、OFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
+
 確認後はブローカーを停止する。
 
 ```bash
@@ -130,7 +157,7 @@ docker compose down
 docker compose down --volumes
 ```
 
-アプリの起動方法は実装後に記載する。Phase 1では、`docker compose up`で全サービスを起動できる構成を目指す。
+Phase 1では、後続Issueで`docker compose up`による全サービスの一括起動を追加する。
 
 ## 設計と開発計画
 

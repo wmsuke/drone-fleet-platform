@@ -12,7 +12,7 @@ cp .env.example .env
 
 `.env.example`にはローカル開発用のダミー値だけを置く。コピー後の`.env`はGitの管理対象外であり、必要に応じて各自の環境で値を変更する。
 
-現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。現時点のworkspaceはこれらを読み込まないため、設定だけでサービスが起動することを意味しない。
+現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。シミュレータを`node --env-file=.env`で起動すると、ルートの`.env`からMQTT接続先とシミュレータ設定を読み込む。PostgreSQLを使うworkspaceは未実装である。
 
 ## 設定項目
 
@@ -25,9 +25,10 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
-| `DRONE_COUNT` | シミュレータが起動する仮想ドローン数 |
+| `SIMULATOR_DEVICE_ID` | シミュレータが使用する仮想ドローンのID |
+| `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 
-値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルのホスト名`postgres`と`mosquitto`は、Docker Compose内で使用するサービス名を想定している。ホストOSからサービスを直接起動する場合は、コピーした`.env`で接続可能なホスト名へ変更する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
+値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`MQTT_HOST`は、ホストOSからDocker ComposeのMosquittoへ接続する値である。サービスをComposeへ追加するときは、そのサービスに`mqtt`を接続先として設定する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
 
 ## 秘密情報の扱い
 

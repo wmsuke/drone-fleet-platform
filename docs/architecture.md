@@ -92,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-これはPhase 0完了時点の構成である。`apps`、`packages/protocol`、`packages/database`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`packages/config`の共通TypeScript設定はPhase 0で実装済みである。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤に加え、Phase 1の通信仕様と仮想ドローン1台からのMQTT送信までを実装済みである。`apps/api`、`apps/telemetry-ingestor`、`apps/dashboard`、`packages/database`はビルド可能なプレースホルダーであり、以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -118,14 +118,14 @@ Phase 1で、MQTTメッセージを受信し、検証してDBへ保存する。
 
 ### apps/simulator
 
-Phase 1で、仮想ドローンの状態と通信を再現する。
+仮想ドローン1台からの接続状態とテレメトリ送信を実装済みである。複数台とコマンド受信は後続Issueで追加する。
 
 - 約5秒ごとのテレメトリ送信
 - 接続状態の通知
 - バッテリー残量、位置、高度、温度の変化
-- コマンド受信とACKの送信
+- コマンド受信とACKの送信（未実装）
 
-`DRONE_COUNT`で台数を設定する。初期の動作確認は10台で行う。
+現在は`SIMULATOR_DEVICE_ID`で1台のdeviceIdを設定する。後続Issueで台数設定を追加し、10台で動作確認する。
 
 ### apps/dashboard
 
