@@ -48,16 +48,29 @@ Phase 0ではテスト対象の機能がまだないため、テストが0件で
 
 ## ローカルMQTTブローカー
 
-Docker ComposeでMosquittoを起動する。現在のCompose構成は開発基盤用のMQTTブローカーのみを含む。
+Docker ComposeでMosquittoを起動する。現在のCompose構成は開発基盤用のMQTTブローカーのみを含む。Docker EngineとDocker Compose v2が必要となる。
 
 ```bash
 docker compose up -d mqtt
 docker compose ps
 ```
 
+ブローカーのログを確認する場合は次のコマンドを使用する。`-f`を付けるとログを継続的に表示できる。
+
+```bash
+docker compose logs mqtt
+docker compose logs -f mqtt
+```
+
 ローカル開発だけで利用するため、`localhost:1883`で匿名接続を許可している。外部へ公開した環境では使用しない。
 
-送受信を確認するには、最初のターミナルで購読を開始する。
+起動、検証専用トピックの購読と送信、受信内容の検証をまとめて実行するには、次のコマンドを使用する。送受信を確認できない場合は終了コードが非0になる。検証後もMosquittoは起動したままになるため、不要になったら後述のコマンドで停止する。
+
+```bash
+pnpm verify:mqtt
+```
+
+手動で確認する場合は、最初のターミナルで購読を開始する。
 
 ```bash
 docker compose exec mqtt mosquitto_sub -h localhost -t fleet/test
