@@ -6,7 +6,7 @@
 
 Phase 1では、テレメトリ、接続状態、コマンド、受領確認（ACK）を扱う。メッセージはUTF-8のJSONとし、型と検証処理を`packages/protocol`に置く。
 
-Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析、テレメトリと接続状態の型・実行時検証を実装済みである。その他のメッセージ型と実行時検証は未実装である。
+Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析と、テレメトリ、接続状態、コマンド、ACKの型・実行時検証を実装済みである。
 
 MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protocol.md)に記載する。
 
@@ -166,6 +166,8 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
 | `commandId` | APIが発行するUUID |
 | `type` | `RETURN_HOME` または `REBOOT` |
 
+`packages/protocol`はZodの`commandMessageSchema`と、スキーマから推論した`CommandMessage`型を公開する。
+
 ### シミュレータの動作
 
 - `RETURN_HOME`：ACKを送信し、飛行状態をRETURNING_HOMEへ変更する。
@@ -192,6 +194,8 @@ Phase 1の処理済みcommandIdはメモリで保持する。再起動後も重�
 ```
 
 ACKは、有効なコマンドを受け付けたことを示す。操作の成功や完了を意味しない。
+
+`packages/protocol`はZodの`commandAcknowledgementMessageSchema`と、受領確認であることを明示した`CommandAcknowledgementMessage`型を公開する。コマンドとACKは`commandId`と`deviceId`で対応付ける。
 
 受信側は、commandIdとdeviceIdが保存済みのコマンドに一致することを確認する。不明なコマンドへのACKは状態更新に使わず、ログに残す。
 
