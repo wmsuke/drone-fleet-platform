@@ -6,7 +6,7 @@
 
 Phase 1では、テレメトリ、接続状態、コマンド、受領確認（ACK）を扱う。メッセージはUTF-8のJSONとし、型と検証処理を`packages/protocol`に置く。
 
-Phase 0で実装済みなのはMosquittoの起動と検証用トピックの送受信までである。`packages/protocol`はビルド可能なプレースホルダーで、この文書のトピック、メッセージ型、実行時検証は未実装である。
+Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析を実装済みである。メッセージ型と実行時検証は未実装である。
 
 MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protocol.md)に記載する。
 
@@ -20,6 +20,8 @@ MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protoc
 | `fleet/v1/devices/{deviceId}/command-acks` | デバイス | MQTT受信処理 |
 
 `deviceId`は機体ごとに一意とする。使用できる文字は英数字、ハイフン、アンダースコアとし、1〜64文字に制限する。
+
+`packages/protocol`は`createTelemetryTopic`、`createStatusTopic`、`createCommandsTopic`、`createCommandAcksTopic`と`parseMqttTopic`を公開する。生成関数は不正な`deviceId`に対して`TypeError`を投げる。`parseMqttTopic`は完全一致するトピックから`kind`と`deviceId`を返し、不正な形式では`null`を返す。
 
 トピックとメッセージ内のdeviceIdが一致しない場合は受け付けない。
 
