@@ -12,7 +12,7 @@ cp .env.example .env
 
 `.env.example`にはローカル開発用のダミー値だけを置く。コピー後の`.env`はGitの管理対象外であり、必要に応じて各自の環境で値を変更する。
 
-現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。`pnpm start:simulator`はルートの`.env`からMQTT接続先とシミュレータ設定を読み込む。PostgreSQLを使うworkspaceは未実装である。
+現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。シミュレータを`node --env-file=.env`で起動すると、ルートの`.env`からMQTT接続先とシミュレータ設定を読み込む。PostgreSQLを使うworkspaceは未実装である。
 
 ## 設定項目
 

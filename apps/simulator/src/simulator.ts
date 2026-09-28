@@ -15,8 +15,9 @@ export interface RunningSimulator {
 
 export interface SimulatorMqttClient {
   connected: boolean;
+  options: IClientOptions;
   endAsync(force?: boolean): Promise<void>;
-  on(event: "connect" | "offline", listener: () => void): this;
+  on(event: "connect" | "offline" | "reconnect", listener: () => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   publishAsync(
     topic: string,
@@ -36,19 +37,20 @@ export async function startSimulator(
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
   const telemetryTopic = createTelemetryTopic(config.deviceId);
-  const lwt = createConnectionLostMessage(
-    config.deviceId,
-    new Date().toISOString(),
-  );
+  const createWill = (): NonNullable<IClientOptions["will"]> => ({
+    topic: statusTopic,
+    payload: Buffer.from(
+      JSON.stringify(
+        createConnectionLostMessage(config.deviceId, new Date().toISOString()),
+      ),
+    ),
+    qos: 1,
+    retain: true,
+  });
   const client = await connectClient(config.mqttUrl, {
     clean: true,
     clientId: `simulator-${config.deviceId}`,
-    will: {
-      topic: statusTopic,
-      payload: Buffer.from(JSON.stringify(lwt)),
-      qos: 1,
-      retain: true,
-    },
+    will: createWill(),
   });
 
   let sequence = 0;
@@ -97,6 +99,9 @@ export async function startSimulator(
       retain: true,
     });
     await publishTelemetry();
+    if (shuttingDown) {
+      return;
+    }
     telemetryTimer = setInterval(
       () =>
         void publishTelemetry().catch((error: unknown) => {
@@ -110,6 +115,9 @@ export async function startSimulator(
   };
 
   client.on("offline", clearTelemetryTimer);
+  client.on("reconnect", () => {
+    client.options.will = createWill();
+  });
   client.on("error", (error) => {
     console.error("MQTT接続でエラーが発生しました", error);
   });

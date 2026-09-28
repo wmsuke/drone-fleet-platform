@@ -52,19 +52,18 @@ pnpm check
 cp .env.example .env
 ```
 
-サンプル値はローカル開発専用である。`pnpm start:simulator`は`.env`からMQTT接続先、deviceId、送信間隔を読み込む。ブローカー単体の送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
+サンプル値はローカル開発専用である。シミュレータは起動時に`.env`からMQTT接続先、deviceId、送信間隔を読み込む。ブローカー単体の送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
 
 個別のコマンドは次のとおり。
 
-| コマンド               | 内容                                       |
-| ---------------------- | ------------------------------------------ |
-| `pnpm check`           | lint、型チェック、テスト、ビルドを順に実行 |
-| `pnpm lint`            | ESLintとPrettierによる静的検査             |
-| `pnpm typecheck`       | 全workspaceの型チェック                    |
-| `pnpm test`            | Vitestによるテスト                         |
-| `pnpm build`           | 全workspaceのビルド                        |
-| `pnpm start:simulator` | 仮想ドローン1台をビルドして起動            |
-| `pnpm verify:mqtt`     | Mosquittoの起動とMQTT送受信を検証          |
+| コマンド           | 内容                                       |
+| ------------------ | ------------------------------------------ |
+| `pnpm check`       | lint、型チェック、テスト、ビルドを順に実行 |
+| `pnpm lint`        | ESLintとPrettierによる静的検査             |
+| `pnpm typecheck`   | 全workspaceの型チェック                    |
+| `pnpm test`        | Vitestによるテスト                         |
+| `pnpm build`       | 全workspaceのビルド                        |
+| `pnpm verify:mqtt` | Mosquittoの起動とMQTT送受信を検証          |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
@@ -140,7 +139,8 @@ docker compose exec mqtt mosquitto_sub -v -h localhost \
 別のターミナルでシミュレータを起動する。起動直後にONLINEとテレメトリを送信し、以後は約5秒ごとにテレメトリを送信する。
 
 ```bash
-pnpm start:simulator
+pnpm --filter @drone-fleet/simulator... build
+node --env-file=.env apps/simulator/dist/index.js
 ```
 
 シミュレータを`Ctrl+C`で終了すると、OFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。

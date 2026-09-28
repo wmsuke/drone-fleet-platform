@@ -19,8 +19,10 @@ interface PublishedMessage {
 
 class FakeMqttClient implements SimulatorMqttClient {
   connected = true;
+  options: IClientOptions = {};
   readonly published: PublishedMessage[] = [];
   readonly endForces: Array<boolean | undefined> = [];
+  private nextPublishBlocker: Promise<void> | undefined;
   private readonly listeners = new Map<
     string,
     Array<(...args: never[]) => void>
@@ -32,6 +34,9 @@ class FakeMqttClient implements SimulatorMqttClient {
     options: { qos: 0 | 1; retain: boolean },
   ): Promise<void> {
     this.published.push({ topic, message, options });
+    const blocker = this.nextPublishBlocker;
+    this.nextPublishBlocker = undefined;
+    await blocker;
   }
 
   async endAsync(force?: boolean): Promise<void> {
@@ -39,13 +44,27 @@ class FakeMqttClient implements SimulatorMqttClient {
     this.connected = false;
   }
 
-  on(event: "connect" | "offline", listener: () => void): this;
+  on(event: "connect" | "offline" | "reconnect", listener: () => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   on(event: string, listener: (...args: never[]) => void): this {
     const listeners = this.listeners.get(event) ?? [];
     listeners.push(listener);
     this.listeners.set(event, listeners);
     return this;
+  }
+
+  emit(event: "connect" | "offline" | "reconnect"): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener();
+    }
+  }
+
+  blockNextPublish(): () => void {
+    let release = (): void => undefined;
+    this.nextPublishBlocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return release;
   }
 }
 
@@ -61,6 +80,7 @@ describe("startSimulator", () => {
     let connectionOptions: IClientOptions | undefined;
     const connectClient: ConnectSimulatorClient = async (_url, options) => {
       connectionOptions = options;
+      client.options = options;
       return client;
     };
 
@@ -129,5 +149,62 @@ describe("startSimulator", () => {
 
     expect(client.published).toHaveLength(2);
     expect(client.endForces).toEqual([true]);
+  });
+
+  it("refreshes the LWT timestamp before reconnecting", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-25T08:00:00.000Z"));
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        telemetryIntervalMs: 5000,
+      },
+      async (_url, options) => {
+        client.options = options;
+        return client;
+      },
+    );
+
+    vi.setSystemTime(new Date("2026-09-25T08:01:00.000Z"));
+    client.connected = false;
+    client.emit("reconnect");
+
+    const refreshedLwt = connectionStatusMessageSchema.parse(
+      JSON.parse(client.options.will?.payload.toString() ?? ""),
+    );
+    expect(refreshedLwt.timestamp).toBe("2026-09-25T08:01:00.000Z");
+    expect(refreshedLwt.payload).toEqual({
+      status: "OFFLINE",
+      reason: "CONNECTION_LOST",
+    });
+
+    await simulator.shutdown();
+  });
+
+  it("does not restart the telemetry timer when shutdown overlaps reconnect", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        telemetryIntervalMs: 5000,
+      },
+      async (_url, options) => {
+        client.options = options;
+        return client;
+      },
+    );
+    const releaseReconnectPublish = client.blockNextPublish();
+
+    client.emit("connect");
+    await vi.waitFor(() => expect(client.published).toHaveLength(3));
+    await simulator.shutdown();
+    releaseReconnectPublish();
+    await vi.waitFor(() => expect(vi.getTimerCount()).toBe(0));
+
+    expect(client.endForces).toEqual([false]);
   });
 });

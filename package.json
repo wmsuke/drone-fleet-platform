@@ -15,7 +15,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . && pnpm format:check",
-    "start:simulator": "pnpm --filter @drone-fleet/simulator... build && node --env-file=.env apps/simulator/dist/index.js",
     "test": "vitest run --passWithNoTests",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:mqtt": "./scripts/verify-mqtt.sh"

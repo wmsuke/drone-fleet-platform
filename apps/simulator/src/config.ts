@@ -6,6 +6,8 @@ export interface SimulatorConfig {
   telemetryIntervalMs: number;
 }
 
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 function parseInteger(
   value: string,
   name: string,
@@ -38,7 +40,7 @@ export function loadSimulatorConfig(
     environment.TELEMETRY_INTERVAL_MS ?? "5000",
     "TELEMETRY_INTERVAL_MS",
     1,
-    Number.MAX_SAFE_INTEGER,
+    MAX_TIMER_DELAY_MS,
   );
 
   if (!isValidDeviceId(deviceId)) {
