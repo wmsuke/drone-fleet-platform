@@ -6,7 +6,7 @@
 
 Phase 1では、テレメトリ、接続状態、コマンド、受領確認（ACK）を扱う。メッセージはUTF-8のJSONとし、型と検証処理を`packages/protocol`に置く。
 
-Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析とテレメトリの型・実行時検証を実装済みである。その他のメッセージ型と実行時検証は未実装である。
+Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析、テレメトリと接続状態の型・実行時検証を実装済みである。その他のメッセージ型と実行時検証は未実装である。
 
 MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protocol.md)に記載する。
 
@@ -126,6 +126,8 @@ sequenceは起動時に0から始め、送信ごとに1増やす。MQTTの再接
 | `ONLINE` | `CONNECTED` | 接続完了 |
 | `OFFLINE` | `SHUTDOWN` | 正常終了 |
 | `OFFLINE` | `CONNECTION_LOST` | LWTによる切断通知 |
+
+`packages/protocol`はZodの`connectionStatusMessageSchema`と、スキーマから推論した`ConnectionStatusMessage`型を公開する。接続状態はテレメトリの飛行状態とは別の型であり、表にないstatusとreasonの組み合わせは受け付けない。
 
 ### 接続・切断時の処理
 
