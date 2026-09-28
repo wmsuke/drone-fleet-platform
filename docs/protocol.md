@@ -6,7 +6,7 @@
 
 Phase 1では、テレメトリ、接続状態、コマンド、受領確認（ACK）を扱う。メッセージはUTF-8のJSONとし、型と検証処理を`packages/protocol`に置く。
 
-Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析を実装済みである。メッセージ型と実行時検証は未実装である。
+Phase 0ではMosquittoの起動と検証用トピックの送受信までを実装した。Phase 1では`packages/protocol`にこの文書のトピック生成・解析とテレメトリの型・実行時検証を実装済みである。その他のメッセージ型と実行時検証は未実装である。
 
 MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protocol.md)に記載する。
 
@@ -76,6 +76,8 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
   }
 }
 ```
+
+`packages/protocol`はZodの`telemetryMessageSchema`と、スキーマから推論した`TelemetryMessage`型を公開する。`parse`または`safeParse`で検証した値では、入力に含まれる未知の追加フィールドを無視して取り除く。
 
 ### 項目
 
