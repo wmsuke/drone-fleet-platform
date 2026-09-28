@@ -1,6 +1,8 @@
 /** workspaceが初期化されていることを示す識別子。 */
 export const workspaceName = "protocol";
 
+export { telemetryMessageSchema, type TelemetryMessage } from "./telemetry.js";
+
 export {
   createCommandAcksTopic,
   createCommandsTopic,
