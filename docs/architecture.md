@@ -6,7 +6,9 @@
 
 AWS接続や通信断対応は後続のPhaseで追加する。AWS対応後も、ローカルだけで動作する構成を維持する。
 
-## ローカル構成
+Phase 0では、TypeScriptのモノレポ、各サービスのプレースホルダー、Mosquitto、共通検証コマンド、CIを実装した。テレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードはPhase 1で実装する。
+
+## Phase 1のローカル構成
 
 ```mermaid
 flowchart LR
@@ -26,7 +28,7 @@ flowchart LR
     Broker -->|"コマンド"| Simulator
 ```
 
-Docker Composeで以下を起動する。
+Phase 1では、Docker Composeで以下を起動する。Phase 0の`compose.yaml`に含まれるのはMosquittoのみである。
 
 - Mosquitto
 - PostgreSQL
@@ -39,24 +41,24 @@ Docker Composeで以下を起動する。
 
 ## 技術スタック
 
-| 領域 | 使用技術 |
-|---|---|
-| 言語・実行環境 | TypeScript / Node.js |
-| モノレポ | pnpm workspace |
-| HTTP API | Fastify |
-| 入力検証 | Zod |
-| データベース | PostgreSQL |
-| ORM・マイグレーション | Drizzle ORM |
-| MQTTクライアント | mqtt.js |
-| MQTTブローカー | Eclipse Mosquitto |
-| フロントエンド | React / Vite / TanStack Query |
-| テスト | Vitest |
-| 画面のE2Eテスト | Playwright |
-| ローカル実行 | Docker Compose |
-| CI | GitHub Actions |
-| 静的検査・整形 | ESLint / Prettier |
+| 領域 | 使用技術 | 状態 |
+|---|---|---|
+| 言語・実行環境 | TypeScript / Node.js | Phase 0で導入済み |
+| モノレポ | pnpm workspace | Phase 0で導入済み |
+| HTTP API | Fastify | Phase 1で導入予定 |
+| 入力検証 | Zod | Phase 1で導入予定 |
+| データベース | PostgreSQL | Phase 1で導入予定 |
+| ORM・マイグレーション | Drizzle ORM | Phase 1で導入予定 |
+| MQTTクライアント | mqtt.js | Phase 1で導入予定 |
+| MQTTブローカー | Eclipse Mosquitto | Phase 0で導入済み |
+| フロントエンド | React / Vite / TanStack Query | Phase 1で導入予定 |
+| テスト | Vitest | Phase 0で実行基盤を導入済み、機能テストは未実装 |
+| 画面のE2Eテスト | Playwright | Phase 1で導入予定 |
+| ローカル実行 | Docker Compose | Phase 0でMosquittoに使用 |
+| CI | GitHub Actions | Phase 0で導入済み |
+| 静的検査・整形 | ESLint / Prettier | Phase 0で導入済み |
 
-バージョンは開発基盤の作成時に互換性を確認して決め、設定ファイルとlockfileに記録する。
+導入済みのバージョンは設定ファイルと`pnpm-lock.yaml`に記録する。Phase 1以降の依存ライブラリは、導入時に互換性を確認してバージョンを決める。
 
 ## ディレクトリ構成
 
@@ -73,19 +75,24 @@ packages/
 └── config/
 
 infra/
-├── local/
-└── terraform/
+└── local/
 
 docs/
 ├── architecture.md
+├── environment.md
 ├── protocol.md
-├── roadmap.md
-└── adr/
+└── roadmap.md
+
+scripts/
+├── scan-secrets.sh
+└── verify-mqtt.sh
 ```
+
+これはPhase 0終盤の現在の構成である。`apps`と`packages`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`infra/terraform`はPhase 2、`docs/adr`は初期ADRの作成時に追加する。
 
 ### apps/api
 
-デバイス情報の取得とコマンド送信を扱うHTTP API。
+Phase 1で、デバイス情報の取得とコマンド送信を扱うHTTP APIを実装する。
 
 - デバイス一覧・詳細の取得
 - テレメトリ履歴の取得
@@ -96,7 +103,7 @@ docs/
 
 ### apps/telemetry-ingestor
 
-MQTTメッセージを受信し、検証してDBへ保存する。
+Phase 1で、MQTTメッセージを受信し、検証してDBへ保存する。
 
 - 初回受信時のデバイス登録
 - テレメトリの保存
@@ -107,7 +114,7 @@ MQTTメッセージを受信し、検証してDBへ保存する。
 
 ### apps/simulator
 
-仮想ドローンの状態と通信を再現する。
+Phase 1で、仮想ドローンの状態と通信を再現する。
 
 - 約5秒ごとのテレメトリ送信
 - 接続状態の通知
@@ -118,7 +125,7 @@ MQTTメッセージを受信し、検証してDBへ保存する。
 
 ### apps/dashboard
 
-APIからデータを取得し、機体一覧と詳細を表示する。MQTTやDBには直接接続しない。
+Phase 1で、APIからデータを取得し、機体一覧と詳細を表示する。MQTTやDBには直接接続しない。
 
 - 総台数とオンライン・オフラインの台数
 - 各機体の接続状態、バッテリー残量、最終受信時刻
@@ -128,7 +135,7 @@ APIからデータを取得し、機体一覧と詳細を表示する。MQTTやD
 
 ### packages/protocol
 
-デバイスと基盤の間で共有する通信仕様。
+Phase 1で、デバイスと基盤の間で共有する通信仕様を実装する。
 
 - MQTTトピック
 - メッセージの型
@@ -139,7 +146,7 @@ APIからデータを取得し、機体一覧と詳細を表示する。MQTTやD
 
 ### packages/database
 
-DBスキーマ、接続処理、マイグレーションを配置する。APIとMQTT受信処理から利用する。
+Phase 1で、DBスキーマ、接続処理、マイグレーションを配置する。APIとMQTT受信処理から利用する。
 
 ### packages/config
 
@@ -147,9 +154,9 @@ TypeScriptなどの共通設定を配置する。各アプリ固有の設定は�
 
 ### infra
 
-`local`にはMosquittoなどのローカル設定を置く。`terraform`はPhase 2以降のAWS環境に使用する。
+`local`にはMosquittoのローカル設定を置く。Phase 1でローカルサービスの構成を追加する。Phase 2以降のAWS環境に使用する`terraform`は未作成である。
 
-## データの流れ
+## Phase 1のデータの流れ
 
 ### テレメトリ
 
@@ -171,9 +178,9 @@ ACKはコマンドの受領を示す。帰還や再起動の完了とは区別�
 
 DB保存とMQTT送信は単一のトランザクションにはならない。送信失敗やACKが届かない場合の状態と扱いは、コマンド実装時に定義する。
 
-## 保存するデータ
+## Phase 1で保存するデータ
 
-初期段階では、次の3テーブルを使用する。
+Phase 1では、次の3テーブルを使用する。
 
 | テーブル | 内容 |
 |---|---|
@@ -183,13 +190,21 @@ DB保存とMQTT送信は単一のトランザクションにはならない。�
 
 接続状態と飛行状態は別の情報として管理する。カラム名、制約、インデックスはDBの実装時に確定する。
 
-## 接続状態の判定
+## Phase 1の接続状態の判定
 
 接続時はONLINEを通知する。予期しない切断はMQTTのLWTでOFFLINEを通知する。
 
 通知だけに依存せず、最終受信時刻からの経過時間も使って判定する。初期案は15秒だが、閾値と状態の優先順位は通信仕様で確定する。
 
 ## 設計の理由
+
+### Phase 0ではサービスの境界から作る
+
+Phase 1の機能を先回りせず、各アプリと共通パッケージの配置、TypeScriptの共通設定、ビルド経路だけを用意した。これにより、サービス間の責務を保ったままIssue単位で機能を追加できる。
+
+### ComposeはMosquittoから始める
+
+Phase 0ではMQTTブローカーの起動と送受信に範囲を絞った。`compose.yaml`へのPostgreSQLと各アプリの追加は、実装と起動条件が確定するPhase 1で行う。Mosquittoは`127.0.0.1:1883`にのみ公開し、匿名接続をローカル開発に限定する。
 
 ### MQTT受信とHTTP APIを分ける
 
