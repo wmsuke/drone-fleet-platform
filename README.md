@@ -42,6 +42,8 @@ cp .env.example .env
 | `pnpm test`      | Vitestによるテスト             |
 | `pnpm build`     | 全workspaceのビルド            |
 
+Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
+
 Phase 0ではテスト対象の機能がまだないため、テストが0件でも`pnpm test`は成功する。これは開発コマンドを実行できることを確認するための一時的な扱いであり、各workspaceの機能がテスト済みであることを意味しない。機能を実装するIssueでは、外部から確認できる振る舞いのテストを追加する。
 
 ## ローカルMQTTブローカー
