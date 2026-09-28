@@ -25,10 +25,11 @@
 - Docker Engine
 - Docker Compose v2
 
-バージョンは次のコマンドで確認できる。
+Corepackを有効化し、各ツールのバージョンを確認する。
 
 ```bash
 node --version
+corepack enable
 pnpm --version
 docker --version
 docker compose version
@@ -39,7 +40,6 @@ docker compose version
 リポジトリをcloneした後、ルートで依存関係をインストールし、共通の品質チェックを実行する。`packageManager`で指定したpnpmと、リポジトリのlockfileを使用する。
 
 ```bash
-corepack enable
 pnpm install --frozen-lockfile
 pnpm check
 ```
