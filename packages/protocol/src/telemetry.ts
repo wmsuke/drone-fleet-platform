@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isValidDeviceId } from "./topics.js";
+import { messageBaseSchema } from "./common.js";
 
 const finiteNumberSchema = z
   .number()
@@ -8,12 +8,8 @@ const finiteNumberSchema = z
 
 export const telemetryMessageSchema = z
   .object({
-    schemaVersion: z.literal(1),
-    deviceId: z
-      .string()
-      .refine(isValidDeviceId, "deviceId has an invalid format"),
+    ...messageBaseSchema.shape,
     sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    timestamp: z.iso.datetime({ offset: false, local: false }),
     payload: z
       .object({
         battery: z.number().min(0).max(100),
