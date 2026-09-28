@@ -6,49 +6,85 @@
 
 ## 開発状況
 
-開発基盤を準備している段階。
+開発基盤を整えるPhase 0は完了した。現在は次の範囲を利用できる。
 
-最初のリリースでは、以下を実装する。
+- pnpm workspaceとTypeScriptの共通設定
+- lint、型チェック、テスト、ビルドの共通コマンド
+- GitHub Actionsによる品質チェックとシークレット検査
+- Docker Composeで動かすローカル開発用Mosquitto
+- MQTTの送受信検証
 
-- 仮想ドローン10台からのテレメトリ送信
-- デバイスの登録とオンライン・オフライン判定
-- 機体一覧と詳細の表示
-- 遠隔コマンドの送信と受領確認
+各アプリと`packages/protocol`、`packages/database`はまだプレースホルダーである。仮想ドローン、テレメトリ受信・保存、HTTP API、ダッシュボード、遠隔コマンドはPhase 1で実装する。現時点では画面や全サービスの起動手順はない。
 
 ## 開発環境
 
-Node.js 22以上とpnpm 10以上を使用する。依存関係をインストールした後、リポジトリのルートで共通の検証コマンドを実行できる。
+次のツールを使用する。
+
+- Node.js 22以上
+- Corepackから有効化するpnpm 10以上
+- Docker Engine
+- Docker Compose v2
+
+Corepackを有効化し、各ツールのバージョンを確認する。
 
 ```bash
+node --version
 corepack enable
-pnpm install
+pnpm --version
+docker --version
+docker compose version
+```
+
+### セットアップ
+
+リポジトリをcloneした後、ルートで依存関係をインストールし、共通の品質チェックを実行する。`packageManager`で指定したpnpmと、リポジトリのlockfileを使用する。
+
+```bash
+pnpm install --frozen-lockfile
 pnpm check
 ```
 
-ローカルサービス用の環境変数は、サンプルをコピーして準備する。
+ローカルサービス用の設定項目を確認する場合は、サンプルをコピーする。
 
 ```bash
 cp .env.example .env
 ```
 
-サンプル値はローカル開発専用であり、現在のworkspaceはまだこれらの変数を読み込まない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
+サンプル値はローカル開発専用であり、Phase 0のコードはこれらの変数を読み込まない。そのため、MQTTの送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
 
 個別のコマンドは次のとおり。
 
-| コマンド         | 内容                           |
-| ---------------- | ------------------------------ |
-| `pnpm lint`      | ESLintとPrettierによる静的検査 |
-| `pnpm typecheck` | 全workspaceの型チェック        |
-| `pnpm test`      | Vitestによるテスト             |
-| `pnpm build`     | 全workspaceのビルド            |
+| コマンド           | 内容                                       |
+| ------------------ | ------------------------------------------ |
+| `pnpm check`       | lint、型チェック、テスト、ビルドを順に実行 |
+| `pnpm lint`        | ESLintとPrettierによる静的検査             |
+| `pnpm typecheck`   | 全workspaceの型チェック                    |
+| `pnpm test`        | Vitestによるテスト                         |
+| `pnpm build`       | 全workspaceのビルド                        |
+| `pnpm verify:mqtt` | Mosquittoの起動とMQTT送受信を検証          |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
 Phase 0ではテスト対象の機能がまだないため、テストが0件でも`pnpm test`は成功する。これは開発コマンドを実行できることを確認するための一時的な扱いであり、各workspaceの機能がテスト済みであることを意味しない。機能を実装するIssueでは、外部から確認できる振る舞いのテストを追加する。
 
+### Phase 0の確認結果
+
+Phase 0完了時に次の環境とコマンドで確認した。バージョンは検証時点の記録であり、前提条件の下限を変更するものではない。
+
+| 項目                                       | 確認結果          |
+| ------------------------------------------ | ----------------- |
+| Node.js                                    | v22.22.3          |
+| pnpm                                       | 10.28.1           |
+| Docker Engine                              | 28.0.4            |
+| Docker Compose                             | v2.34.0-desktop.1 |
+| `pnpm install --frozen-lockfile`           | 成功              |
+| `pnpm check`                               | 成功（テスト0件） |
+| `pnpm verify:mqtt`                         | 成功              |
+| `docker compose ps` / `logs mqtt` / `down` | 成功              |
+
 ## ローカルMQTTブローカー
 
-Docker ComposeでMosquittoを起動する。現在のCompose構成は開発基盤用のMQTTブローカーのみを含む。Docker EngineとDocker Compose v2が必要となる。
+Docker ComposeでMosquittoを起動する。現在のCompose構成に含まれるのはMQTTブローカーのみで、仮想ドローンや他のサービスは起動しない。
 
 ```bash
 docker compose up -d mqtt
@@ -82,10 +118,16 @@ docker compose exec mqtt mosquitto_sub -h localhost -t fleet/test
 docker compose exec mqtt mosquitto_pub -h localhost -t fleet/test -m hello
 ```
 
-確認後はブローカーを停止する。保存データも削除する場合は`--volumes`を付ける。
+確認後はブローカーを停止する。
 
 ```bash
 docker compose down
+```
+
+保存データも削除する場合は、代わりに次のコマンドを使用する。
+
+```bash
+docker compose down --volumes
 ```
 
 アプリの起動方法は実装後に記載する。Phase 1では、`docker compose up`で全サービスを起動できる構成を目指す。
@@ -97,6 +139,9 @@ docker compose down
 - [ロードマップ](docs/roadmap.md)
 - [環境変数と秘密情報](docs/environment.md)
 - [開発ルール](AGENTS.md)
+- [ADR 0001: pnpmでTypeScriptのモノレポを構成する](docs/adr/0001-monorepo.md)
+- [ADR 0002: デバイスとの通信にMQTTを使う](docs/adr/0002-mqtt-protocol.md)
+- [ADR 0003: 初期の保存先にPostgreSQLを使う](docs/adr/0003-database.md)
 
 ## ライセンス
 

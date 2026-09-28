@@ -92,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-これはPhase 0終盤の現在の構成である。`apps`、`packages/protocol`、`packages/database`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`packages/config`の共通TypeScript設定はPhase 0で実装済みである。`infra/terraform`はPhase 2で追加する。
+これはPhase 0完了時点の構成である。`apps`、`packages/protocol`、`packages/database`にはビルド可能なプレースホルダーのみを置き、以下の機能はPhase 1で実装する。`packages/config`の共通TypeScript設定はPhase 0で実装済みである。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
