@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test:integration": "vitest run test/repository.integration.test.ts",
+    "test:integration": "vitest run --no-file-parallelism test/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

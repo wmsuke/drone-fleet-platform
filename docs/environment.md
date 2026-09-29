@@ -25,6 +25,7 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
+| `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 

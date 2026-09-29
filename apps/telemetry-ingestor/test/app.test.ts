@@ -1,19 +1,22 @@
-import type { IClientOptions } from "mqtt";
-import { describe, expect, it, vi } from "vitest";
+import type { IClientOptions, IPublishPacket } from "mqtt";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   startTelemetryIngestor,
+  STATUS_TOPIC_FILTER,
   TELEMETRY_TOPIC_FILTER,
   type TelemetryMqttClient,
 } from "../src/app.js";
 import type { IngestionLogger } from "../src/ingestion.js";
 import type { TelemetryRepository } from "../src/repository.js";
+import type { DeviceStatusRepository } from "../src/status.js";
 
 class FakeMqttClient implements TelemetryMqttClient {
   readonly endForces: Array<boolean | undefined> = [];
-  readonly subscriptions: Array<{ topic: string; options: { qos: 0 } }> = [];
+  readonly subscriptions: Array<{ topic: string; options: { qos: 0 | 1 } }> =
+    [];
   private readonly messageListeners: Array<
-    (topic: string, payload: Buffer) => void
+    (topic: string, payload: Buffer, packet: IPublishPacket) => void
   > = [];
 
   async endAsync(force?: boolean): Promise<void> {
@@ -22,7 +25,7 @@ class FakeMqttClient implements TelemetryMqttClient {
 
   on(
     event: "message",
-    listener: (topic: string, payload: Buffer) => void,
+    listener: (topic: string, payload: Buffer, packet: IPublishPacket) => void,
   ): this;
   on(event: "error", listener: (error: Error) => void): this;
   on(event: string, listener: (...args: never[]) => void): this {
@@ -32,13 +35,13 @@ class FakeMqttClient implements TelemetryMqttClient {
     return this;
   }
 
-  async subscribeAsync(topic: string, options: { qos: 0 }): Promise<void> {
+  async subscribeAsync(topic: string, options: { qos: 0 | 1 }): Promise<void> {
     this.subscriptions.push({ topic, options });
   }
 
-  emitMessage(topic: string, payload: Buffer): void {
+  emitMessage(topic: string, payload: Buffer, retain = false): void {
     for (const listener of this.messageListeners) {
-      listener(topic, payload);
+      listener(topic, payload, { retain } as IPublishPacket);
     }
   }
 }
@@ -63,6 +66,10 @@ function validTelemetryPayload(): Buffer {
 }
 
 describe("startTelemetryIngestor", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("subscribes to all telemetry topics and handles consecutive messages", async () => {
     const client = new FakeMqttClient();
     let connection: { url: string; options: IClientOptions } | undefined;
@@ -73,9 +80,14 @@ describe("startTelemetryIngestor", () => {
       },
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => undefined),
+      markTimedOut: vi.fn(async () => undefined),
+    };
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883" },
+      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
       repository,
+      statusRepository,
       logger,
       async (url, options) => {
         connection = { url, options };
@@ -89,6 +101,7 @@ describe("startTelemetryIngestor", () => {
     });
     expect(client.subscriptions).toEqual([
       { topic: TELEMETRY_TOPIC_FILTER, options: { qos: 0 } },
+      { topic: STATUS_TOPIC_FILTER, options: { qos: 1 } },
     ]);
 
     client.emitMessage(TELEMETRY_TOPIC_FILTER, Buffer.from("{"));
@@ -119,9 +132,14 @@ describe("startTelemetryIngestor", () => {
       },
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => undefined),
+      markTimedOut: vi.fn(async () => undefined),
+    };
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883" },
+      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
       repository,
+      statusRepository,
       logger,
       async () => client,
     );
@@ -144,5 +162,32 @@ describe("startTelemetryIngestor", () => {
     releaseSave();
     await shutdown;
     expect(shutdownCompleted).toBe(true);
+  });
+
+  it("marks devices offline after the configured receipt timeout", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-29T02:00:15.000Z"));
+    const client = new FakeMqttClient();
+    const repository: TelemetryRepository = { save: vi.fn() };
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => undefined),
+      markTimedOut: vi.fn(async () => undefined),
+    };
+    const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const ingestor = await startTelemetryIngestor(
+      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      repository,
+      statusRepository,
+      logger,
+      async () => client,
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(statusRepository.markTimedOut).toHaveBeenCalledWith(
+      new Date("2026-09-29T02:00:01.000Z"),
+      new Date("2026-09-29T02:00:16.000Z"),
+    );
+    await ingestor.shutdown();
   });
 });

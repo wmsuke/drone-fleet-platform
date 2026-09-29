@@ -55,6 +55,7 @@ export async function ingestTelemetry(
   receivedAt: Date,
   repository: TelemetryRepository,
   logger: IngestionLogger,
+  isRetained = false,
 ): Promise<boolean> {
   const parsed = parseTelemetry(topic, payload);
   if (!parsed.success) {
@@ -66,7 +67,7 @@ export async function ingestTelemetry(
   }
 
   try {
-    await repository.save(parsed.message, receivedAt);
+    await repository.save(parsed.message, receivedAt, isRetained);
     return true;
   } catch (error) {
     logger.error("テレメトリの保存に失敗しました", {
