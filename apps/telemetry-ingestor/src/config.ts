@@ -1,5 +1,6 @@
 export interface TelemetryIngestorConfig {
   mqttUrl: string;
+  offlineTimeoutMs: number;
 }
 
 function parsePort(value: string): number {
@@ -19,5 +20,9 @@ export function loadTelemetryIngestorConfig(
   }
 
   const port = parsePort(environment.MQTT_PORT ?? "1883");
-  return { mqttUrl: `mqtt://${host}:${port}` };
+  const offlineTimeoutMs = Number(environment.OFFLINE_TIMEOUT_MS ?? "15000");
+  if (!Number.isSafeInteger(offlineTimeoutMs) || offlineTimeoutMs < 1) {
+    throw new TypeError("OFFLINE_TIMEOUT_MS must be a positive integer");
+  }
+  return { mqttUrl: `mqtt://${host}:${port}`, offlineTimeoutMs };
 }

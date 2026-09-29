@@ -3,15 +3,21 @@ import { createDatabase } from "@drone-fleet/database";
 import { startTelemetryIngestor } from "./app.js";
 import { loadTelemetryIngestorConfig } from "./config.js";
 import { createTelemetryRepository } from "./repository.js";
+import { createDeviceStatusRepository } from "./status.js";
 
 async function main(): Promise<void> {
   const config = loadTelemetryIngestorConfig();
   const { client: databaseClient, db } = createDatabase();
   const repository = createTelemetryRepository(db);
+  const statusRepository = createDeviceStatusRepository(db);
 
   let ingestor;
   try {
-    ingestor = await startTelemetryIngestor(config, repository);
+    ingestor = await startTelemetryIngestor(
+      config,
+      repository,
+      statusRepository,
+    );
   } catch (error) {
     await databaseClient.end();
     throw error;
