@@ -7,10 +7,18 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.mjs",
+    "db:migrate": "pnpm build && node --env-file-if-exists=../../.env dist/migrate.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@drone-fleet/config": "workspace:*",
+    "@types/node": "^26.6.3",
+    "drizzle-kit": "^0.31.11",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9"
   }
 }

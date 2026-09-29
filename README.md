@@ -159,6 +159,33 @@ docker compose down
 docker compose down --volumes
 ```
 
+### PostgreSQLの起動と初期化
+
+`.env.example`をコピーし、空のPostgreSQLを起動する。
+
+```bash
+cp .env.example .env
+docker compose up -d --wait postgres
+```
+
+Drizzleのマイグレーションを適用する。再実行しても適用済みのマイグレーションは重複実行されない。
+
+```bash
+pnpm db:migrate
+```
+
+スキーマを変更した場合は、変更内容を確認してから新しいSQLマイグレーションを生成する。
+
+```bash
+pnpm db:generate
+```
+
+DBを空の状態へ戻す場合は、PostgreSQLを停止してデータ用volumeを削除する。
+
+```bash
+docker compose down --volumes
+```
+
 Phase 1では、後続Issueで`docker compose up`による全サービスの一括起動を追加する。
 
 ## 設計と開発計画

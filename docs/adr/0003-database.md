@@ -9,7 +9,7 @@ Phase 1では、デバイス情報、時系列のテレメトリ、コマンド�
 
 ## 決定
 
-Phase 1の初期保存先にPostgreSQLを使う。`devices`、`telemetry`、`commands`の3テーブルから始め、スキーマ、接続処理、マイグレーションは`packages/database`に置く。ORMとマイグレーションにはDrizzle ORMを導入する予定だが、依存ライブラリと具体的なスキーマはDB実装時に確定する。
+Phase 1の初期保存先にPostgreSQLを使う。`devices`、`telemetry`、`commands`の3テーブルから始め、スキーマ、接続処理、マイグレーションは`packages/database`に置く。ORMとマイグレーションにはDrizzle ORM、Node.jsからの接続にはpostgres.jsを使う。
 
 ## 理由
 
