@@ -1,12 +1,11 @@
-import { isValidDeviceId } from "@drone-fleet/protocol";
-
 export interface SimulatorConfig {
-  deviceId: string;
+  droneCount: number;
   mqttUrl: string;
   telemetryIntervalMs: number;
 }
 
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
+export const MAX_DRONE_COUNT = 1_000;
 
 function parseInteger(
   value: string,
@@ -35,7 +34,12 @@ export function loadSimulatorConfig(
     1,
     65_535,
   );
-  const deviceId = environment.SIMULATOR_DEVICE_ID ?? "drone-001";
+  const droneCount = parseInteger(
+    environment.DRONE_COUNT ?? "10",
+    "DRONE_COUNT",
+    1,
+    MAX_DRONE_COUNT,
+  );
   const telemetryIntervalMs = parseInteger(
     environment.TELEMETRY_INTERVAL_MS ?? "5000",
     "TELEMETRY_INTERVAL_MS",
@@ -43,16 +47,12 @@ export function loadSimulatorConfig(
     MAX_TIMER_DELAY_MS,
   );
 
-  if (!isValidDeviceId(deviceId)) {
-    throw new TypeError("SIMULATOR_DEVICE_ID has an invalid format");
-  }
-
   if (host.length === 0) {
     throw new TypeError("MQTT_HOST must not be empty");
   }
 
   return {
-    deviceId,
+    droneCount,
     mqttUrl: `mqtt://${host}:${port}`,
     telemetryIntervalMs,
   };

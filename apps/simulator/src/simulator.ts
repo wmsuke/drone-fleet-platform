@@ -7,7 +7,6 @@ import {
 } from "@drone-fleet/protocol";
 import { connectAsync, type IClientOptions } from "mqtt";
 
-import type { SimulatorConfig } from "./config.js";
 import { createCommandProcessor } from "./commands.js";
 import {
   createConnectionLostMessage,
@@ -18,6 +17,12 @@ import {
 
 export interface RunningSimulator {
   shutdown(): Promise<void>;
+}
+
+export interface SimulatorDeviceConfig {
+  deviceId: string;
+  mqttUrl: string;
+  telemetryIntervalMs: number;
 }
 
 export interface SimulatorMqttClient {
@@ -45,7 +50,7 @@ export type ConnectSimulatorClient = (
 ) => Promise<SimulatorMqttClient>;
 
 export async function startSimulator(
-  config: SimulatorConfig,
+  config: SimulatorDeviceConfig,
   connectClient: ConnectSimulatorClient = connectAsync,
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
