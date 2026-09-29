@@ -10,6 +10,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "api:test:integration": "pnpm --filter @drone-fleet/api test:integration",
     "build": "pnpm -r --if-present build",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @drone-fleet/database db:generate",

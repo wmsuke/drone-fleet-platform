@@ -1,0 +1,103 @@
+import { createDatabase, devices, telemetry } from "@drone-fleet/database";
+import { inArray } from "drizzle-orm";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { fileURLToPath } from "node:url";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+import { createDeviceListRepository } from "../src/repository.js";
+
+const runIntegration = process.env.DATABASE_INTEGRATION === "true";
+const integration = describe.skipIf(!runIntegration);
+const deviceIds = ["integration-api-001", "integration-api-002"] as const;
+const migrationsFolder = fileURLToPath(
+  new URL("../../../packages/database/drizzle", import.meta.url),
+);
+const database = runIntegration ? createDatabase() : undefined;
+
+integration("device list repository", () => {
+  beforeAll(async () => {
+    if (database !== undefined) {
+      await migrate(database.db, { migrationsFolder });
+    }
+  });
+
+  beforeEach(async () => {
+    if (database !== undefined) {
+      await database.db
+        .delete(devices)
+        .where(inArray(devices.deviceId, deviceIds));
+    }
+  });
+
+  afterAll(async () => {
+    if (database !== undefined) {
+      await database.db
+        .delete(devices)
+        .where(inArray(devices.deviceId, deviceIds));
+      await database.client.end();
+    }
+  });
+
+  it("returns devices in device ID order with their latest telemetry", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    const receivedAt = new Date("2026-09-29T02:00:10.000Z");
+    await database.db.insert(devices).values([
+      {
+        deviceId: deviceIds[1],
+        connectionStatus: "OFFLINE",
+      },
+      {
+        deviceId: deviceIds[0],
+        connectionStatus: "ONLINE",
+        lastReceivedAt: receivedAt,
+      },
+    ]);
+    await database.db
+      .insert(telemetry)
+      .values([
+        telemetryRow(0, new Date("2026-09-29T02:00:01.000Z"), 90, "IDLE"),
+        telemetryRow(1, new Date("2026-09-29T02:00:05.000Z"), 75, "FLYING"),
+      ]);
+
+    const repository = createDeviceListRepository(database.db);
+
+    await expect(repository.list()).resolves.toEqual([
+      {
+        deviceId: deviceIds[0],
+        connectionStatus: "ONLINE",
+        battery: 75,
+        flightStatus: "FLYING",
+        lastReceivedAt: receivedAt.toISOString(),
+      },
+      {
+        deviceId: deviceIds[1],
+        connectionStatus: "OFFLINE",
+        battery: null,
+        flightStatus: null,
+        lastReceivedAt: null,
+      },
+    ]);
+  });
+});
+
+function telemetryRow(
+  sequence: number,
+  receivedAt: Date,
+  battery: number,
+  flightStatus: "IDLE" | "FLYING",
+) {
+  return {
+    deviceId: deviceIds[0],
+    sequence,
+    deviceTimestamp: receivedAt,
+    receivedAt,
+    battery,
+    latitude: 35,
+    longitude: 139,
+    altitude: 10,
+    temperature: 25,
+    flightStatus,
+  };
+}

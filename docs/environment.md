@@ -26,6 +26,8 @@ cp .env.example .env
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
+| `API_HOST` | HTTP APIの待受ホスト |
+| `API_PORT` | HTTP APIの待受ポート |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 
