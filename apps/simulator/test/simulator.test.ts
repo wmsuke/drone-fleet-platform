@@ -26,6 +26,7 @@ class FakeMqttClient implements SimulatorMqttClient {
   readonly subscriptions: Array<{ topic: string; options: { qos: 1 } }> = [];
   reconnectCount = 0;
   private nextPublishBlocker: Promise<void> | undefined;
+  private nextPublishError: Error | undefined;
   private readonly listeners = new Map<
     string,
     Array<(...args: never[]) => void>
@@ -40,6 +41,11 @@ class FakeMqttClient implements SimulatorMqttClient {
     const blocker = this.nextPublishBlocker;
     this.nextPublishBlocker = undefined;
     await blocker;
+    const error = this.nextPublishError;
+    this.nextPublishError = undefined;
+    if (error !== undefined) {
+      throw error;
+    }
   }
 
   async endAsync(force?: boolean): Promise<void> {
@@ -88,6 +94,10 @@ class FakeMqttClient implements SimulatorMqttClient {
       release = resolve;
     });
     return release;
+  }
+
+  failNextPublish(error: Error): void {
+    this.nextPublishError = error;
   }
 }
 
@@ -242,6 +252,47 @@ describe("startSimulator", () => {
     );
     expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
     expect(client.subscriptions).toHaveLength(2);
+
+    await simulator.shutdown();
+  });
+
+  it("executes a redelivered command once after its first acknowledgement fails", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        telemetryIntervalMs: 5000,
+      },
+      async () => client,
+    );
+    const command = Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+        deviceId: "drone-001",
+        type: "REBOOT",
+        timestamp: "2026-09-25T08:00:00.000Z",
+      }),
+    );
+    const topic = "fleet/v1/devices/drone-001/commands";
+
+    client.failNextPublish(new Error("ACK publish failed"));
+    client.emitMessage(topic, command);
+    await vi.waitFor(() => expect(client.published).toHaveLength(3));
+    expect(client.endForces).toEqual([]);
+
+    client.emitMessage(topic, command);
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+    expect(client.endForces).toEqual([false]);
+
+    client.emit("connect");
+    await vi.waitFor(() => expect(client.published).toHaveLength(6));
+    client.emitMessage(topic, command);
+    await vi.waitFor(() => expect(client.published).toHaveLength(7));
+    expect(client.reconnectCount).toBe(1);
+    expect(client.endForces).toEqual([false]);
 
     await simulator.shutdown();
   });

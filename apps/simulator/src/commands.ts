@@ -17,6 +17,7 @@ export interface CommandProcessor {
     payload: Buffer,
     timestamp: string,
   ): ProcessedCommand | null;
+  markProcessed(commandId: string): void;
 }
 
 export function createCommandProcessor(deviceId: string): CommandProcessor {
@@ -42,9 +43,6 @@ export function createCommandProcessor(deviceId: string): CommandProcessor {
       }
 
       const command = parsed.data;
-      const duplicate = processedCommandIds.has(command.commandId);
-      processedCommandIds.add(command.commandId);
-
       return {
         acknowledgement: commandAcknowledgementMessageSchema.parse({
           schemaVersion: 1,
@@ -53,8 +51,13 @@ export function createCommandProcessor(deviceId: string): CommandProcessor {
           status: "ACKNOWLEDGED",
           timestamp,
         }),
-        action: duplicate ? null : command.type,
+        action: processedCommandIds.has(command.commandId)
+          ? null
+          : command.type,
       };
+    },
+    markProcessed(commandId) {
+      processedCommandIds.add(commandId);
     },
   };
 }

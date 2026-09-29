@@ -75,6 +75,7 @@ export async function startSimulator(
   let shuttingDown = false;
   let initialConnectionHandled = false;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
+  let commandQueue = Promise.resolve();
 
   const publishTelemetry = async (): Promise<void> => {
     if (publishInProgress || shuttingDown || !client.connected) {
@@ -141,35 +142,42 @@ export async function startSimulator(
     console.error("MQTT接続でエラーが発生しました", error);
   });
   client.on("message", (topic, payload) => {
-    void (async () => {
-      const processed = commandProcessor.process(
-        topic,
-        payload,
-        new Date().toISOString(),
-      );
-      if (processed === null || shuttingDown) {
-        return;
-      }
+    commandQueue = commandQueue
+      .then(async () => {
+        const processed = commandProcessor.process(
+          topic,
+          payload,
+          new Date().toISOString(),
+        );
+        if (processed === null || shuttingDown) {
+          return;
+        }
 
-      await client.publishAsync(
-        commandAcksTopic,
-        JSON.stringify(processed.acknowledgement),
-        { qos: 1, retain: false },
-      );
+        await client.publishAsync(
+          commandAcksTopic,
+          JSON.stringify(processed.acknowledgement),
+          { qos: 1, retain: false },
+        );
 
-      if (processed.action === "RETURN_HOME") {
-        flightStatus = "RETURNING_HOME";
-      } else if (processed.action === "REBOOT") {
-        clearTelemetryTimer();
-        await client.endAsync(false);
-        if (!shuttingDown) {
+        if (processed.action === "RETURN_HOME") {
+          flightStatus = "RETURNING_HOME";
+        } else if (processed.action === "REBOOT") {
+          clearTelemetryTimer();
+          await client.endAsync(false);
+        }
+
+        if (processed.action !== null) {
+          commandProcessor.markProcessed(processed.acknowledgement.commandId);
+        }
+
+        if (processed.action === "REBOOT" && !shuttingDown) {
           client.options.will = createWill();
           client.reconnect();
         }
-      }
-    })().catch((error: unknown) => {
-      console.error("コマンドの処理に失敗しました", error);
-    });
+      })
+      .catch((error: unknown) => {
+        console.error("コマンドの処理に失敗しました", error);
+      });
   });
   client.on("connect", () => {
     if (initialConnectionHandled && !shuttingDown) {

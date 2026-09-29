@@ -46,11 +46,23 @@ describe("createCommandProcessor", () => {
     const topic = "fleet/v1/devices/drone-001/commands";
 
     const first = processor.process(topic, commandPayload(), timestamp);
+    processor.markProcessed(commandId);
     const duplicate = processor.process(topic, commandPayload(), timestamp);
 
     expect(first?.action).toBe("RETURN_HOME");
     expect(duplicate?.action).toBeNull();
     expect(duplicate?.acknowledgement.commandId).toBe(commandId);
+  });
+
+  it("keeps an uncommitted command actionable for redelivery", () => {
+    const processor = createCommandProcessor("drone-001");
+    const topic = "fleet/v1/devices/drone-001/commands";
+
+    const first = processor.process(topic, commandPayload(), timestamp);
+    const redelivery = processor.process(topic, commandPayload(), timestamp);
+
+    expect(first?.action).toBe("RETURN_HOME");
+    expect(redelivery?.action).toBe("RETURN_HOME");
   });
 
   it.each([
