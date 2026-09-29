@@ -41,7 +41,13 @@ export async function startTelemetryIngestor(
     logger.error("MQTT接続でエラーが発生しました", { error });
   });
   client.on("message", (topic, payload) => {
-    const task = ingestTelemetry(topic, payload, new Date(), repository, logger);
+    const task = ingestTelemetry(
+      topic,
+      payload,
+      new Date(),
+      repository,
+      logger,
+    );
     inFlight.add(task);
     void task.finally(() => {
       inFlight.delete(task);
