@@ -71,10 +71,26 @@ importers:
         version: 6.0.3
 
   apps/telemetry-ingestor:
+    dependencies:
+      '@drone-fleet/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@drone-fleet/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      mqtt:
+        specifier: ^5.16.0
+        version: 5.16.0
     devDependencies:
       '@drone-fleet/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(postgres@3.4.9)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
