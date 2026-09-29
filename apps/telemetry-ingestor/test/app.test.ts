@@ -43,6 +43,25 @@ class FakeMqttClient implements TelemetryMqttClient {
   }
 }
 
+function validTelemetryPayload(): Buffer {
+  return Buffer.from(
+    JSON.stringify({
+      schemaVersion: 1,
+      deviceId: "drone-001",
+      sequence: 0,
+      timestamp: "2026-09-29T02:00:00.000Z",
+      payload: {
+        battery: 100,
+        latitude: 35,
+        longitude: 139,
+        altitude: 0,
+        temperature: 25,
+        status: "IDLE",
+      },
+    }),
+  );
+}
+
 describe("startTelemetryIngestor", () => {
   it("subscribes to all telemetry topics and handles consecutive messages", async () => {
     const client = new FakeMqttClient();
@@ -75,26 +94,55 @@ describe("startTelemetryIngestor", () => {
     client.emitMessage(TELEMETRY_TOPIC_FILTER, Buffer.from("{"));
     client.emitMessage(
       "fleet/v1/devices/drone-001/telemetry",
-      Buffer.from(
-        JSON.stringify({
-          schemaVersion: 1,
-          deviceId: "drone-001",
-          sequence: 0,
-          timestamp: "2026-09-29T02:00:00.000Z",
-          payload: {
-            battery: 100,
-            latitude: 35,
-            longitude: 139,
-            altitude: 0,
-            temperature: 25,
-            status: "IDLE",
-          },
-        }),
-      ),
+      validTelemetryPayload(),
     );
     await vi.waitFor(() => expect(saved).toEqual(["drone-001"]));
 
     await ingestor.shutdown();
     expect(client.endForces).toEqual([false]);
+  });
+
+  it("waits for in-flight persistence before shutdown completes", async () => {
+    const client = new FakeMqttClient();
+    let releaseSave = (): void => undefined;
+    let markSaveStarted = (): void => undefined;
+    const saveStarted = new Promise<void>((resolve) => {
+      markSaveStarted = resolve;
+    });
+    const saveBlocker = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    const repository: TelemetryRepository = {
+      async save() {
+        markSaveStarted();
+        await saveBlocker;
+      },
+    };
+    const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const ingestor = await startTelemetryIngestor(
+      { mqttUrl: "mqtt://127.0.0.1:1883" },
+      repository,
+      logger,
+      async () => client,
+    );
+
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry",
+      validTelemetryPayload(),
+    );
+    await saveStarted;
+
+    let shutdownCompleted = false;
+    const shutdown = ingestor.shutdown().then(() => {
+      shutdownCompleted = true;
+    });
+
+    await vi.waitFor(() => expect(client.endForces).toEqual([false]));
+    await Promise.resolve();
+    expect(shutdownCompleted).toBe(false);
+
+    releaseSave();
+    await shutdown;
+    expect(shutdownCompleted).toBe(true);
   });
 });
