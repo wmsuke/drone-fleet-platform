@@ -35,12 +35,17 @@ export async function startTelemetryIngestor(
     clean: true,
     clientId: "telemetry-ingestor",
   });
+  const inFlight = new Set<Promise<boolean>>();
 
   client.on("error", (error) => {
     logger.error("MQTT接続でエラーが発生しました", { error });
   });
   client.on("message", (topic, payload) => {
-    void ingestTelemetry(topic, payload, new Date(), repository, logger);
+    const task = ingestTelemetry(topic, payload, new Date(), repository, logger);
+    inFlight.add(task);
+    void task.finally(() => {
+      inFlight.delete(task);
+    });
   });
 
   try {
@@ -52,7 +57,18 @@ export async function startTelemetryIngestor(
 
   return {
     async shutdown() {
-      await client.endAsync(false);
+      let disconnectError: unknown;
+      try {
+        await client.endAsync(false);
+      } catch (error) {
+        disconnectError = error;
+      }
+
+      await Promise.allSettled([...inFlight]);
+
+      if (disconnectError !== undefined) {
+        throw disconnectError;
+      }
     },
   };
 }
