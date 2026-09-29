@@ -92,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-Phase 0の開発基盤に加え、Phase 1の通信仕様と仮想ドローン1台からのMQTT送信までを実装済みである。`apps/api`、`apps/telemetry-ingestor`、`apps/dashboard`、`packages/database`はビルド可能なプレースホルダーであり、以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存を実装済みである。`apps/api`と`apps/dashboard`はビルド可能なプレースホルダーであり、以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -107,10 +107,10 @@ Phase 1で、デバイス情報の取得とコマンド送信を扱うHTTP API�
 
 ### apps/telemetry-ingestor
 
-Phase 1で、MQTTメッセージを受信し、検証してDBへ保存する。
+テレメトリトピックの購読、通信仕様による検証、既存デバイスへのテレメトリ保存を実装済みである。初回受信時のデバイス登録、接続状態、ACKの処理は後続Issueで追加する。
 
 - 初回受信時のデバイス登録
-- テレメトリの保存
+- テレメトリの保存（実装済み）
 - 接続状態と最終受信時刻の更新
 - ACKによるコマンド状態の更新
 

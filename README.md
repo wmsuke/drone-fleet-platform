@@ -180,6 +180,12 @@ DB制約を含むintegration testは、PostgreSQL起動後に次のコマンド�
 DATABASE_INTEGRATION=true pnpm db:test:integration
 ```
 
+MQTT受信処理のテレメトリ保存を実DBで確認する場合は、次のintegration testを実行する。テスト内で既存デバイスを用意し、有効なテレメトリだけが保存されることを確認する。
+
+```bash
+DATABASE_INTEGRATION=true pnpm telemetry:test:integration
+```
+
 スキーマを変更した場合は、変更内容を確認してから新しいSQLマイグレーションを生成する。
 
 ```bash

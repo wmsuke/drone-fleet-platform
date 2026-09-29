@@ -7,10 +7,18 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test:integration": "vitest run test/repository.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@drone-fleet/config": "workspace:*",
+    "@types/node": "^26.6.3",
+    "drizzle-orm": "^0.45.3",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@drone-fleet/database": "workspace:*",
+    "@drone-fleet/protocol": "workspace:*",
+    "mqtt": "^5.16.0"
   }
 }
