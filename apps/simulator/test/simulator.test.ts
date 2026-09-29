@@ -1,4 +1,5 @@
 import {
+  commandAcknowledgementMessageSchema,
   connectionStatusMessageSchema,
   telemetryMessageSchema,
 } from "@drone-fleet/protocol";
@@ -22,6 +23,8 @@ class FakeMqttClient implements SimulatorMqttClient {
   options: IClientOptions = {};
   readonly published: PublishedMessage[] = [];
   readonly endForces: Array<boolean | undefined> = [];
+  readonly subscriptions: Array<{ topic: string; options: { qos: 1 } }> = [];
+  reconnectCount = 0;
   private nextPublishBlocker: Promise<void> | undefined;
   private readonly listeners = new Map<
     string,
@@ -44,8 +47,22 @@ class FakeMqttClient implements SimulatorMqttClient {
     this.connected = false;
   }
 
+  reconnect(): this {
+    this.reconnectCount += 1;
+    this.connected = true;
+    return this;
+  }
+
+  async subscribeAsync(topic: string, options: { qos: 1 }): Promise<void> {
+    this.subscriptions.push({ topic, options });
+  }
+
   on(event: "connect" | "offline" | "reconnect", listener: () => void): this;
   on(event: "error", listener: (error: Error) => void): this;
+  on(
+    event: "message",
+    listener: (topic: string, payload: Buffer) => void,
+  ): this;
   on(event: string, listener: (...args: never[]) => void): this {
     const listeners = this.listeners.get(event) ?? [];
     listeners.push(listener);
@@ -56,6 +73,12 @@ class FakeMqttClient implements SimulatorMqttClient {
   emit(event: "connect" | "offline" | "reconnect"): void {
     for (const listener of this.listeners.get(event) ?? []) {
       listener();
+    }
+  }
+
+  emitMessage(topic: string, payload: Buffer): void {
+    for (const listener of this.listeners.get("message") ?? []) {
+      listener(topic, payload);
     }
   }
 
@@ -107,6 +130,12 @@ describe("startSimulator", () => {
     });
 
     expect(client.published).toHaveLength(2);
+    expect(client.subscriptions).toEqual([
+      {
+        topic: "fleet/v1/devices/drone-001/commands",
+        options: { qos: 1 },
+      },
+    ]);
     const online = connectionStatusMessageSchema.parse(
       JSON.parse(client.published[0]?.message ?? ""),
     );
@@ -130,6 +159,91 @@ describe("startSimulator", () => {
     expect(offline.payload).toEqual({ status: "OFFLINE", reason: "SHUTDOWN" });
     expect(client.published[3]?.options).toEqual({ qos: 1, retain: true });
     expect(client.endForces).toEqual([false]);
+  });
+
+  it("acknowledges RETURN_HOME and changes subsequent telemetry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-25T08:00:00.000Z"));
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        telemetryIntervalMs: 5000,
+      },
+      async () => client,
+    );
+    const commandId = "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c";
+    const command = Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        commandId,
+        deviceId: "drone-001",
+        type: "RETURN_HOME",
+        timestamp: "2026-09-25T08:00:00.000Z",
+      }),
+    );
+
+    client.emitMessage("fleet/v1/devices/drone-001/commands", command);
+    await vi.waitFor(() => expect(client.published).toHaveLength(3));
+
+    const acknowledgement = commandAcknowledgementMessageSchema.parse(
+      JSON.parse(client.published[2]?.message ?? ""),
+    );
+    expect(acknowledgement.commandId).toBe(commandId);
+    expect(client.published[2]?.options).toEqual({ qos: 1, retain: false });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    const telemetry = telemetryMessageSchema.parse(
+      JSON.parse(client.published[3]?.message ?? ""),
+    );
+    expect(telemetry.payload.status).toBe("RETURNING_HOME");
+
+    client.emitMessage("fleet/v1/devices/drone-001/commands", command);
+    await vi.waitFor(() => expect(client.published).toHaveLength(5));
+    expect(client.endForces).toEqual([]);
+
+    await simulator.shutdown();
+  });
+
+  it("acknowledges REBOOT before reconnecting and announces ONLINE again", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        telemetryIntervalMs: 5000,
+      },
+      async () => client,
+    );
+    const command = Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+        deviceId: "drone-001",
+        type: "REBOOT",
+        timestamp: "2026-09-25T08:00:00.000Z",
+      }),
+    );
+
+    client.emitMessage("fleet/v1/devices/drone-001/commands", command);
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+
+    expect(client.published[2]?.topic).toBe(
+      "fleet/v1/devices/drone-001/command-acks",
+    );
+    expect(client.endForces).toEqual([false]);
+
+    client.emit("connect");
+    await vi.waitFor(() => expect(client.published).toHaveLength(5));
+    const online = connectionStatusMessageSchema.parse(
+      JSON.parse(client.published[3]?.message ?? ""),
+    );
+    expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
+    expect(client.subscriptions).toHaveLength(2);
+
+    await simulator.shutdown();
   });
 
   it("forces shutdown without publishing when disconnected", async () => {
