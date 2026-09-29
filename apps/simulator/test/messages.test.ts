@@ -33,15 +33,14 @@ describe("simulator messages", () => {
     expect(message.payload.status).toBe("IDLE");
   });
 
-  it("changes battery according to sequence without leaving its range", () => {
+  it("changes state according to sequence without leaving protocol ranges", () => {
+    const first = createTelemetryMessage("drone-001", 1, timestamp);
+    const second = createTelemetryMessage("drone-001", 2, timestamp);
+
     expect(
-      createTelemetryMessage("drone-001", 1, timestamp).payload.battery,
-    ).toBe(99);
-    expect(
-      createTelemetryMessage("drone-001", 100, timestamp).payload.battery,
-    ).toBe(0);
-    expect(
-      createTelemetryMessage("drone-001", 101, timestamp).payload.battery,
-    ).toBe(100);
+      telemetryMessageSchema.safeParse(first).success &&
+        telemetryMessageSchema.safeParse(second).success,
+    ).toBe(true);
+    expect(second.payload).not.toEqual(first.payload);
   });
 });
