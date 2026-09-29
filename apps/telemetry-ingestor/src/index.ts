@@ -26,7 +26,11 @@ async function main(): Promise<void> {
     console.log(`${signal}を受信したためMQTT受信処理を停止します`);
 
     try {
-      await Promise.all([ingestor.shutdown(), databaseClient.end()]);
+      try {
+        await ingestor.shutdown();
+      } finally {
+        await databaseClient.end();
+      }
       process.exitCode = 0;
     } catch (error) {
       console.error("MQTT受信処理の停止に失敗しました", error);
