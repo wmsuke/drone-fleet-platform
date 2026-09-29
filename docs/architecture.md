@@ -204,7 +204,7 @@ Phase 1では、次の3テーブルを使用する。
 
 接続時はONLINEを通知する。予期しない切断はMQTTのLWTでOFFLINEを通知する。
 
-通知だけに依存せず、最終受信時刻からの経過時間も使って判定する。通常のONLINE通知またはテレメトリ受信でONLINE、OFFLINE通知または既定15秒の未受信でOFFLINEとする。閾値は`OFFLINE_TIMEOUT_MS`で変更できる。購読直後に届くretainedのONLINE通知だけでは、現在も接続中とは確認できないためONLINEへ更新しない。
+通知だけに依存せず、最終受信時刻からの経過時間も使って判定する。通常のONLINE通知またはテレメトリ受信でONLINE、OFFLINE通知または既定15秒の未受信でOFFLINEとする。閾値は`OFFLINE_TIMEOUT_MS`で変更できる。購読直後に届くretainedのONLINE通知だけでは現在も接続中とは確認できないため、未知deviceの登録だけを行い、接続状態と最終受信時刻は更新しない。防御的にretainedのテレメトリも同様に扱う。
 
 ## 設計の理由
 

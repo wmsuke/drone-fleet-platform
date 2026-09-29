@@ -4,6 +4,16 @@ import { sql } from "drizzle-orm";
 type DeviceWriteDatabase = Pick<Database, "insert">;
 export type DeviceConnectionStatus = "ONLINE" | "OFFLINE";
 
+export async function ensureDeviceRegistered(
+  database: DeviceWriteDatabase,
+  deviceId: string,
+): Promise<void> {
+  await database
+    .insert(devices)
+    .values({ deviceId })
+    .onConflictDoNothing({ target: devices.deviceId });
+}
+
 export async function upsertDeviceReceipt(
   database: DeviceWriteDatabase,
   deviceId: string,

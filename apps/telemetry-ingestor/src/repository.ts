@@ -5,7 +5,10 @@ import {
 } from "@drone-fleet/database";
 import type { TelemetryMessage } from "@drone-fleet/protocol";
 
-import { upsertDeviceReceipt } from "./device-repository.js";
+import {
+  ensureDeviceRegistered,
+  upsertDeviceReceipt,
+} from "./device-repository.js";
 
 export interface TelemetryRepository {
   save(
@@ -39,12 +42,16 @@ export function createTelemetryRepository(
   return {
     async save(message, receivedAt, isRetained = false) {
       await database.transaction(async (transaction) => {
-        await upsertDeviceReceipt(
-          transaction,
-          message.deviceId,
-          receivedAt,
-          isRetained ? undefined : "ONLINE",
-        );
+        if (isRetained) {
+          await ensureDeviceRegistered(transaction, message.deviceId);
+        } else {
+          await upsertDeviceReceipt(
+            transaction,
+            message.deviceId,
+            receivedAt,
+            "ONLINE",
+          );
+        }
         await transaction
           .insert(telemetry)
           .values(toNewTelemetry(message, receivedAt));

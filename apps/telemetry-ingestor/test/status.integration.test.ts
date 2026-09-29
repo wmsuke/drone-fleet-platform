@@ -66,7 +66,7 @@ integration("device connection status repository", () => {
     );
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
-      lastReceivedAt: firstReceipt,
+      lastReceivedAt: null,
     });
 
     await statusRepository.saveStatus(
@@ -76,11 +76,54 @@ integration("device connection status repository", () => {
     );
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
+      lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
     });
 
     await statusRepository.saveStatus(
+      statusMessage("ONLINE", "CONNECTED"),
+      new Date("2026-09-29T02:00:16.000Z"),
+      true,
+    );
+    await telemetryRepository.save(
+      {
+        schemaVersion: 1,
+        deviceId,
+        sequence: 0,
+        timestamp: "2026-09-29T02:00:17.000Z",
+        payload: {
+          battery: 100,
+          latitude: 35,
+          longitude: 139,
+          altitude: 0,
+          temperature: 25,
+          status: "IDLE",
+        },
+      },
+      new Date("2026-09-29T02:00:17.000Z"),
+      true,
+    );
+    await expect(readDevice()).resolves.toMatchObject({
+      connectionStatus: "ONLINE",
+      lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
+    });
+
+    await statusRepository.markTimedOut(
+      new Date("2026-09-29T02:00:01.000Z"),
+      new Date("2026-09-29T02:00:16.000Z"),
+    );
+    await expect(readDevice()).resolves.toMatchObject({
+      connectionStatus: "OFFLINE",
+      lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
+    });
+
+    await statusRepository.saveStatus(
+      statusMessage("ONLINE", "CONNECTED"),
+      new Date("2026-09-29T02:00:18.000Z"),
+      false,
+    );
+    await statusRepository.saveStatus(
       statusMessage("OFFLINE", "CONNECTION_LOST"),
-      new Date("2026-09-29T02:00:02.000Z"),
+      new Date("2026-09-29T02:00:19.000Z"),
       false,
     );
     await expect(readDevice()).resolves.toMatchObject({
@@ -91,8 +134,8 @@ integration("device connection status repository", () => {
       {
         schemaVersion: 1,
         deviceId,
-        sequence: 0,
-        timestamp: "2026-09-29T02:00:03.000Z",
+        sequence: 1,
+        timestamp: "2026-09-29T02:00:20.000Z",
         payload: {
           battery: 100,
           latitude: 35,
@@ -102,27 +145,27 @@ integration("device connection status repository", () => {
           status: "IDLE",
         },
       },
-      new Date("2026-09-29T02:00:03.000Z"),
+      new Date("2026-09-29T02:00:20.000Z"),
     );
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
     });
 
     await statusRepository.markTimedOut(
-      new Date("2026-09-29T02:00:03.000Z"),
-      new Date("2026-09-29T02:00:18.000Z"),
+      new Date("2026-09-29T02:00:20.000Z"),
+      new Date("2026-09-29T02:00:35.000Z"),
     );
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
-      updatedAt: new Date("2026-09-29T02:00:18.000Z"),
+      updatedAt: new Date("2026-09-29T02:00:35.000Z"),
     });
 
     await telemetryRepository.save(
       {
         schemaVersion: 1,
         deviceId,
-        sequence: 1,
-        timestamp: "2026-09-29T02:00:19.000Z",
+        sequence: 2,
+        timestamp: "2026-09-29T02:00:36.000Z",
         payload: {
           battery: 99,
           latitude: 35,
@@ -132,11 +175,11 @@ integration("device connection status repository", () => {
           status: "IDLE",
         },
       },
-      new Date("2026-09-29T02:00:19.000Z"),
+      new Date("2026-09-29T02:00:36.000Z"),
     );
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
-      lastReceivedAt: new Date("2026-09-29T02:00:19.000Z"),
+      lastReceivedAt: new Date("2026-09-29T02:00:36.000Z"),
     });
   });
 });

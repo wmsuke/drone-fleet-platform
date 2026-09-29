@@ -7,8 +7,8 @@ import { and, eq, lte } from "drizzle-orm";
 import { devices, type Database } from "@drone-fleet/database";
 
 import {
+  ensureDeviceRegistered,
   upsertDeviceReceipt,
-  type DeviceConnectionStatus,
 } from "./device-repository.js";
 import type { IngestionLogger } from "./ingestion.js";
 
@@ -26,11 +26,16 @@ export function createDeviceStatusRepository(
 ): DeviceStatusRepository {
   return {
     async saveStatus(message, receivedAt, isRetained) {
-      const status: DeviceConnectionStatus | undefined =
-        isRetained && message.payload.status === "ONLINE"
-          ? undefined
-          : message.payload.status;
-      await upsertDeviceReceipt(database, message.deviceId, receivedAt, status);
+      if (isRetained && message.payload.status === "ONLINE") {
+        await ensureDeviceRegistered(database, message.deviceId);
+        return;
+      }
+      await upsertDeviceReceipt(
+        database,
+        message.deviceId,
+        receivedAt,
+        message.payload.status,
+      );
     },
     async markTimedOut(cutoff, updatedAt) {
       await database
