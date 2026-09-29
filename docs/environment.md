@@ -25,7 +25,7 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
-| `SIMULATOR_DEVICE_ID` | シミュレータが使用する仮想ドローンのID |
+| `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 
 値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`MQTT_HOST`は、ホストOSからDocker ComposeのMosquittoへ接続する値である。サービスをComposeへ追加するときは、そのサービスに`mqtt`を接続先として設定する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。

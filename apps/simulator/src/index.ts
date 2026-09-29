@@ -1,9 +1,9 @@
 import { loadSimulatorConfig } from "./config.js";
-import { startSimulator } from "./simulator.js";
+import { startSimulatorFleet } from "./fleet.js";
 
 async function main(): Promise<void> {
   const config = loadSimulatorConfig();
-  const simulator = await startSimulator(config);
+  const fleet = await startSimulatorFleet(config);
 
   let shutdownStarted = false;
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
@@ -15,7 +15,7 @@ async function main(): Promise<void> {
     console.log(`${signal}を受信したためシミュレータを停止します`);
 
     try {
-      await simulator.shutdown();
+      await fleet.shutdown();
       process.exitCode = 0;
     } catch (error) {
       console.error("シミュレータの停止に失敗しました", error);

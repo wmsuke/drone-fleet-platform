@@ -120,7 +120,7 @@ docker compose exec mqtt mosquitto_sub -h localhost -t fleet/test
 docker compose exec mqtt mosquitto_pub -h localhost -t fleet/test -m hello
 ```
 
-### 仮想ドローン1台の起動
+### 仮想ドローンの起動
 
 `.env.example`をコピーし、Mosquittoを起動する。
 
@@ -129,21 +129,23 @@ cp .env.example .env
 docker compose up -d mqtt
 ```
 
-最初のターミナルで対象機体の接続状態とテレメトリを購読する。
+最初のターミナルで全機体のテレメトリを購読する。`-v`によりトピックへ含まれるdeviceIdを識別できる。
 
 ```bash
 docker compose exec mqtt mosquitto_sub -v -h localhost \
-  -t 'fleet/v1/devices/drone-001/#'
+  -t 'fleet/v1/devices/+/telemetry'
 ```
 
-別のターミナルでシミュレータを起動する。起動直後にONLINEとテレメトリを送信し、以後は約5秒ごとにテレメトリを送信する。
+別のターミナルでシミュレータを起動する。`DRONE_COUNT`の既定値は10で、`drone-001`から`drone-010`が起動する。各機体は起動直後にONLINEとテレメトリを送信し、以後は約5秒ごとにテレメトリを送信する。
 
 ```bash
 pnpm --filter @drone-fleet/simulator... build
 node --env-file=.env apps/simulator/dist/index.js
 ```
 
-シミュレータを`Ctrl+C`で終了すると、OFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
+台数を変更する場合は`.env`の`DRONE_COUNT`へ1〜1000の整数を指定する。不正な値では起動せずエラーを表示する。1000台規模の性能はPhase 1の保証対象外とする。
+
+シミュレータを`Ctrl+C`で終了すると、全機体がOFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
 
 確認後はブローカーを停止する。
 
