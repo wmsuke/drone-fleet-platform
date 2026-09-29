@@ -1,5 +1,5 @@
 {
-  "id": "f7ed4474-518b-4644-9792-7daf3093cae9",
+  "id": "e8571b93-eaf7-49ab-b4bb-01d24cc838c5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -209,7 +209,7 @@
         },
         "sequence": {
           "name": "sequence",
-          "type": "integer",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         },
@@ -265,8 +265,8 @@
         }
       },
       "indexes": {
-        "telemetry_device_sequence_unique": {
-          "name": "telemetry_device_sequence_unique",
+        "telemetry_device_sequence_idx": {
+          "name": "telemetry_device_sequence_idx",
           "columns": [
             {
               "expression": "device_id",
@@ -281,7 +281,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

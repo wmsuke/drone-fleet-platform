@@ -14,6 +14,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @drone-fleet/database db:generate",
     "db:migrate": "pnpm --filter @drone-fleet/database db:migrate",
+    "db:test:integration": "pnpm --filter @drone-fleet/database test:integration",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . && pnpm format:check",

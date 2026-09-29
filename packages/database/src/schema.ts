@@ -1,16 +1,15 @@
 import { sql } from "drizzle-orm";
 import {
   bigserial,
+  bigint,
   check,
   doublePrecision,
   index,
-  integer,
   pgEnum,
   pgTable,
   primaryKey,
   real,
   timestamp,
-  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -66,7 +65,7 @@ export const telemetry = pgTable(
     deviceId: varchar("device_id", { length: 64 })
       .notNull()
       .references(() => devices.deviceId, { onDelete: "cascade" }),
-    sequence: integer("sequence").notNull(),
+    sequence: bigint("sequence", { mode: "number" }).notNull(),
     deviceTimestamp: timestamp("device_timestamp", {
       withTimezone: true,
       mode: "date",
@@ -85,10 +84,7 @@ export const telemetry = pgTable(
     flightStatus: flightStatusEnum("flight_status").notNull(),
   },
   (table) => [
-    uniqueIndex("telemetry_device_sequence_unique").on(
-      table.deviceId,
-      table.sequence,
-    ),
+    index("telemetry_device_sequence_idx").on(table.deviceId, table.sequence),
     index("telemetry_device_received_at_idx").on(
       table.deviceId,
       table.receivedAt.desc(),

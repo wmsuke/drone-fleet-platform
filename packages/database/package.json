@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "db:generate": "drizzle-kit generate --config=drizzle.config.mjs",
     "db:migrate": "pnpm build && node --env-file-if-exists=../../.env dist/migrate.js",
+    "test:integration": "vitest run test/database.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

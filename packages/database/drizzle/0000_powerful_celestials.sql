@@ -28,7 +28,7 @@ CREATE TABLE "devices" (
 CREATE TABLE "telemetry" (
 	"id" bigserial PRIMARY KEY NOT NULL,
 	"device_id" varchar(64) NOT NULL,
-	"sequence" integer NOT NULL,
+	"sequence" bigint NOT NULL,
 	"device_timestamp" timestamp with time zone NOT NULL,
 	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"battery" real NOT NULL,
@@ -49,5 +49,5 @@ ALTER TABLE "commands" ADD CONSTRAINT "commands_device_id_devices_device_id_fk" 
 ALTER TABLE "telemetry" ADD CONSTRAINT "telemetry_device_id_devices_device_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("device_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "commands_device_created_at_idx" ON "commands" USING btree ("device_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "commands_status_created_at_idx" ON "commands" USING btree ("status","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "telemetry_device_sequence_unique" ON "telemetry" USING btree ("device_id","sequence");--> statement-breakpoint
+CREATE INDEX "telemetry_device_sequence_idx" ON "telemetry" USING btree ("device_id","sequence");--> statement-breakpoint
 CREATE INDEX "telemetry_device_received_at_idx" ON "telemetry" USING btree ("device_id","received_at" DESC NULLS LAST);

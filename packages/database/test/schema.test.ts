@@ -37,10 +37,12 @@ describe("database schema", () => {
     expect(deviceConfig.primaryKeys).toHaveLength(1);
     expect(telemetryConfig.foreignKeys).toHaveLength(1);
     expect(telemetryConfig.checks).toHaveLength(6);
+    expect(telemetry.sequence.dataType).toBe("number");
     expect(telemetryConfig.indexes.map(({ config }) => config.name)).toEqual([
-      "telemetry_device_sequence_unique",
+      "telemetry_device_sequence_idx",
       "telemetry_device_received_at_idx",
     ]);
+    expect(telemetryConfig.indexes[0]?.config.unique).toBe(false);
     expect(commandConfig.foreignKeys).toHaveLength(1);
     expect(commandConfig.checks).toHaveLength(1);
     expect(commandConfig.indexes.map(({ config }) => config.name)).toEqual([

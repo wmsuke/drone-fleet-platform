@@ -174,6 +174,12 @@ Drizzleのマイグレーションを適用する。再実行しても適用済�
 pnpm db:migrate
 ```
 
+DB制約を含むintegration testは、PostgreSQL起動後に次のコマンドで実行する。
+
+```bash
+DATABASE_INTEGRATION=true pnpm db:test:integration
+```
+
 スキーマを変更した場合は、変更内容を確認してから新しいSQLマイグレーションを生成する。
 
 ```bash
