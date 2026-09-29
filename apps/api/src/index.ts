@@ -2,12 +2,12 @@ import { createDatabase } from "@drone-fleet/database";
 
 import { buildApi } from "./app.js";
 import { loadApiConfig } from "./config.js";
-import { createDeviceListRepository } from "./repository.js";
+import { createDeviceRepository } from "./repository.js";
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const { client, db } = createDatabase();
-  const app = buildApi(createDeviceListRepository(db));
+  const app = buildApi(createDeviceRepository(db));
 
   let closing = false;
   const shutdown = async () => {

@@ -4,7 +4,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createDeviceListRepository } from "../src/repository.js";
+import { createDeviceRepository } from "../src/repository.js";
 
 const runIntegration = process.env.DATABASE_INTEGRATION === "true";
 const integration = describe.skipIf(!runIntegration);
@@ -61,7 +61,7 @@ integration("device list repository", () => {
         telemetryRow(1, new Date("2026-09-29T02:00:05.000Z"), 75, "FLYING"),
       ]);
 
-    const repository = createDeviceListRepository(database.db);
+    const repository = createDeviceRepository(database.db);
 
     await expect(repository.list()).resolves.toEqual([
       {
@@ -79,6 +79,60 @@ integration("device list repository", () => {
         lastReceivedAt: null,
       },
     ]);
+  });
+
+  it("returns one device with its latest telemetry", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    const createdAt = new Date("2026-09-29T01:00:00.000Z");
+    const updatedAt = new Date("2026-09-29T02:00:10.000Z");
+    await database.db.insert(devices).values({
+      deviceId: deviceIds[0],
+      model: "virtual-drone",
+      softwareVersion: "1.0.0",
+      connectionStatus: "ONLINE",
+      lastReceivedAt: updatedAt,
+      createdAt,
+      updatedAt,
+    });
+    await database.db
+      .insert(telemetry)
+      .values([
+        telemetryRow(0, new Date("2026-09-29T02:00:01.000Z"), 90, "IDLE"),
+        telemetryRow(1, new Date("2026-09-29T02:00:05.000Z"), 75, "FLYING"),
+      ]);
+    const repository = createDeviceRepository(database.db);
+
+    await expect(repository.findById(deviceIds[0])).resolves.toEqual({
+      deviceId: deviceIds[0],
+      model: "virtual-drone",
+      softwareVersion: "1.0.0",
+      connectionStatus: "ONLINE",
+      lastReceivedAt: updatedAt.toISOString(),
+      createdAt: createdAt.toISOString(),
+      updatedAt: updatedAt.toISOString(),
+      latestTelemetry: {
+        sequence: 1,
+        deviceTimestamp: "2026-09-29T02:00:05.000Z",
+        receivedAt: "2026-09-29T02:00:05.000Z",
+        battery: 75,
+        latitude: 35,
+        longitude: 139,
+        altitude: 10,
+        temperature: 25,
+        flightStatus: "FLYING",
+      },
+    });
+  });
+
+  it("returns null for an unregistered device", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    const repository = createDeviceRepository(database.db);
+
+    await expect(repository.findById(deviceIds[0])).resolves.toBeNull();
   });
 });
 
