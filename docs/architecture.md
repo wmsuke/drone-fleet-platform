@@ -198,7 +198,7 @@ Phase 1では、次の3テーブルを使用する。
 
 接続状態は`devices.connection_status`、飛行状態は`telemetry.flight_status`として別に管理する。テレメトリのsequenceはプロセス再起動で0へ戻るため一意制約には使わず、機体とsequence、および機体と受信時刻の複合インデックスを持つ。コマンドは機体と作成時刻、状態と作成時刻のインデックスを持つ。
 
-初めて受信したdeviceIdは`devices`の主キーとupsertを使って登録する。同じdeviceIdの同時受信でも1行だけを保持し、受信ごとに`last_received_at`を更新する。Phase 1のメッセージには機体情報がないため、`model`と`software_version`は初期値を`null`とする。
+初めて受信したdeviceIdは`devices`の主キーとupsertを使って登録する。同じdeviceIdの同時受信でも1行だけを保持する。`last_received_at`と`updated_at`は既存値と受信時刻の大きい方を保存し、並行処理の完了順によって時刻が戻らないようにする。Phase 1のメッセージには機体情報がないため、`model`と`software_version`は初期値を`null`とする。
 
 ## Phase 1の接続状態の判定
 

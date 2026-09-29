@@ -1,10 +1,11 @@
 import {
-  devices,
   telemetry,
   type Database,
   type NewTelemetry,
 } from "@drone-fleet/database";
 import type { TelemetryMessage } from "@drone-fleet/protocol";
+
+import { upsertDeviceReceipt } from "./device-repository.js";
 
 export interface TelemetryRepository {
   save(message: TelemetryMessage, receivedAt: Date): Promise<void>;
@@ -34,20 +35,7 @@ export function createTelemetryRepository(
   return {
     async save(message, receivedAt) {
       await database.transaction(async (transaction) => {
-        await transaction
-          .insert(devices)
-          .values({
-            deviceId: message.deviceId,
-            lastReceivedAt: receivedAt,
-            updatedAt: receivedAt,
-          })
-          .onConflictDoUpdate({
-            target: devices.deviceId,
-            set: {
-              lastReceivedAt: receivedAt,
-              updatedAt: receivedAt,
-            },
-          });
+        await upsertDeviceReceipt(transaction, message.deviceId, receivedAt);
         await transaction
           .insert(telemetry)
           .values(toNewTelemetry(message, receivedAt));

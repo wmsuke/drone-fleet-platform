@@ -154,12 +154,51 @@ integration("telemetry repository", () => {
     expect(registeredDevices[0]?.lastReceivedAt).toEqual(secondReceivedAt);
   });
 
+  it("does not move receipt timestamps backwards", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    const repository = createTelemetryRepository(database.db);
+    const newerReceivedAt = new Date("2026-09-29T02:00:10.000Z");
+    const olderReceivedAt = new Date("2026-09-29T02:00:05.000Z");
+    const createMessage = (sequence: number) => ({
+      schemaVersion: 1 as const,
+      deviceId,
+      sequence,
+      timestamp: "2026-09-29T02:00:00.000Z",
+      payload: {
+        battery: 100,
+        latitude: 35,
+        longitude: 139,
+        altitude: 0,
+        temperature: 25,
+        status: "IDLE" as const,
+      },
+    });
+
+    await repository.save(createMessage(0), newerReceivedAt);
+    await repository.save(createMessage(1), olderReceivedAt);
+
+    const registeredDevices = await database.db
+      .select()
+      .from(devices)
+      .where(eq(devices.deviceId, deviceId));
+    expect(registeredDevices[0]).toMatchObject({
+      lastReceivedAt: newerReceivedAt,
+      updatedAt: newerReceivedAt,
+    });
+  });
+
   it("registers one device during concurrent first receipts", async () => {
     if (database === undefined) {
       throw new Error("database integration test is not configured");
     }
     const repository = createTelemetryRepository(database.db);
-    const receivedAt = new Date("2026-09-29T02:00:01.000Z");
+    const receivedTimes = Array.from(
+      { length: 10 },
+      (_, index) =>
+        new Date(`2026-09-29T02:00:${String(index).padStart(2, "0")}.000Z`),
+    );
 
     await Promise.all(
       Array.from({ length: 10 }, async (_, sequence) =>
@@ -178,7 +217,7 @@ integration("telemetry repository", () => {
               status: "IDLE",
             },
           },
-          receivedAt,
+          receivedTimes[sequence] ?? new Date(0),
         ),
       ),
     );
@@ -192,6 +231,10 @@ integration("telemetry repository", () => {
       .from(telemetry)
       .where(eq(telemetry.deviceId, deviceId));
     expect(registeredDevices).toHaveLength(1);
+    expect(registeredDevices[0]).toMatchObject({
+      lastReceivedAt: receivedTimes[9],
+      updatedAt: receivedTimes[9],
+    });
     expect(rows).toHaveLength(10);
   });
 });
