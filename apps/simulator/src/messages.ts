@@ -47,12 +47,15 @@ export function createTelemetryMessage(
   deviceId: string,
   sequence: number,
   timestamp: string,
+  status?: TelemetryMessage["payload"]["status"],
 ): TelemetryMessage {
+  const state = calculateDroneState(sequence);
+
   return telemetryMessageSchema.parse({
     schemaVersion: 1,
     deviceId,
     sequence,
     timestamp,
-    payload: calculateDroneState(sequence),
+    payload: status === undefined ? state : { ...state, status },
   });
 }

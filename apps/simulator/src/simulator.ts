@@ -1,7 +1,14 @@
-import { createStatusTopic, createTelemetryTopic } from "@drone-fleet/protocol";
+import {
+  createCommandAcksTopic,
+  createCommandsTopic,
+  createStatusTopic,
+  createTelemetryTopic,
+  type TelemetryMessage,
+} from "@drone-fleet/protocol";
 import { connectAsync, type IClientOptions } from "mqtt";
 
 import type { SimulatorConfig } from "./config.js";
+import { createCommandProcessor } from "./commands.js";
 import {
   createConnectionLostMessage,
   createOnlineMessage,
@@ -17,8 +24,14 @@ export interface SimulatorMqttClient {
   connected: boolean;
   options: IClientOptions;
   endAsync(force?: boolean): Promise<void>;
+  reconnect(): this;
+  subscribeAsync(topic: string, options: { qos: 1 }): Promise<unknown>;
   on(event: "connect" | "offline" | "reconnect", listener: () => void): this;
   on(event: "error", listener: (error: Error) => void): this;
+  on(
+    event: "message",
+    listener: (topic: string, payload: Buffer) => void,
+  ): this;
   publishAsync(
     topic: string,
     message: string,
@@ -37,6 +50,9 @@ export async function startSimulator(
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
   const telemetryTopic = createTelemetryTopic(config.deviceId);
+  const commandsTopic = createCommandsTopic(config.deviceId);
+  const commandAcksTopic = createCommandAcksTopic(config.deviceId);
+  const commandProcessor = createCommandProcessor(config.deviceId);
   const createWill = (): NonNullable<IClientOptions["will"]> => ({
     topic: statusTopic,
     payload: Buffer.from(
@@ -58,6 +74,8 @@ export async function startSimulator(
   let publishInProgress = false;
   let shuttingDown = false;
   let initialConnectionHandled = false;
+  let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
+  let commandQueue = Promise.resolve();
 
   const publishTelemetry = async (): Promise<void> => {
     if (publishInProgress || shuttingDown || !client.connected) {
@@ -70,6 +88,7 @@ export async function startSimulator(
         config.deviceId,
         sequence,
         new Date().toISOString(),
+        flightStatus,
       );
       await client.publishAsync(telemetryTopic, JSON.stringify(telemetry), {
         qos: 0,
@@ -90,6 +109,7 @@ export async function startSimulator(
 
   const publishOnlineAndStartTelemetry = async (): Promise<void> => {
     clearTelemetryTimer();
+    await client.subscribeAsync(commandsTopic, { qos: 1 });
     const online = createOnlineMessage(
       config.deviceId,
       new Date().toISOString(),
@@ -120,6 +140,44 @@ export async function startSimulator(
   });
   client.on("error", (error) => {
     console.error("MQTT接続でエラーが発生しました", error);
+  });
+  client.on("message", (topic, payload) => {
+    commandQueue = commandQueue
+      .then(async () => {
+        const processed = commandProcessor.process(
+          topic,
+          payload,
+          new Date().toISOString(),
+        );
+        if (processed === null || shuttingDown) {
+          return;
+        }
+
+        await client.publishAsync(
+          commandAcksTopic,
+          JSON.stringify(processed.acknowledgement),
+          { qos: 1, retain: false },
+        );
+
+        if (processed.action === "RETURN_HOME") {
+          flightStatus = "RETURNING_HOME";
+        } else if (processed.action === "REBOOT") {
+          clearTelemetryTimer();
+          await client.endAsync(false);
+        }
+
+        if (processed.action !== null) {
+          commandProcessor.markProcessed(processed.acknowledgement.commandId);
+        }
+
+        if (processed.action === "REBOOT" && !shuttingDown) {
+          client.options.will = createWill();
+          client.reconnect();
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("コマンドの処理に失敗しました", error);
+      });
   });
   client.on("connect", () => {
     if (initialConnectionHandled && !shuttingDown) {
