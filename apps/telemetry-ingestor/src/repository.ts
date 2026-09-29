@@ -1,4 +1,5 @@
 import {
+  devices,
   telemetry,
   type Database,
   type NewTelemetry,
@@ -32,9 +33,25 @@ export function createTelemetryRepository(
 ): TelemetryRepository {
   return {
     async save(message, receivedAt) {
-      await database
-        .insert(telemetry)
-        .values(toNewTelemetry(message, receivedAt));
+      await database.transaction(async (transaction) => {
+        await transaction
+          .insert(devices)
+          .values({
+            deviceId: message.deviceId,
+            lastReceivedAt: receivedAt,
+            updatedAt: receivedAt,
+          })
+          .onConflictDoUpdate({
+            target: devices.deviceId,
+            set: {
+              lastReceivedAt: receivedAt,
+              updatedAt: receivedAt,
+            },
+          });
+        await transaction
+          .insert(telemetry)
+          .values(toNewTelemetry(message, receivedAt));
+      });
     },
   };
 }
