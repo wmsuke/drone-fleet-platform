@@ -5,6 +5,8 @@ import {
   type TelemetryMessage,
 } from "@drone-fleet/protocol";
 
+import { calculateDroneState } from "./state.js";
+
 export function createOnlineMessage(
   deviceId: string,
   timestamp: string,
@@ -51,13 +53,6 @@ export function createTelemetryMessage(
     deviceId,
     sequence,
     timestamp,
-    payload: {
-      battery: Math.max(0, 100 - (sequence % 101)),
-      latitude: 35.681236,
-      longitude: 139.767125,
-      altitude: 0,
-      temperature: 25,
-      status: "IDLE",
-    },
+    payload: calculateDroneState(sequence),
   });
 }
