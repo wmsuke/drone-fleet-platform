@@ -14,7 +14,7 @@ const migrationsFolder = fileURLToPath(
 );
 const database = runIntegration ? createDatabase() : undefined;
 
-integration("device list repository", () => {
+integration("device repository", () => {
   beforeAll(async () => {
     if (database !== undefined) {
       await migrate(database.db, { migrationsFolder });
@@ -134,6 +134,52 @@ integration("device list repository", () => {
 
     await expect(repository.findById(deviceIds[0])).resolves.toBeNull();
   });
+
+  it("returns only the target device telemetry in newest-first order", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    await database.db
+      .insert(devices)
+      .values([{ deviceId: deviceIds[0] }, { deviceId: deviceIds[1] }]);
+    await database.db
+      .insert(telemetry)
+      .values([
+        telemetryRow(0, new Date("2026-09-29T02:00:01.000Z"), 90, "IDLE"),
+        telemetryRow(2, new Date("2026-09-29T02:00:03.000Z"), 70, "FLYING"),
+        telemetryRow(1, new Date("2026-09-29T02:00:02.000Z"), 80, "IDLE"),
+        telemetryRow(
+          0,
+          new Date("2026-09-29T02:00:04.000Z"),
+          60,
+          "FLYING",
+          deviceIds[1],
+        ),
+      ]);
+    const repository = createDeviceRepository(database.db);
+
+    await expect(repository.telemetryHistory(deviceIds[0], 2)).resolves.toEqual(
+      [
+        expectedTelemetry(2, "2026-09-29T02:00:03.000Z", 70, "FLYING"),
+        expectedTelemetry(1, "2026-09-29T02:00:02.000Z", 80, "IDLE"),
+      ],
+    );
+  });
+
+  it("distinguishes an empty history from an unregistered device", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    await database.db.insert(devices).values({ deviceId: deviceIds[0] });
+    const repository = createDeviceRepository(database.db);
+
+    await expect(
+      repository.telemetryHistory(deviceIds[0], 100),
+    ).resolves.toEqual([]);
+    await expect(
+      repository.telemetryHistory(deviceIds[1], 100),
+    ).resolves.toBeNull();
+  });
 });
 
 function telemetryRow(
@@ -141,12 +187,32 @@ function telemetryRow(
   receivedAt: Date,
   battery: number,
   flightStatus: "IDLE" | "FLYING",
+  deviceId: string = deviceIds[0],
 ) {
   return {
-    deviceId: deviceIds[0],
+    deviceId,
     sequence,
     deviceTimestamp: receivedAt,
     receivedAt,
+    battery,
+    latitude: 35,
+    longitude: 139,
+    altitude: 10,
+    temperature: 25,
+    flightStatus,
+  };
+}
+
+function expectedTelemetry(
+  sequence: number,
+  timestamp: string,
+  battery: number,
+  flightStatus: "IDLE" | "FLYING",
+) {
+  return {
+    sequence,
+    deviceTimestamp: timestamp,
+    receivedAt: timestamp,
     battery,
     latitude: 35,
     longitude: 139,

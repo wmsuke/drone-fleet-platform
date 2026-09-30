@@ -27,6 +27,14 @@ export const latestTelemetrySchema = z.object({
   flightStatus: z.enum(["IDLE", "FLYING", "RETURNING_HOME"]),
 });
 
+export const telemetryHistoryResponseSchema = z.array(latestTelemetrySchema);
+
+export const telemetryLimitSchema = z
+  .string()
+  .regex(/^[1-9]\d*$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(1000));
+
 export const deviceDetailSchema = z.object({
   deviceId: deviceIdSchema,
   model: z.string().nullable(),
@@ -40,3 +48,4 @@ export const deviceDetailSchema = z.object({
 
 export type DeviceListItem = z.infer<typeof deviceListItemSchema>;
 export type DeviceDetail = z.infer<typeof deviceDetailSchema>;
+export type TelemetryHistoryItem = z.infer<typeof latestTelemetrySchema>;

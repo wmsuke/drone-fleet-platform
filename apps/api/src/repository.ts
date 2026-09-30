@@ -1,11 +1,19 @@
 import { devices, telemetry, type Database } from "@drone-fleet/database";
 import { asc, desc, eq } from "drizzle-orm";
 
-import type { DeviceDetail, DeviceListItem } from "./schema.js";
+import type {
+  DeviceDetail,
+  DeviceListItem,
+  TelemetryHistoryItem,
+} from "./schema.js";
 
 export interface DeviceRepository {
   list(): Promise<DeviceListItem[]>;
   findById(deviceId: string): Promise<DeviceDetail | null>;
+  telemetryHistory(
+    deviceId: string,
+    limit: number,
+  ): Promise<TelemetryHistoryItem[] | null>;
 }
 
 export function createDeviceRepository(database: Database): DeviceRepository {
@@ -112,6 +120,38 @@ export function createDeviceRepository(database: Database): DeviceRepository {
                 flightStatus: latest.flightStatus,
               },
       };
+    },
+    async telemetryHistory(deviceId, limit) {
+      const registered = await database
+        .select({ deviceId: devices.deviceId })
+        .from(devices)
+        .where(eq(devices.deviceId, deviceId))
+        .limit(1);
+      if (registered.length === 0) {
+        return null;
+      }
+      const rows = await database
+        .select({
+          sequence: telemetry.sequence,
+          deviceTimestamp: telemetry.deviceTimestamp,
+          receivedAt: telemetry.receivedAt,
+          battery: telemetry.battery,
+          latitude: telemetry.latitude,
+          longitude: telemetry.longitude,
+          altitude: telemetry.altitude,
+          temperature: telemetry.temperature,
+          flightStatus: telemetry.flightStatus,
+        })
+        .from(telemetry)
+        .where(eq(telemetry.deviceId, deviceId))
+        .orderBy(desc(telemetry.receivedAt), desc(telemetry.id))
+        .limit(limit);
+
+      return rows.map((row) => ({
+        ...row,
+        deviceTimestamp: row.deviceTimestamp.toISOString(),
+        receivedAt: row.receivedAt.toISOString(),
+      }));
     },
   };
 }
