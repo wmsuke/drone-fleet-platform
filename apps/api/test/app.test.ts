@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildApi } from "../src/app.js";
 import type { DeviceRepository } from "../src/repository.js";
-import type { DeviceDetail, DeviceListItem } from "../src/schema.js";
+import type {
+  DeviceDetail,
+  DeviceListItem,
+  TelemetryHistoryItem,
+} from "../src/schema.js";
 
 const apps: ReturnType<typeof buildApi>[] = [];
 
@@ -13,10 +17,12 @@ afterEach(async () => {
 function repository(
   list: DeviceListItem[] = [],
   detail: DeviceDetail | null = null,
+  history: TelemetryHistoryItem[] | null = [],
 ): DeviceRepository {
   return {
     list: async () => list,
     findById: async () => detail,
+    telemetryHistory: async () => history,
   };
 }
 
@@ -57,6 +63,95 @@ describe("GET /devices", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([]);
   });
+});
+
+describe("GET /devices/:deviceId/telemetry", () => {
+  const history = [
+    {
+      sequence: 2,
+      deviceTimestamp: "2026-09-29T02:00:09.000Z",
+      receivedAt: "2026-09-29T02:00:10.000Z",
+      battery: 80,
+      latitude: 35,
+      longitude: 139,
+      altitude: 20,
+      temperature: 25,
+      flightStatus: "FLYING" as const,
+    },
+  ];
+
+  it("returns newest telemetry with the default limit", async () => {
+    const telemetryHistory = vi.fn(async () => history);
+    const app = buildApi({ ...repository(), telemetryHistory });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-001/telemetry",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(history);
+    expect(telemetryHistory).toHaveBeenCalledWith("drone-001", 100);
+  });
+
+  it("accepts a limit up to 1000", async () => {
+    const telemetryHistory = vi.fn(async () => history);
+    const app = buildApi({ ...repository(), telemetryHistory });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-001/telemetry?limit=1000",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(telemetryHistory).toHaveBeenCalledWith("drone-001", 1000);
+  });
+
+  it("returns 404 for an unregistered device", async () => {
+    const app = buildApi(repository([], null, null));
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-999/telemetry",
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "deviceが見つかりません" });
+  });
+
+  it("returns 400 for an invalid device ID", async () => {
+    const app = buildApi(repository());
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/invalid.device/telemetry",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "deviceIdの形式が不正です" });
+  });
+
+  it.each(["0", "1001", "1.5", "-1", "abc", ""])(
+    "returns 400 for invalid limit %s",
+    async (limit) => {
+      const app = buildApi(repository());
+      apps.push(app);
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/devices/drone-001/telemetry?limit=${limit}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: "limitは1から1000の整数です",
+      });
+    },
+  );
 });
 
 describe("GET /devices/:deviceId", () => {
