@@ -51,7 +51,7 @@ Phase 1では、Docker Composeで以下を起動する。Phase 0の`compose.yaml
 | ORM・マイグレーション | Drizzle ORM | Phase 1で導入予定 |
 | MQTTクライアント | mqtt.js | Phase 1で導入予定 |
 | MQTTブローカー | Eclipse Mosquitto | Phase 0で導入済み |
-| フロントエンド | React / Vite / TanStack Query | Phase 1で導入予定 |
+| フロントエンド | React / Vite / TanStack Query | Phase 1で導入済み |
 | テスト | Vitest | Phase 0で実行基盤を導入済み、機能テストは未実装 |
 | 画面のE2Eテスト | Playwright | Phase 1で導入予定 |
 | ローカル実行 | Docker Compose | Phase 0でMosquittoに使用 |
@@ -92,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存を実装済みである。`apps/api`と`apps/dashboard`はビルド可能なプレースホルダーであり、以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード基盤を実装済みである。以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -133,7 +133,7 @@ Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、
 
 ### apps/dashboard
 
-Phase 1で、APIからデータを取得し、機体一覧と詳細を表示する。MQTTやDBには直接接続しない。
+React、Vite、TanStack Query、React Routerによる画面基盤を実装済みである。API接続先は`VITE_API_BASE_URL`で指定し、未設定、読み込み中、通信失敗を画面に表示する。APIからデータを取得し、MQTTやDBには直接接続しない。機体一覧や詳細などの各画面は後続Issueで追加する。
 
 - 総台数とオンライン・オフラインの台数
 - 各機体の接続状態、バッテリー残量、最終受信時刻

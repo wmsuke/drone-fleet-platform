@@ -28,6 +28,7 @@ cp .env.example .env
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
 | `API_HOST` | HTTP APIの待受ホスト |
 | `API_PORT` | HTTP APIの待受ポート |
+| `VITE_API_BASE_URL` | ダッシュボードが接続するHTTP APIのベースURL |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 

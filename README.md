@@ -18,8 +18,9 @@
 - PostgreSQLへのデバイス登録とテレメトリ保存、オンライン・オフライン判定、ACK受信処理
 - 登録済みデバイスの一覧・詳細・テレメトリ履歴API
 - RETURN_HOME・REBOOTコマンドの送信APIとコマンド履歴API
+- React・Vite・TanStack Queryによるダッシュボード基盤
 
-`apps/dashboard`は後続Issueで実装する。現時点では画面や全サービスの一括起動手順はない。
+ダッシュボードの機体一覧・詳細画面は後続Issueで実装する。現時点では全サービスの一括起動手順はない。
 
 ## 開発環境
 
@@ -70,7 +71,13 @@ cp .env.example .env
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
-`pnpm test`は通信仕様とシミュレータの単体テストを実行する。未実装workspaceにはまだテストがない。
+ダッシュボードの開発サーバーは、`.env`の`VITE_API_BASE_URL`を接続先として起動する。
+
+```bash
+pnpm --filter @drone-fleet/dashboard dev
+```
+
+`pnpm test`は各workspaceの単体テストを実行する。
 
 ### Phase 0の確認結果
 
