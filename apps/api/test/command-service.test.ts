@@ -40,6 +40,7 @@ function dependencies() {
     })),
     markSent: vi.fn(async () => response("SENT")),
     markFailed: vi.fn(async () => response("FAILED")),
+    history: vi.fn(async () => []),
   };
   const publisher: CommandPublisher = { publish: vi.fn(async () => undefined) };
   const times = [createdAt, sentAt];
@@ -53,6 +54,13 @@ function dependencies() {
 }
 
 describe("createCommandService", () => {
+  it("returns command history from the repository", async () => {
+    const { repository, service } = dependencies();
+
+    await expect(service.history("drone-001", 100)).resolves.toEqual([]);
+    expect(repository.history).toHaveBeenCalledWith("drone-001", 100);
+  });
+
   it.each(["RETURN_HOME", "REBOOT"] as const)(
     "persists, publishes, and marks a %s command sent",
     async (type) => {

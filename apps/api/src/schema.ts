@@ -48,6 +48,13 @@ export const commandResponseSchema = z.object({
   sentAt: z.iso.datetime().nullable(),
 });
 
+export const commandHistoryItemSchema = commandResponseSchema.extend({
+  acknowledgementReceivedAt: z.iso.datetime().nullable(),
+  timedOutAt: z.iso.datetime().nullable(),
+});
+
+export const commandHistoryResponseSchema = z.array(commandHistoryItemSchema);
+
 export const deviceDetailSchema = z.object({
   deviceId: deviceIdSchema,
   model: z.string().nullable(),
@@ -64,3 +71,4 @@ export type DeviceDetail = z.infer<typeof deviceDetailSchema>;
 export type TelemetryHistoryItem = z.infer<typeof latestTelemetrySchema>;
 export type CommandRequest = z.infer<typeof commandRequestSchema>;
 export type CommandResponse = z.infer<typeof commandResponseSchema>;
+export type CommandHistoryItem = z.infer<typeof commandHistoryItemSchema>;

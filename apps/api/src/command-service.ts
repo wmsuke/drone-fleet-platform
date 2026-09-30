@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import type { CommandRepository } from "./command-repository.js";
 import type { CommandPublisher } from "./command-publisher.js";
-import type { CommandRequest, CommandResponse } from "./schema.js";
+import type {
+  CommandHistoryItem,
+  CommandRequest,
+  CommandResponse,
+} from "./schema.js";
 
 export class DeviceNotFoundError extends Error {}
 
@@ -17,6 +21,10 @@ export interface CommandService {
     deviceId: string,
     type: CommandRequest["type"],
   ): Promise<CommandResponse>;
+  history(
+    deviceId: string,
+    limit: number,
+  ): Promise<CommandHistoryItem[] | null>;
 }
 
 export function createCommandService(
@@ -26,6 +34,9 @@ export function createCommandService(
   now: () => Date = () => new Date(),
 ): CommandService {
   return {
+    history(deviceId, limit) {
+      return repository.history(deviceId, limit);
+    },
     async send(deviceId, type) {
       const createdAt = now();
       const commandId = generateId();

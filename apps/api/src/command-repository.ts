@@ -1,7 +1,7 @@
 import { commands, devices, type Database } from "@drone-fleet/database";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
-import type { CommandResponse } from "./schema.js";
+import type { CommandHistoryItem, CommandResponse } from "./schema.js";
 
 export interface PendingCommand {
   commandId: string;
@@ -14,6 +14,10 @@ export interface CommandRepository {
   createPending(command: PendingCommand): Promise<CommandResponse | null>;
   markSent(commandId: string, sentAt: Date): Promise<CommandResponse>;
   markFailed(commandId: string): Promise<CommandResponse>;
+  history(
+    deviceId: string,
+    limit: number,
+  ): Promise<CommandHistoryItem[] | null>;
 }
 
 export function createCommandRepository(database: Database): CommandRepository {
@@ -77,6 +81,23 @@ export function createCommandRepository(database: Database): CommandRepository {
         );
       return findCommand(commandId);
     },
+    async history(deviceId, limit) {
+      const registered = await database
+        .select({ deviceId: devices.deviceId })
+        .from(devices)
+        .where(eq(devices.deviceId, deviceId))
+        .limit(1);
+      if (registered.length === 0) {
+        return null;
+      }
+      const history = await database
+        .select()
+        .from(commands)
+        .where(eq(commands.deviceId, deviceId))
+        .orderBy(desc(commands.createdAt), desc(commands.commandId))
+        .limit(limit);
+      return history.map(toCommandHistoryItem);
+    },
   };
 }
 
@@ -90,5 +111,16 @@ function toCommandResponse(
     status: command.status,
     createdAt: command.createdAt.toISOString(),
     sentAt: command.sentAt?.toISOString() ?? null,
+  };
+}
+
+function toCommandHistoryItem(
+  command: typeof commands.$inferSelect,
+): CommandHistoryItem {
+  return {
+    ...toCommandResponse(command),
+    acknowledgementReceivedAt:
+      command.acknowledgementReceivedAt?.toISOString() ?? null,
+    timedOutAt: command.timedOutAt?.toISOString() ?? null,
   };
 }
