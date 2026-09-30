@@ -8,6 +8,7 @@ import {
 } from "./command-service.js";
 import {
   commandRequestSchema,
+  commandHistoryResponseSchema,
   commandResponseSchema,
   deviceDetailSchema,
   deviceIdSchema,
@@ -17,6 +18,7 @@ import {
 } from "./schema.js";
 
 const DEFAULT_TELEMETRY_LIMIT = 100;
+const DEFAULT_COMMAND_LIMIT = 100;
 
 export function buildApi(
   repository: DeviceRepository,
@@ -96,6 +98,31 @@ export function buildApi(
       }
     },
   );
+
+  app.get<{
+    Params: { deviceId: string };
+    Querystring: { limit?: string };
+  }>("/devices/:deviceId/commands", async (request, reply) => {
+    const parsedDeviceId = deviceIdSchema.safeParse(request.params.deviceId);
+    if (!parsedDeviceId.success) {
+      return reply.code(400).send({ error: "deviceIdの形式が不正です" });
+    }
+    const parsedLimit =
+      request.query.limit === undefined
+        ? { success: true as const, data: DEFAULT_COMMAND_LIMIT }
+        : telemetryLimitSchema.safeParse(request.query.limit);
+    if (!parsedLimit.success) {
+      return reply.code(400).send({ error: "limitは1から1000の整数です" });
+    }
+    const history = await commandService.history(
+      parsedDeviceId.data,
+      parsedLimit.data,
+    );
+    if (history === null) {
+      return reply.code(404).send({ error: "deviceが見つかりません" });
+    }
+    return commandHistoryResponseSchema.parse(history);
+  });
 
   return app;
 }

@@ -41,8 +41,9 @@ function commands(
     createdAt: "2026-09-30T02:00:00.000Z",
     sentAt: "2026-09-30T02:00:01.000Z",
   }),
+  history: CommandService["history"] = async () => [],
 ): CommandService {
-  return { send };
+  return { history, send };
 }
 
 describe("GET /devices", () => {
@@ -344,4 +345,131 @@ describe("POST /devices/:deviceId/commands", () => {
 
     expect(response.statusCode).toBe(500);
   });
+});
+
+describe("GET /devices/:deviceId/commands", () => {
+  const history = [
+    {
+      commandId,
+      deviceId: "drone-001",
+      type: "RETURN_HOME" as const,
+      status: "ACKNOWLEDGED" as const,
+      createdAt: "2026-09-30T02:00:00.000Z",
+      sentAt: "2026-09-30T02:00:01.000Z",
+      acknowledgementReceivedAt: "2026-09-30T02:00:02.000Z",
+      timedOutAt: null,
+    },
+    {
+      commandId: "6761a788-402d-4b44-b1fd-779ced12e54f",
+      deviceId: "drone-001",
+      type: "REBOOT" as const,
+      status: "TIMED_OUT" as const,
+      createdAt: "2026-09-30T01:00:00.000Z",
+      sentAt: "2026-09-30T01:00:01.000Z",
+      acknowledgementReceivedAt: null,
+      timedOutAt: "2026-09-30T01:00:30.000Z",
+    },
+  ];
+
+  it.each(["PENDING", "SENT", "ACKNOWLEDGED", "FAILED", "TIMED_OUT"] as const)(
+    "returns a %s command",
+    async (status) => {
+      const item = {
+        ...history[0],
+        status,
+        acknowledgementReceivedAt:
+          status === "ACKNOWLEDGED" ? "2026-09-30T02:00:02.000Z" : null,
+        timedOutAt: status === "TIMED_OUT" ? "2026-09-30T02:00:30.000Z" : null,
+      };
+      const app = buildApi(
+        repository(),
+        commands(undefined, async () => [item]),
+      );
+      apps.push(app);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/devices/drone-001/commands",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([item]);
+    },
+  );
+
+  it("returns recent commands with all status timestamps", async () => {
+    const commandHistory = vi.fn(async () => history);
+    const app = buildApi(repository(), commands(undefined, commandHistory));
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-001/commands",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(history);
+    expect(commandHistory).toHaveBeenCalledWith("drone-001", 100);
+  });
+
+  it("accepts a limit up to 1000", async () => {
+    const commandHistory = vi.fn(async () => history);
+    const app = buildApi(repository(), commands(undefined, commandHistory));
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-001/commands?limit=1000",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(commandHistory).toHaveBeenCalledWith("drone-001", 1000);
+  });
+
+  it("returns 404 for an unregistered device", async () => {
+    const app = buildApi(
+      repository(),
+      commands(undefined, async () => null),
+    );
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/drone-999/commands",
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "deviceが見つかりません" });
+  });
+
+  it("returns 400 for an invalid device ID", async () => {
+    const app = buildApi(repository(), commands());
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices/invalid.device/commands",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "deviceIdの形式が不正です" });
+  });
+
+  it.each(["0", "1001", "1.5", "-1", "abc", ""])(
+    "returns 400 for invalid limit %s",
+    async (limit) => {
+      const app = buildApi(repository(), commands());
+      apps.push(app);
+
+      const response = await app.inject({
+        method: "GET",
+        url: `/devices/drone-001/commands?limit=${limit}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: "limitは1から1000の整数です",
+      });
+    },
+  );
 });
