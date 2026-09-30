@@ -7,6 +7,7 @@ import { createCommandRepository } from "./command-repository.js";
 import { createCommandService } from "./command-service.js";
 import { loadApiConfig } from "./config.js";
 import { createDeviceRepository } from "./repository.js";
+import { createShutdown } from "./shutdown.js";
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
@@ -27,18 +28,7 @@ async function main(): Promise<void> {
   );
   const app = buildApi(createDeviceRepository(db), commandService);
 
-  let closing = false;
-  const shutdown = async () => {
-    if (closing) {
-      return;
-    }
-    closing = true;
-    await Promise.allSettled([
-      app.close(),
-      mqttClient.endAsync(false),
-      client.end(),
-    ]);
-  };
+  const shutdown = createShutdown(app, mqttClient, client);
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 
