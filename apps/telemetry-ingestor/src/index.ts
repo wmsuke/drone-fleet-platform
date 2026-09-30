@@ -1,5 +1,6 @@
 import { createDatabase } from "@drone-fleet/database";
 
+import { createCommandAcknowledgementRepository } from "./acknowledgement.js";
 import { startTelemetryIngestor } from "./app.js";
 import { loadTelemetryIngestorConfig } from "./config.js";
 import { createTelemetryRepository } from "./repository.js";
@@ -10,6 +11,7 @@ async function main(): Promise<void> {
   const { client: databaseClient, db } = createDatabase();
   const repository = createTelemetryRepository(db);
   const statusRepository = createDeviceStatusRepository(db);
+  const acknowledgementRepository = createCommandAcknowledgementRepository(db);
 
   let ingestor;
   try {
@@ -17,6 +19,7 @@ async function main(): Promise<void> {
       config,
       repository,
       statusRepository,
+      acknowledgementRepository,
     );
   } catch (error) {
     await databaseClient.end();
