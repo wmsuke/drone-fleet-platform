@@ -1,5 +1,9 @@
 import { connectAsync, type IClientOptions, type IPublishPacket } from "mqtt";
 
+import {
+  ingestAcknowledgement,
+  type CommandAcknowledgementRepository,
+} from "./acknowledgement.js";
 import type { TelemetryIngestorConfig } from "./config.js";
 import { ingestTelemetry, type IngestionLogger } from "./ingestion.js";
 import type { TelemetryRepository } from "./repository.js";
@@ -7,6 +11,7 @@ import { ingestStatus, type DeviceStatusRepository } from "./status.js";
 
 export const TELEMETRY_TOPIC_FILTER = "fleet/v1/devices/+/telemetry";
 export const STATUS_TOPIC_FILTER = "fleet/v1/devices/+/status";
+export const COMMAND_ACK_TOPIC_FILTER = "fleet/v1/devices/+/command-acks";
 
 export interface TelemetryMqttClient {
   endAsync(force?: boolean): Promise<void>;
@@ -31,6 +36,7 @@ export async function startTelemetryIngestor(
   config: TelemetryIngestorConfig,
   repository: TelemetryRepository,
   statusRepository: DeviceStatusRepository,
+  acknowledgementRepository: CommandAcknowledgementRepository,
   logger: IngestionLogger = console,
   connectClient: ConnectTelemetryClient = connectAsync,
 ): Promise<RunningTelemetryIngestor> {
@@ -45,23 +51,31 @@ export async function startTelemetryIngestor(
   });
   client.on("message", (topic, payload, packet) => {
     const receivedAt = new Date();
-    const task = topic.endsWith("/status")
-      ? ingestStatus(
+    const task = topic.endsWith("/command-acks")
+      ? ingestAcknowledgement(
           topic,
           payload,
           receivedAt,
-          packet.retain,
-          statusRepository,
+          acknowledgementRepository,
           logger,
         )
-      : ingestTelemetry(
-          topic,
-          payload,
-          receivedAt,
-          repository,
-          logger,
-          packet.retain,
-        );
+      : topic.endsWith("/status")
+        ? ingestStatus(
+            topic,
+            payload,
+            receivedAt,
+            packet.retain,
+            statusRepository,
+            logger,
+          )
+        : ingestTelemetry(
+            topic,
+            payload,
+            receivedAt,
+            repository,
+            logger,
+            packet.retain,
+          );
     inFlight.add(task);
     void task.finally(() => {
       inFlight.delete(task);
@@ -71,6 +85,7 @@ export async function startTelemetryIngestor(
   try {
     await client.subscribeAsync(TELEMETRY_TOPIC_FILTER, { qos: 0 });
     await client.subscribeAsync(STATUS_TOPIC_FILTER, { qos: 1 });
+    await client.subscribeAsync(COMMAND_ACK_TOPIC_FILTER, { qos: 1 });
   } catch (error) {
     await client.endAsync(true);
     throw error;

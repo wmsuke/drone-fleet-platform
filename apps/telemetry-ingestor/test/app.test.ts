@@ -1,7 +1,9 @@
 import type { IClientOptions, IPublishPacket } from "mqtt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { CommandAcknowledgementRepository } from "../src/acknowledgement.js";
 import {
+  COMMAND_ACK_TOPIC_FILTER,
   startTelemetryIngestor,
   STATUS_TOPIC_FILTER,
   TELEMETRY_TOPIC_FILTER,
@@ -65,6 +67,10 @@ function validTelemetryPayload(): Buffer {
   );
 }
 
+function acknowledgementRepository(): CommandAcknowledgementRepository {
+  return { acknowledge: vi.fn(async () => "updated") };
+}
+
 describe("startTelemetryIngestor", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -84,10 +90,12 @@ describe("startTelemetryIngestor", () => {
       saveStatus: vi.fn(async () => undefined),
       markTimedOut: vi.fn(async () => undefined),
     };
+    const ackRepository = acknowledgementRepository();
     const ingestor = await startTelemetryIngestor(
       { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
       repository,
       statusRepository,
+      ackRepository,
       logger,
       async (url, options) => {
         connection = { url, options };
@@ -102,6 +110,7 @@ describe("startTelemetryIngestor", () => {
     expect(client.subscriptions).toEqual([
       { topic: TELEMETRY_TOPIC_FILTER, options: { qos: 0 } },
       { topic: STATUS_TOPIC_FILTER, options: { qos: 1 } },
+      { topic: COMMAND_ACK_TOPIC_FILTER, options: { qos: 1 } },
     ]);
 
     client.emitMessage(TELEMETRY_TOPIC_FILTER, Buffer.from("{"));
@@ -110,6 +119,22 @@ describe("startTelemetryIngestor", () => {
       validTelemetryPayload(),
     );
     await vi.waitFor(() => expect(saved).toEqual(["drone-001"]));
+
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/command-acks",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 1,
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          deviceId: "drone-001",
+          status: "ACKNOWLEDGED",
+          timestamp: "2026-09-29T02:00:01.000Z",
+        }),
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(ackRepository.acknowledge).toHaveBeenCalledOnce(),
+    );
 
     await ingestor.shutdown();
     expect(client.endForces).toEqual([false]);
@@ -140,6 +165,7 @@ describe("startTelemetryIngestor", () => {
       { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
       repository,
       statusRepository,
+      acknowledgementRepository(),
       logger,
       async () => client,
     );
@@ -178,6 +204,7 @@ describe("startTelemetryIngestor", () => {
       { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
       repository,
       statusRepository,
+      acknowledgementRepository(),
       logger,
       async () => client,
     );
