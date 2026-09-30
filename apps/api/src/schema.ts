@@ -35,6 +35,19 @@ export const telemetryLimitSchema = z
   .transform(Number)
   .pipe(z.number().int().min(1).max(1000));
 
+export const commandRequestSchema = z
+  .object({ type: z.enum(["RETURN_HOME", "REBOOT"]) })
+  .strict();
+
+export const commandResponseSchema = z.object({
+  commandId: z.uuid(),
+  deviceId: deviceIdSchema,
+  type: z.enum(["RETURN_HOME", "REBOOT"]),
+  status: z.enum(["PENDING", "SENT", "ACKNOWLEDGED", "FAILED", "TIMED_OUT"]),
+  createdAt: z.iso.datetime(),
+  sentAt: z.iso.datetime().nullable(),
+});
+
 export const deviceDetailSchema = z.object({
   deviceId: deviceIdSchema,
   model: z.string().nullable(),
@@ -49,3 +62,5 @@ export const deviceDetailSchema = z.object({
 export type DeviceListItem = z.infer<typeof deviceListItemSchema>;
 export type DeviceDetail = z.infer<typeof deviceDetailSchema>;
 export type TelemetryHistoryItem = z.infer<typeof latestTelemetrySchema>;
+export type CommandRequest = z.infer<typeof commandRequestSchema>;
+export type CommandResponse = z.infer<typeof commandResponseSchema>;
