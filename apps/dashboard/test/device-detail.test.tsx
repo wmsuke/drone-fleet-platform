@@ -48,6 +48,15 @@ function deviceResponse(latestTelemetry: object | null = telemetry) {
   );
 }
 
+function dashboardResponse(
+  input: string | URL | Request,
+  latestTelemetry: object | null = telemetry,
+) {
+  return String(input).endsWith("/commands")
+    ? new Response("[]", { status: 200 })
+    : deviceResponse(latestTelemetry);
+}
+
 const telemetry = {
   sequence: 12,
   deviceTimestamp: "2026-10-01T02:00:00.000Z",
@@ -68,7 +77,9 @@ describe("DeviceDetailPage", () => {
   });
 
   it("shows the target device status and latest telemetry with units", async () => {
-    const fetchMock = vi.fn(async () => deviceResponse());
+    const fetchMock = vi.fn(async (input: string | URL | Request) =>
+      dashboardResponse(input),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     renderDetail();
@@ -98,7 +109,9 @@ describe("DeviceDetailPage", () => {
   it("shows a device even when telemetry has not arrived", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => deviceResponse(null)),
+      vi.fn(async (input: string | URL | Request) =>
+        dashboardResponse(input, null),
+      ),
     );
 
     renderDetail();
@@ -110,11 +123,20 @@ describe("DeviceDetailPage", () => {
   });
 
   it("distinguishes a missing device from a communication failure", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
-      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
-      .mockResolvedValueOnce(deviceResponse());
+    let deviceRequestCount = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/commands")) {
+        return new Response("[]", { status: 200 });
+      }
+      deviceRequestCount += 1;
+      if (deviceRequestCount === 1) {
+        return new Response("not found", { status: 404 });
+      }
+      if (deviceRequestCount === 2) {
+        return new Response("unavailable", { status: 503 });
+      }
+      return deviceResponse();
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const missing = renderDetail();
@@ -134,13 +156,15 @@ describe("DeviceDetailPage", () => {
 
   it("refreshes the detail every five seconds", async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn(async () => deviceResponse());
+    const fetchMock = vi.fn(async (input: string | URL | Request) =>
+      dashboardResponse(input),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     renderDetail();
     await act(async () => vi.advanceTimersByTimeAsync(0));
-    expect(fetchMock).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

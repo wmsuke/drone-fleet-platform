@@ -52,6 +52,11 @@ export interface CommandResponse {
   sentAt: string | null;
 }
 
+export interface CommandHistoryItem extends CommandResponse {
+  acknowledgementReceivedAt: string | null;
+  timedOutAt: string | null;
+}
+
 export function normalizeApiBaseUrl(value: string | undefined): string | null {
   const normalized = value?.trim().replace(/\/+$/, "");
   return normalized === undefined || normalized.length === 0
@@ -118,6 +123,25 @@ export async function sendCommand(
   const input: unknown = await response.json();
   if (!isCommandResponse(input)) {
     throw new TypeError("command response has an invalid format");
+  }
+  return input;
+}
+
+export async function fetchCommandHistory(
+  apiBaseUrl: string,
+  deviceId: string,
+  signal?: AbortSignal,
+): Promise<CommandHistoryItem[]> {
+  const response = await fetch(
+    `${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`,
+    { headers: { Accept: "application/json" }, signal },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status);
+  }
+  const input: unknown = await response.json();
+  if (!Array.isArray(input) || !input.every(isCommandHistoryItem)) {
+    throw new TypeError("command history response has an invalid format");
   }
   return input;
 }
@@ -195,5 +219,17 @@ function isCommandResponse(input: unknown): input is CommandResponse {
       command.status === "TIMED_OUT") &&
     typeof command.createdAt === "string" &&
     (command.sentAt === null || typeof command.sentAt === "string")
+  );
+}
+
+function isCommandHistoryItem(input: unknown): input is CommandHistoryItem {
+  if (!isCommandResponse(input)) {
+    return false;
+  }
+  const command = input as unknown as Record<string, unknown>;
+  return (
+    (command.acknowledgementReceivedAt === null ||
+      typeof command.acknowledgementReceivedAt === "string") &&
+    (command.timedOutAt === null || typeof command.timedOutAt === "string")
   );
 }
