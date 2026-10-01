@@ -65,9 +65,10 @@ Phase 1では、Docker Composeで以下を起動する。
 ```text
 apps/
 ├── api/
+├── dashboard/
+├── load-generator/
 ├── telemetry-ingestor/
-├── simulator/
-└── dashboard/
+└── simulator/
 
 packages/
 ├── protocol/
@@ -131,6 +132,12 @@ Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、
 `DRONE_COUNT`で起動台数を指定し、既定値は10台とする。deviceIdは`drone-001`から連番で割り当て、機体ごとに独立したMQTTクライアントを使用する。`SIMULATION_SEED`は既定値を`default`とし、1〜128文字を受け付ける。1000台規模の動作保証はPhase 1に含めない。
 
 機体状態はテレメトリのsequenceを時間ステップとして決定論的に計算する。シードとdeviceIdから安定した32bit値を作り、機体ごとの位相、初期バッテリー、位置中心、温度差へ反映する。同じシード、deviceId、sequenceからは同じ状態を生成し、シードまたはdeviceIdが異なる場合は別の系列になる。メッセージ作成時刻は実時刻を使うため再現対象に含めない。バッテリーは1ステップにつき0.5ポイント減少して0で下げ止まり、緯度・経度、高度、温度は40ステップ周期で変化する。
+
+### apps/load-generator
+
+ローカル負荷検証用に、指定したdeviceId範囲を接続レートに従ってMosquittoへ接続し、一定間隔でテレメトリを送信する。通常のシミュレータとは分離し、接続状態やコマンド処理は持たない。複数プロセスや複数ホストではdeviceIdの開始位置と台数を分ける。
+
+送信件数と実行時間の両方に上限を設け、先に達した方で新規送信を停止する。終了時は進行中の送信を待ち、timerとMQTT接続を閉じてJSONレポートを保存する。試験ID、セッションID、設定、開始・終了時刻、停止理由、送信カウンタ、機体ごとの最終sequenceはレポートに記録し、productionのテレメトリには負荷試験専用フィールドを追加しない。現時点のtransportはローカルMQTTだけであり、AWS IoT CoreとmTLSは対象外とする。
 
 ### apps/dashboard
 
