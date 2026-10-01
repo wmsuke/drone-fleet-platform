@@ -141,6 +141,12 @@ Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、
 
 送信件数と実行時間の両方に上限を設け、先に達した方で新規送信を停止する。終了時は進行中の送信を待ち、timerとMQTT接続を閉じてJSONレポートを保存する。試験ID、セッションID、設定、開始・終了時刻、停止理由、送信カウンタ、機体ごとの最終sequenceはレポートに記録し、productionのテレメトリには負荷試験専用フィールドを追加しない。現時点のtransportはローカルMQTTだけであり、AWS IoT CoreとmTLSは対象外とする。
 
+### 負荷試験レポート集約
+
+`apps/load-report`は同じtestIdのgeneratorレポートとingestorレポートを読み、PostgreSQLの実保存データと突き合わせる。generator sessionごとのdeviceId集合とdevice timestampの開始・終了範囲をDB検索条件に使い、送信成功数、実保存件数、欠損数、sequenceをsession別に保持する。同一deviceを使うsessionは時間範囲が重ならない場合だけ集約できる。これにより、プロセス再起動でsequenceが0へ戻る場合も別sessionとして扱う。
+
+集約レポートはJSONで保存し、送信、MQTT受信、検証、DB保存、実保存、欠損率、OFFLINE遷移を記録する。ingestorの固定bucketを統合して、送信から受信までの遅延とMQTT受信からDB transaction完了までの時間をそれぞれp50、p95、p99で出力する。送信成功数と各段階の件数が一致しない場合はsession別の内訳を含むエラーで終了する。
+
 ### apps/dashboard
 
 React、Vite、TanStack Query、React Routerによる画面基盤と機体一覧・詳細画面、コマンド操作・履歴表示を実装済みである。API接続先は`VITE_API_BASE_URL`で指定し、未設定、読み込み中、通信失敗を画面に表示する。ローカル開発で別originになるAPIは、`DASHBOARD_ORIGIN`と一致するダッシュボードだけにCORSレスポンスを返す。一覧、詳細、コマンド履歴は5秒ごとに更新する。一覧は総台数、オンライン・オフライン台数、各機体の接続状態と最新値を表示し、詳細は位置、高度、温度を含む最新テレメトリを単位付きで表示する。詳細画面から帰還または再起動コマンドを確認後に送信でき、再起動は通信断への明示的な同意を必要とする。送信中は操作を無効化し、結果を画面に表示する。コマンド履歴には種類、状態、作成時刻、ACK受信時刻を表示し、送信直後と5秒ごとに更新する。APIからデータを取得し、MQTTやDBには直接接続しない。

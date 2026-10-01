@@ -8,6 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY apps/load-generator/package.json apps/load-generator/package.json
+COPY apps/load-report/package.json apps/load-report/package.json
 COPY apps/simulator/package.json apps/simulator/package.json
 COPY apps/telemetry-ingestor/package.json apps/telemetry-ingestor/package.json
 COPY packages/config/package.json packages/config/package.json

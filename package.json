@@ -21,6 +21,7 @@
     "lint": "eslint . && pnpm format:check",
     "load:local": "pnpm --filter @drone-fleet/load-generator build && node --env-file-if-exists=.env apps/load-generator/dist/index.js",
     "test": "vitest run --passWithNoTests",
+    "test:load-report": "./scripts/test-load-report-e2e.sh",
     "telemetry:test:integration": "pnpm --filter @drone-fleet/telemetry-ingestor test:integration",
     "test:telemetry-path": "./scripts/test-telemetry-path.sh",
     "typecheck": "pnpm -r --if-present typecheck",
