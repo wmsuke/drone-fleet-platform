@@ -35,6 +35,23 @@ export interface DeviceDetail {
   latestTelemetry: LatestTelemetry | null;
 }
 
+export type CommandType = "RETURN_HOME" | "REBOOT";
+export type CommandStatus =
+  | "PENDING"
+  | "SENT"
+  | "ACKNOWLEDGED"
+  | "FAILED"
+  | "TIMED_OUT";
+
+export interface CommandResponse {
+  commandId: string;
+  deviceId: string;
+  type: CommandType;
+  status: CommandStatus;
+  createdAt: string;
+  sentAt: string | null;
+}
+
 export function normalizeApiBaseUrl(value: string | undefined): string | null {
   const normalized = value?.trim().replace(/\/+$/, "");
   return normalized === undefined || normalized.length === 0
@@ -75,6 +92,32 @@ export async function fetchDevice(
   const input: unknown = await response.json();
   if (!isDeviceDetail(input)) {
     throw new TypeError("device detail response has an invalid format");
+  }
+  return input;
+}
+
+export async function sendCommand(
+  apiBaseUrl: string,
+  deviceId: string,
+  type: CommandType,
+): Promise<CommandResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ type }),
+    },
+  );
+  if (!response.ok) {
+    throw new ApiError(response.status);
+  }
+  const input: unknown = await response.json();
+  if (!isCommandResponse(input)) {
+    throw new TypeError("command response has an invalid format");
   }
   return input;
 }
@@ -133,5 +176,24 @@ function isLatestTelemetry(input: unknown): input is LatestTelemetry {
     (telemetry.flightStatus === "IDLE" ||
       telemetry.flightStatus === "FLYING" ||
       telemetry.flightStatus === "RETURNING_HOME")
+  );
+}
+
+function isCommandResponse(input: unknown): input is CommandResponse {
+  if (typeof input !== "object" || input === null) {
+    return false;
+  }
+  const command = input as Record<string, unknown>;
+  return (
+    typeof command.commandId === "string" &&
+    typeof command.deviceId === "string" &&
+    (command.type === "RETURN_HOME" || command.type === "REBOOT") &&
+    (command.status === "PENDING" ||
+      command.status === "SENT" ||
+      command.status === "ACKNOWLEDGED" ||
+      command.status === "FAILED" ||
+      command.status === "TIMED_OUT") &&
+    typeof command.createdAt === "string" &&
+    (command.sentAt === null || typeof command.sentAt === "string")
   );
 }
