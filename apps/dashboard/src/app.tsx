@@ -1,8 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { NavLink, Route, Routes, useParams } from "react-router-dom";
 
-import { fetchDevices } from "./api.js";
+import { DeviceListPage } from "./device-list.js";
 
 export interface DashboardAppProps {
   apiBaseUrl: string | null;
@@ -25,35 +24,12 @@ function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-function ConnectionStatus({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const devices = useQuery({
-    queryKey: ["devices", "connection-check"],
-    queryFn: ({ signal }) => fetchDevices(apiBaseUrl, signal),
-    retry: false,
-  });
-
-  if (devices.isPending) {
-    return <p className="notice">APIへ接続しています…</p>;
-  }
-  if (devices.isError) {
-    return (
-      <div className="notice notice-error" role="alert">
-        <strong>APIへ接続できませんでした。</strong>
-        <span>接続先とAPIの起動状態を確認して、再読み込みしてください。</span>
-      </div>
-    );
-  }
-  return <p className="notice notice-success">APIへ接続できました。</p>;
-}
-
 function HomePage({ apiBaseUrl }: { apiBaseUrl: string | null }) {
   return (
     <section className="panel" aria-labelledby="dashboard-title">
       <p className="eyebrow">Overview</p>
-      <h2 id="dashboard-title">機体の状態をひと目で確認</h2>
-      <p className="lead">
-        機体一覧と運航状況は、次の画面実装でここに追加する。
-      </p>
+      <h2 id="dashboard-title">機体一覧</h2>
+      <p className="lead">接続状態と最新の運航状況を5秒ごとに更新する。</p>
       {apiBaseUrl === null ? (
         <div className="notice notice-error" role="alert">
           <strong>API接続先が設定されていません。</strong>
@@ -62,7 +38,7 @@ function HomePage({ apiBaseUrl }: { apiBaseUrl: string | null }) {
           </span>
         </div>
       ) : (
-        <ConnectionStatus apiBaseUrl={apiBaseUrl} />
+        <DeviceListPage apiBaseUrl={apiBaseUrl} />
       )}
     </section>
   );

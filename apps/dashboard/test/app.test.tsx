@@ -2,7 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  act,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,10 +31,11 @@ function renderApp(apiBaseUrl: string | null, route = "/") {
 describe("DashboardApp", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("shows loading and success states while checking the API", async () => {
+  it("shows loading and empty states", async () => {
     let resolveRequest!: (response: Response) => void;
     const request = new Promise<Response>((resolve) => {
       resolveRequest = resolve;
@@ -37,7 +45,7 @@ describe("DashboardApp", () => {
 
     renderApp("http://api.example.test");
 
-    expect(screen.getByText("APIへ接続しています…")).toBeInTheDocument();
+    expect(screen.getByText("機体情報を読み込んでいます…")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "http://api.example.test/devices",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
@@ -45,21 +53,78 @@ describe("DashboardApp", () => {
 
     resolveRequest(new Response("[]", { status: 200 }));
     expect(
-      await screen.findByText("APIへ接続できました。"),
+      await screen.findByText("登録済みの機体はありません。"),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("機体数の集計")).toHaveTextContent(
+      "総台数0オンライン0オフライン0",
+    );
   });
 
-  it("shows a helpful error when the API request fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("unavailable", { status: 503 })),
-    );
+  it("shows an error and retries the request", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
 
     renderApp("http://api.example.test");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "APIへ接続できませんでした。",
+      "機体情報を取得できませんでした。",
     );
+    fireEvent.click(screen.getByRole("button", { name: "再試行" }));
+    expect(
+      await screen.findByText("登録済みの機体はありません。"),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows fleet totals, device status, telemetry summary, and detail links", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                deviceId: "drone-001",
+                connectionStatus: "ONLINE",
+                battery: 87.5,
+                flightStatus: "FLYING",
+                lastReceivedAt: "2026-10-01T02:00:00.000Z",
+              },
+              {
+                deviceId: "drone-002",
+                connectionStatus: "OFFLINE",
+                battery: null,
+                flightStatus: null,
+                lastReceivedAt: null,
+              },
+            ]),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    renderApp("http://api.example.test");
+
+    expect(await screen.findByText("drone-001")).toBeInTheDocument();
+    const summary = within(screen.getByLabelText("機体数の集計"));
+    expect(summary.getByText("総台数").parentElement).toHaveTextContent("2");
+    expect(summary.getByText("オンライン").parentElement).toHaveTextContent(
+      "1",
+    );
+    expect(summary.getByText("オフライン").parentElement).toHaveTextContent(
+      "1",
+    );
+    expect(screen.getByText("87.5%")).toBeInTheDocument();
+    expect(screen.getByText("飛行中")).toBeInTheDocument();
+    expect(screen.getByText("未受信")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: /機体詳細を見る/ })[0],
+    ).toHaveAttribute("href", "/devices/drone-001");
+    expect(screen.getAllByText("オンライン")).toHaveLength(2);
+    expect(screen.getAllByText("オフライン")).toHaveLength(2);
   });
 
   it("explains how to configure a missing API base URL", () => {
@@ -83,5 +148,17 @@ describe("DashboardApp", () => {
     expect(
       screen.getByRole("heading", { name: "ページが見つかりません" }),
     ).toBeInTheDocument();
+  });
+
+  it("refreshes the device list every five seconds", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderApp("http://api.example.test");
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
