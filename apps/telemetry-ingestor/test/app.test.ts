@@ -12,6 +12,7 @@ import {
 import type { IngestionLogger } from "../src/ingestion.js";
 import type { TelemetryRepository } from "../src/repository.js";
 import type { DeviceStatusRepository } from "../src/status.js";
+import { createLoadMetrics } from "../src/metrics.js";
 
 class FakeMqttClient implements TelemetryMqttClient {
   readonly endForces: Array<boolean | undefined> = [];
@@ -87,8 +88,8 @@ describe("startTelemetryIngestor", () => {
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
     const statusRepository: DeviceStatusRepository = {
-      saveStatus: vi.fn(async () => undefined),
-      markTimedOut: vi.fn(async () => undefined),
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
     };
     const ackRepository = acknowledgementRepository();
     const ingestor = await startTelemetryIngestor(
@@ -158,8 +159,8 @@ describe("startTelemetryIngestor", () => {
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
     const statusRepository: DeviceStatusRepository = {
-      saveStatus: vi.fn(async () => undefined),
-      markTimedOut: vi.fn(async () => undefined),
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
     };
     const ingestor = await startTelemetryIngestor(
       { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
@@ -196,8 +197,8 @@ describe("startTelemetryIngestor", () => {
     const client = new FakeMqttClient();
     const repository: TelemetryRepository = { save: vi.fn() };
     const statusRepository: DeviceStatusRepository = {
-      saveStatus: vi.fn(async () => undefined),
-      markTimedOut: vi.fn(async () => undefined),
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
     const ingestor = await startTelemetryIngestor(
@@ -216,5 +217,52 @@ describe("startTelemetryIngestor", () => {
       new Date("2026-09-29T02:00:16.000Z"),
     );
     await ingestor.shutdown();
+  });
+
+  it("records MQTT receipts and writes metrics after in-flight work", async () => {
+    const client = new FakeMqttClient();
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const metrics = createLoadMetrics(
+      {
+        testId: "test-1",
+        sessionId: "ingestor-a",
+        reportPath: "/tmp/metrics.json",
+      },
+      { writeFile },
+    );
+    const repository: TelemetryRepository = { save: vi.fn() };
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
+    };
+    const ingestor = await startTelemetryIngestor(
+      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      repository,
+      statusRepository,
+      acknowledgementRepository(),
+      { warn: vi.fn(), error: vi.fn() },
+      async () => client,
+      metrics,
+    );
+
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry",
+      Buffer.from("{"),
+    );
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry",
+      validTelemetryPayload(),
+    );
+    await ingestor.shutdown();
+
+    const report = metrics.snapshot();
+    expect(report.counters).toMatchObject({
+      mqttReceived: 2,
+      validationSucceeded: 1,
+      validationFailed: 1,
+      dbSaveSucceeded: 1,
+      dbSaveFailed: 0,
+    });
+    expect(writeFile).toHaveBeenCalledOnce();
   });
 });

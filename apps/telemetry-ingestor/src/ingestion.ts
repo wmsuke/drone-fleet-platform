@@ -5,6 +5,7 @@ import {
 } from "@drone-fleet/protocol";
 
 import type { TelemetryRepository } from "./repository.js";
+import type { LoadMetrics } from "./metrics.js";
 
 export interface IngestionLogger {
   warn(message: string, context: Record<string, unknown>): void;
@@ -56,9 +57,11 @@ export async function ingestTelemetry(
   repository: TelemetryRepository,
   logger: IngestionLogger,
   isRetained = false,
+  metrics?: LoadMetrics,
 ): Promise<boolean> {
   const parsed = parseTelemetry(topic, payload);
   if (!parsed.success) {
+    metrics?.recordValidationFailure();
     logger.warn("テレメトリを保存しませんでした", {
       reason: parsed.reason,
       topic,
@@ -66,10 +69,15 @@ export async function ingestTelemetry(
     return false;
   }
 
+  metrics?.recordValidationSuccess(parsed.message.timestamp, receivedAt);
+  const saveStartedAt = metrics === undefined ? 0 : performance.now();
+
   try {
     await repository.save(parsed.message, receivedAt, isRetained);
+    metrics?.recordDbSaveSuccess(performance.now() - saveStartedAt);
     return true;
   } catch (error) {
+    metrics?.recordDbSaveFailure(performance.now() - saveStartedAt);
     logger.error("テレメトリの保存に失敗しました", {
       deviceId: parsed.message.deviceId,
       error,

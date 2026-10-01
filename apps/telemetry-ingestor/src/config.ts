@@ -1,6 +1,34 @@
 export interface TelemetryIngestorConfig {
   mqttUrl: string;
   offlineTimeoutMs: number;
+  loadMetrics?: LoadMetricsConfig;
+}
+
+export interface LoadMetricsConfig {
+  testId: string;
+  sessionId: string;
+  reportPath: string;
+}
+
+const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function parseBoolean(value: string, name: string): boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new TypeError(`${name} must be true or false`);
+}
+
+function requiredIdentifier(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+): string {
+  const value = environment[name];
+  if (value === undefined || !IDENTIFIER_PATTERN.test(value)) {
+    throw new TypeError(
+      `${name} must be 1-64 characters using only letters, numbers, hyphens, and underscores`,
+    );
+  }
+  return value;
 }
 
 function parsePort(value: string): number {
@@ -24,5 +52,26 @@ export function loadTelemetryIngestorConfig(
   if (!Number.isSafeInteger(offlineTimeoutMs) || offlineTimeoutMs < 1) {
     throw new TypeError("OFFLINE_TIMEOUT_MS must be a positive integer");
   }
-  return { mqttUrl: `mqtt://${host}:${port}`, offlineTimeoutMs };
+  const loadMetricsEnabled = parseBoolean(
+    environment.LOAD_METRICS_ENABLED ?? "false",
+    "LOAD_METRICS_ENABLED",
+  );
+  const loadMetrics = loadMetricsEnabled
+    ? (() => {
+        const testId = requiredIdentifier(environment, "LOAD_TEST_ID");
+        const sessionId = requiredIdentifier(environment, "LOAD_SESSION_ID");
+        return {
+          testId,
+          sessionId,
+          reportPath:
+            environment.LOAD_METRICS_REPORT_PATH ??
+            `load-results/${testId}-${sessionId}-ingestor.json`,
+        };
+      })()
+    : undefined;
+  return {
+    mqttUrl: `mqtt://${host}:${port}`,
+    offlineTimeoutMs,
+    ...(loadMetrics === undefined ? {} : { loadMetrics }),
+  };
 }

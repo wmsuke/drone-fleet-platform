@@ -6,6 +6,7 @@ import {
 } from "./acknowledgement.js";
 import type { TelemetryIngestorConfig } from "./config.js";
 import { ingestTelemetry, type IngestionLogger } from "./ingestion.js";
+import { createLoadMetrics, type LoadMetrics } from "./metrics.js";
 import type { TelemetryRepository } from "./repository.js";
 import { ingestStatus, type DeviceStatusRepository } from "./status.js";
 
@@ -39,7 +40,13 @@ export async function startTelemetryIngestor(
   acknowledgementRepository: CommandAcknowledgementRepository,
   logger: IngestionLogger = console,
   connectClient: ConnectTelemetryClient = connectAsync,
+  injectedMetrics?: LoadMetrics,
 ): Promise<RunningTelemetryIngestor> {
+  const metrics =
+    injectedMetrics ??
+    (config.loadMetrics === undefined
+      ? undefined
+      : createLoadMetrics(config.loadMetrics));
   const client = await connectClient(config.mqttUrl, {
     clean: true,
     clientId: "telemetry-ingestor",
@@ -67,15 +74,20 @@ export async function startTelemetryIngestor(
             packet.retain,
             statusRepository,
             logger,
+            metrics,
           )
-        : ingestTelemetry(
-            topic,
-            payload,
-            receivedAt,
-            repository,
-            logger,
-            packet.retain,
-          );
+        : (() => {
+            metrics?.recordMqttReceived();
+            return ingestTelemetry(
+              topic,
+              payload,
+              receivedAt,
+              repository,
+              logger,
+              packet.retain,
+              metrics,
+            );
+          })();
     inFlight.add(task);
     void task.finally(() => {
       inFlight.delete(task);
@@ -95,7 +107,11 @@ export async function startTelemetryIngestor(
     () => {
       const updatedAt = new Date();
       const cutoff = new Date(updatedAt.getTime() - config.offlineTimeoutMs);
-      const task = statusRepository.markTimedOut(cutoff, updatedAt);
+      const task = statusRepository
+        .markTimedOut(cutoff, updatedAt)
+        .then((offlineTransitions) => {
+          metrics?.recordOfflineTransitions(offlineTransitions);
+        });
       inFlight.add(task);
       void task
         .catch((error: unknown) => {
@@ -120,8 +136,24 @@ export async function startTelemetryIngestor(
 
       await Promise.allSettled([...inFlight]);
 
+      let reportError: unknown;
+      try {
+        await metrics?.writeReport();
+      } catch (error) {
+        reportError = error;
+      }
+
+      if (disconnectError !== undefined && reportError !== undefined) {
+        throw new AggregateError(
+          [disconnectError, reportError],
+          "MQTT切断と負荷試験レポートの保存に失敗しました",
+        );
+      }
       if (disconnectError !== undefined) {
         throw disconnectError;
+      }
+      if (reportError !== undefined) {
+        throw reportError;
       }
     },
   };

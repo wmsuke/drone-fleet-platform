@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { IngestionLogger } from "../src/ingestion.js";
 import { ingestStatus, type DeviceStatusRepository } from "../src/status.js";
+import { createLoadMetrics } from "../src/metrics.js";
 
 const topic = "fleet/v1/devices/drone-001/status";
 const message = {
@@ -21,8 +22,11 @@ function createDependencies() {
   const repository: DeviceStatusRepository = {
     async saveStatus(savedMessage, receivedAt, isRetained) {
       saved.push({ message: savedMessage, receivedAt, isRetained });
+      return 0;
     },
-    async markTimedOut() {},
+    async markTimedOut() {
+      return 0;
+    },
   };
   const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
   return { logger, repository, saved };
@@ -73,5 +77,44 @@ describe("ingestStatus", () => {
     ).resolves.toBe(false);
     expect(saved).toHaveLength(0);
     expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it("records only transitions reported by the repository", async () => {
+    const metrics = createLoadMetrics({
+      testId: "test-1",
+      sessionId: "ingestor-a",
+      reportPath: "/tmp/metrics.json",
+    });
+    const repository: DeviceStatusRepository = {
+      saveStatus: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+      markTimedOut: vi.fn(async () => 0),
+    };
+    const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const offlineMessage: ConnectionStatusMessage = {
+      ...message,
+      payload: { status: "OFFLINE", reason: "CONNECTION_LOST" },
+    };
+    const offlinePayload = Buffer.from(JSON.stringify(offlineMessage));
+
+    await ingestStatus(
+      topic,
+      offlinePayload,
+      new Date(),
+      false,
+      repository,
+      logger,
+      metrics,
+    );
+    await ingestStatus(
+      topic,
+      offlinePayload,
+      new Date(),
+      false,
+      repository,
+      logger,
+      metrics,
+    );
+
+    expect(metrics.snapshot().counters.offlineTransitions).toBe(1);
   });
 });

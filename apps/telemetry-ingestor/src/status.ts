@@ -3,7 +3,7 @@ import {
   parseMqttTopic,
   type ConnectionStatusMessage,
 } from "@drone-fleet/protocol";
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { devices, type Database } from "@drone-fleet/database";
 
 import {
@@ -11,14 +11,15 @@ import {
   upsertDeviceReceipt,
 } from "./device-repository.js";
 import type { IngestionLogger } from "./ingestion.js";
+import type { LoadMetrics } from "./metrics.js";
 
 export interface DeviceStatusRepository {
   saveStatus(
     message: ConnectionStatusMessage,
     receivedAt: Date,
     isRetained: boolean,
-  ): Promise<void>;
-  markTimedOut(cutoff: Date, updatedAt: Date): Promise<void>;
+  ): Promise<number>;
+  markTimedOut(cutoff: Date, updatedAt: Date): Promise<number>;
 }
 
 export function createDeviceStatusRepository(
@@ -28,17 +29,43 @@ export function createDeviceStatusRepository(
     async saveStatus(message, receivedAt, isRetained) {
       if (isRetained && message.payload.status === "ONLINE") {
         await ensureDeviceRegistered(database, message.deviceId);
-        return;
+        return 0;
       }
-      await upsertDeviceReceipt(
-        database,
-        message.deviceId,
-        receivedAt,
-        message.payload.status,
-      );
+      if (message.payload.status === "ONLINE") {
+        await upsertDeviceReceipt(
+          database,
+          message.deviceId,
+          receivedAt,
+          message.payload.status,
+        );
+        return 0;
+      }
+      return database.transaction(async (transaction) => {
+        const transitioned = await transaction
+          .update(devices)
+          .set({ connectionStatus: "OFFLINE" })
+          .where(
+            and(
+              eq(devices.deviceId, message.deviceId),
+              eq(devices.connectionStatus, "ONLINE"),
+              or(
+                isNull(devices.lastReceivedAt),
+                lte(devices.lastReceivedAt, receivedAt),
+              ),
+            ),
+          )
+          .returning({ deviceId: devices.deviceId });
+        await upsertDeviceReceipt(
+          transaction,
+          message.deviceId,
+          receivedAt,
+          message.payload.status,
+        );
+        return transitioned.length;
+      });
     },
     async markTimedOut(cutoff, updatedAt) {
-      await database
+      const transitioned = await database
         .update(devices)
         .set({ connectionStatus: "OFFLINE", updatedAt })
         .where(
@@ -46,7 +73,9 @@ export function createDeviceStatusRepository(
             eq(devices.connectionStatus, "ONLINE"),
             lte(devices.lastReceivedAt, cutoff),
           ),
-        );
+        )
+        .returning({ deviceId: devices.deviceId });
+      return transitioned.length;
     },
   };
 }
@@ -58,6 +87,7 @@ export async function ingestStatus(
   isRetained: boolean,
   repository: DeviceStatusRepository,
   logger: IngestionLogger,
+  metrics?: LoadMetrics,
 ): Promise<boolean> {
   const parsedTopic = parseMqttTopic(topic);
   let input: unknown;
@@ -84,7 +114,12 @@ export async function ingestStatus(
     return false;
   }
   try {
-    await repository.saveStatus(parsed.data, receivedAt, isRetained);
+    const offlineTransitions = await repository.saveStatus(
+      parsed.data,
+      receivedAt,
+      isRetained,
+    );
+    metrics?.recordOfflineTransitions(offlineTransitions);
     return true;
   } catch (error) {
     logger.error("接続状態の保存に失敗しました", { error, topic });

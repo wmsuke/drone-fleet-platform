@@ -59,11 +59,13 @@ integration("device connection status repository", () => {
     const telemetryRepository = createTelemetryRepository(database.db);
     const firstReceipt = new Date("2026-09-29T02:00:00.000Z");
 
-    await statusRepository.saveStatus(
-      statusMessage("ONLINE", "CONNECTED"),
-      firstReceipt,
-      true,
-    );
+    await expect(
+      statusRepository.saveStatus(
+        statusMessage("ONLINE", "CONNECTED"),
+        firstReceipt,
+        true,
+      ),
+    ).resolves.toBe(0);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
       lastReceivedAt: null,
@@ -107,10 +109,12 @@ integration("device connection status repository", () => {
       lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
     });
 
-    await statusRepository.markTimedOut(
-      new Date("2026-09-29T02:00:01.000Z"),
-      new Date("2026-09-29T02:00:16.000Z"),
-    );
+    await expect(
+      statusRepository.markTimedOut(
+        new Date("2026-09-29T02:00:01.000Z"),
+        new Date("2026-09-29T02:00:16.000Z"),
+      ),
+    ).resolves.toBe(1);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
       lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
@@ -121,11 +125,20 @@ integration("device connection status repository", () => {
       new Date("2026-09-29T02:00:18.000Z"),
       false,
     );
-    await statusRepository.saveStatus(
-      statusMessage("OFFLINE", "CONNECTION_LOST"),
-      new Date("2026-09-29T02:00:19.000Z"),
-      false,
-    );
+    await expect(
+      statusRepository.saveStatus(
+        statusMessage("OFFLINE", "CONNECTION_LOST"),
+        new Date("2026-09-29T02:00:19.000Z"),
+        false,
+      ),
+    ).resolves.toBe(1);
+    await expect(
+      statusRepository.saveStatus(
+        statusMessage("OFFLINE", "CONNECTION_LOST"),
+        new Date("2026-09-29T02:00:20.000Z"),
+        false,
+      ),
+    ).resolves.toBe(0);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
     });
@@ -151,10 +164,12 @@ integration("device connection status repository", () => {
       connectionStatus: "ONLINE",
     });
 
-    await statusRepository.markTimedOut(
-      new Date("2026-09-29T02:00:20.000Z"),
-      new Date("2026-09-29T02:00:35.000Z"),
-    );
+    await expect(
+      statusRepository.markTimedOut(
+        new Date("2026-09-29T02:00:20.000Z"),
+        new Date("2026-09-29T02:00:35.000Z"),
+      ),
+    ).resolves.toBe(1);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "OFFLINE",
       updatedAt: new Date("2026-09-29T02:00:35.000Z"),
