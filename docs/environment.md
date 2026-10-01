@@ -26,6 +26,10 @@ cp .env.example .env
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
+| `LOAD_METRICS_ENABLED` | telemetry-ingestorの負荷試験メトリクスを有効にするか |
+| `LOAD_TEST_ID` | 負荷試験を識別するID |
+| `LOAD_SESSION_ID` | 負荷生成器またはingestorプロセスを識別するセッションID |
+| `LOAD_METRICS_REPORT_PATH` | ingestorの負荷試験レポート保存先 |
 | `API_HOST` | HTTP APIの待受ホスト |
 | `API_PORT` | HTTP APIの待受ポート |
 | `DASHBOARD_ORIGIN` | APIがCORSで許可するダッシュボードのorigin |

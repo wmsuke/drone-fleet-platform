@@ -158,6 +158,17 @@ deviceIdは`load-000001`の形式で、`LOAD_DEVICE_START`から`LOAD_DEVICE_COU
 
 レポートには試験ID、セッションID、全設定、開始・終了時刻、停止理由、送信試行・成功・失敗数、機体ごとの最終sequenceを記録する。テレメトリ本体は[通信仕様](docs/protocol.md)のproduction schemaをそのまま使い、試験IDなどは追加しない。負荷検証全体の方針とAWSの費用上限は[負荷検証の提案](docs/proposals/load-testing.md)を参照する。
 
+telemetry-ingestor側の受信・検証・DB保存を計測する場合は、`.env`で次を設定してからingestorを起動する。通常起動では`LOAD_METRICS_ENABLED=false`のため計測処理は動かない。
+
+```dotenv
+LOAD_METRICS_ENABLED=true
+LOAD_TEST_ID=local-100
+LOAD_SESSION_ID=ingestor-1
+LOAD_METRICS_REPORT_PATH=load-results/local-100-ingestor-1-ingestor.json
+```
+
+ingestorの停止時にJSONレポートを保存する。レポートではMQTT受信、protocol検証、DB保存の成功・失敗を別々に数え、device timestampからMQTT受信までの遅延と、MQTT受信からDB transaction完了までの時間を別のヒストグラムへ記録する。ヒストグラムは固定bucketの非累積件数、合計、最小、最大を保持し、p50/p95/p99を近似集計できる。負の受信遅延も送受信ホスト間の時計ずれとして捨てずに記録する。
+
 ## 全サービスの一括起動
 
 Docker ComposeでPostgreSQL、Mosquitto、DBマイグレーション、MQTT受信処理、API、仮想ドローン10台、ダッシュボードを起動する。Node.jsやpnpmをホストへインストールしていない場合も、Docker EngineとDocker Compose v2があれば起動できる。

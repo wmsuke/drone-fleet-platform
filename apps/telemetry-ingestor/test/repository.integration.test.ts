@@ -14,6 +14,7 @@ import {
 
 import { ingestTelemetry, type IngestionLogger } from "../src/ingestion.js";
 import { createTelemetryRepository } from "../src/repository.js";
+import { createLoadMetrics } from "../src/metrics.js";
 
 const runIntegration = process.env.DATABASE_INTEGRATION === "true";
 const integration = describe.skipIf(!runIntegration);
@@ -53,6 +54,11 @@ integration("telemetry repository", () => {
     }
     const repository = createTelemetryRepository(database.db);
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const metrics = createLoadMetrics({
+      testId: "integration",
+      sessionId: "repository",
+      reportPath: "/tmp/metrics.json",
+    });
     const receivedAt = new Date("2026-09-29T02:00:01.000Z");
 
     await expect(
@@ -77,6 +83,8 @@ integration("telemetry repository", () => {
         receivedAt,
         repository,
         logger,
+        false,
+        metrics,
       ),
     ).resolves.toBe(true);
 
@@ -103,6 +111,13 @@ integration("telemetry repository", () => {
       receivedAt,
       flightStatus: "IDLE",
     });
+    expect(metrics.snapshot().counters).toMatchObject({
+      validationSucceeded: 1,
+      validationFailed: 0,
+      dbSaveSucceeded: 1,
+      dbSaveFailed: 0,
+    });
+    expect(metrics.snapshot().timings.mqttReceiveToDbCompleteMs.count).toBe(1);
   });
 
   it("keeps one device and updates its last receipt time", async () => {

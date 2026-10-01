@@ -7,6 +7,7 @@ import {
   type IngestionLogger,
 } from "../src/ingestion.js";
 import type { TelemetryRepository } from "../src/repository.js";
+import { createLoadMetrics } from "../src/metrics.js";
 
 const topic = "fleet/v1/devices/drone-001/telemetry";
 const message = {
@@ -112,5 +113,80 @@ describe("ingestTelemetry", () => {
       "テレメトリの保存に失敗しました",
       expect.objectContaining({ deviceId: "drone-001", topic }),
     );
+  });
+
+  it("records validation and DB persistence outcomes separately", async () => {
+    const monotonicNow = vi
+      .spyOn(performance, "now")
+      .mockReturnValueOnce(140)
+      .mockReturnValueOnce(260);
+    const metrics = createLoadMetrics(
+      {
+        testId: "test-1",
+        sessionId: "ingestor-a",
+        reportPath: "/tmp/metrics.json",
+      },
+      { now: () => new Date("2026-09-29T02:00:02.000Z") },
+    );
+    const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const repository: TelemetryRepository = {
+      save: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("database unavailable")),
+    };
+    const receivedAt = new Date("2026-09-29T02:00:01.000Z");
+
+    await ingestTelemetry(
+      topic,
+      Buffer.from("{"),
+      receivedAt,
+      repository,
+      logger,
+      false,
+      metrics,
+      0,
+    );
+    await ingestTelemetry(
+      topic,
+      payload(),
+      receivedAt,
+      repository,
+      logger,
+      false,
+      metrics,
+      100,
+    );
+    await ingestTelemetry(
+      topic,
+      payload({ ...message, sequence: 13 }),
+      receivedAt,
+      repository,
+      logger,
+      false,
+      metrics,
+      200,
+    );
+
+    const report = metrics.snapshot();
+    expect(report.counters).toMatchObject({
+      validationSucceeded: 2,
+      validationFailed: 1,
+      dbSaveSucceeded: 1,
+      dbSaveFailed: 1,
+    });
+    expect(report.timings.deviceTimestampToMqttReceiveMs).toMatchObject({
+      count: 2,
+      minMs: 1000,
+      maxMs: 1000,
+    });
+    expect(report.timings.mqttReceiveToDbCompleteMs).toMatchObject({
+      count: 2,
+      minMs: 40,
+      maxMs: 60,
+      sumMs: 100,
+    });
+    expect(monotonicNow).toHaveBeenCalledTimes(2);
+    monotonicNow.mockRestore();
   });
 });
