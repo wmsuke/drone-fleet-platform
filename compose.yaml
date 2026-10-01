@@ -1,8 +1,6 @@
 services:
   postgres:
     image: postgres:17-alpine
-    ports:
-      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-drone_fleet}
       POSTGRES_USER: ${POSTGRES_USER:-drone_fleet}
@@ -19,8 +17,6 @@ services:
 
   mqtt:
     image: eclipse-mosquitto:2.0.22
-    ports:
-      - "127.0.0.1:1883:1883"
     volumes:
       - ./infra/local/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
@@ -34,6 +30,128 @@ services:
       timeout: 4s
       retries: 5
       start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "packages/database/dist/migrate.js"]
+    environment: &database-environment
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-drone_fleet}
+      POSTGRES_USER: ${POSTGRES_USER:-drone_fleet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  telemetry-ingestor:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "apps/telemetry-ingestor/dist/index.js"]
+    environment:
+      <<: *database-environment
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      OFFLINE_TIMEOUT_MS: ${OFFLINE_TIMEOUT_MS:-15000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  api:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "apps/api/dist/index.js"]
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    environment:
+      <<: *database-environment
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      DASHBOARD_ORIGIN: http://localhost:${DASHBOARD_PORT:-5173}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/devices').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  simulator:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "apps/simulator/dist/index.js"]
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      DRONE_COUNT: ${DRONE_COUNT:-10}
+      TELEMETRY_INTERVAL_MS: ${TELEMETRY_INTERVAL_MS:-5000}
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      telemetry-ingestor:
+        condition: service_started
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  dashboard:
+    build:
+      context: .
+      target: runtime
+      args:
+        VITE_API_BASE_URL: http://127.0.0.1:${API_PORT:-3000}
+    command:
+      [
+        "pnpm",
+        "--filter",
+        "@drone-fleet/dashboard",
+        "preview",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "4173",
+      ]
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-5173}:4173"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 10
+      start_period: 5s
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

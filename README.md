@@ -11,7 +11,7 @@
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
 - GitHub Actionsによる品質チェックとシークレット検査
-- Docker Composeで動かすローカル開発用Mosquitto
+- Docker Composeで動かすローカル開発環境
 - MQTTの送受信検証
 - MQTTトピックとPhase 1メッセージの型・実行時検証
 - 台数を設定できる仮想ドローンからの接続状態・テレメトリ送信・コマンド処理
@@ -19,8 +19,6 @@
 - 登録済みデバイスの一覧・詳細・テレメトリ履歴API
 - RETURN_HOME・REBOOTコマンドの送信APIとコマンド履歴API
 - React・Vite・TanStack Queryによるダッシュボード基盤、機体一覧・詳細画面、コマンド操作・履歴表示
-
-現時点では全サービスの一括起動手順はない。
 
 ## 開発環境
 
@@ -71,6 +69,43 @@ cp .env.example .env
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
+## 全サービスの一括起動
+
+Docker ComposeでPostgreSQL、Mosquitto、DBマイグレーション、MQTT受信処理、API、仮想ドローン10台、ダッシュボードを起動する。Node.jsやpnpmをホストへインストールしていない場合も、Docker EngineとDocker Compose v2があれば起動できる。
+
+```bash
+cp .env.example .env
+docker compose up --build -d --wait
+```
+
+初回起動ではPostgreSQLとMosquittoのhealthcheck完了後にDBマイグレーションを自動適用する。マイグレーションが正常終了してからMQTT受信処理とAPIを起動し、APIのhealthcheck完了後にダッシュボードを起動する。起動状態は次のコマンドで確認できる。`migrate`だけは処理完了後に`Exited (0)`となるのが正常である。
+
+```bash
+docker compose ps -a
+docker compose logs migrate
+```
+
+[http://localhost:5173](http://localhost:5173)を開くと、`drone-001`から`drone-010`までの状態を確認できる。APIは`http://127.0.0.1:3000`で利用できる。PostgreSQLとMosquittoは通常の一括起動ではホストへ公開せず、Composeネットワーク内だけで使用する。
+
+全サービスを停止してコンテナとネットワークを削除する。PostgreSQLとMosquittoのデータはvolumeへ残るため、同じコマンドで再起動できる。
+
+```bash
+docker compose down
+docker compose up -d --wait
+```
+
+保存データも削除して初回起動の状態へ戻す場合は、次のコマンドを使用する。
+
+```bash
+docker compose down --volumes
+```
+
+ログをまとめて確認する場合は次のコマンドを使用する。
+
+```bash
+docker compose logs -f
+```
+
 ダッシュボードの開発サーバーは、`.env`の`VITE_API_BASE_URL`を接続先として起動する。
 
 ```bash
@@ -94,9 +129,17 @@ Phase 0完了時に次の環境とコマンドで確認した。バージョン�
 | `pnpm verify:mqtt`                         | 成功              |
 | `docker compose ps` / `logs mqtt` / `down` | 成功              |
 
-## ローカルMQTTブローカー
+## 個別サービスの開発
 
-Docker ComposeでMosquittoを起動する。現在のCompose構成に含まれるのはMQTTブローカーのみで、仮想ドローンや他のサービスは起動しない。
+PostgreSQLやMosquittoへホスト側の開発コマンドから接続する場合は、`compose.dev.yaml`を追加してlocalhostへポートを公開する。
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d --wait postgres mqtt
+```
+
+### ローカルMQTTブローカー
+
+Docker ComposeでMosquittoだけを起動する。
 
 ```bash
 docker compose up -d mqtt
@@ -136,7 +179,7 @@ docker compose exec mqtt mosquitto_pub -h localhost -t fleet/test -m hello
 
 ```bash
 cp .env.example .env
-docker compose up -d mqtt
+docker compose -f compose.yaml -f compose.dev.yaml up -d mqtt
 ```
 
 最初のターミナルで全機体のテレメトリを購読する。`-v`によりトピックへ含まれるdeviceIdを識別できる。
@@ -175,7 +218,7 @@ docker compose down --volumes
 
 ```bash
 cp .env.example .env
-docker compose up -d --wait postgres
+docker compose -f compose.yaml -f compose.dev.yaml up -d --wait postgres
 ```
 
 Drizzleのマイグレーションを適用する。再実行しても適用済みのマイグレーションは重複実行されない。
@@ -207,8 +250,6 @@ DBを空の状態へ戻す場合は、PostgreSQLを停止してデータ用volum
 ```bash
 docker compose down --volumes
 ```
-
-Phase 1では、後続Issueで`docker compose up`による全サービスの一括起動を追加する。
 
 ## 設計と開発計画
 
