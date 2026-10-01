@@ -24,7 +24,9 @@ readonly api_port="${TELEMETRY_PATH_API_PORT:-31045}"
 readonly raw_project="telemetry-path-${GITHUB_RUN_ID:-local-$$}-${GITHUB_RUN_ATTEMPT:-1}"
 readonly project_name="${raw_project//_/-}"
 readonly api_url="http://127.0.0.1:${api_port}/devices/${device_id}/telemetry?limit=1"
+readonly simulator_api_url="http://127.0.0.1:${api_port}/devices/drone-001/telemetry?limit=1"
 response_file="$(mktemp)"
+simulator_response_file="$(mktemp)"
 
 cleanup() {
   status=$?
@@ -33,13 +35,42 @@ cleanup() {
     echo "テレメトリ経路の結合テストに失敗しました。サービス状態とログを出力します。" >&2
     docker compose -p "${project_name}" ps -a >&2 || true
     docker compose -p "${project_name}" logs \
-      postgres mqtt migrate telemetry-ingestor api >&2 || true
+      postgres mqtt migrate telemetry-ingestor simulator api >&2 || true
   fi
 
   API_PORT="${api_port}" docker compose -p "${project_name}" \
     down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -f "${response_file}"
+  rm -f "${simulator_response_file}"
   exit "${status}"
+}
+
+matches_simulator_telemetry() {
+  node --input-type=module - "${simulator_response_file}" <<'NODE'
+import { readFile } from "node:fs/promises";
+
+const response = JSON.parse(await readFile(process.argv[2], "utf8"));
+const telemetry = response[0];
+const valid =
+  response.length === 1 &&
+  Number.isSafeInteger(telemetry?.sequence) &&
+  telemetry.sequence >= 0 &&
+  typeof telemetry.deviceTimestamp === "string" &&
+  !Number.isNaN(Date.parse(telemetry.deviceTimestamp)) &&
+  typeof telemetry.receivedAt === "string" &&
+  !Number.isNaN(Date.parse(telemetry.receivedAt)) &&
+  typeof telemetry.battery === "number" &&
+  telemetry.battery >= 0 &&
+  telemetry.battery <= 100 &&
+  typeof telemetry.latitude === "number" &&
+  typeof telemetry.longitude === "number" &&
+  typeof telemetry.altitude === "number" &&
+  typeof telemetry.temperature === "number" &&
+  ["IDLE", "FLYING", "RETURNING_HOME"].includes(telemetry.flightStatus);
+if (!valid) {
+  process.exit(1);
+}
+NODE
 }
 
 trap cleanup EXIT
@@ -72,10 +103,11 @@ NODE
 }
 
 echo "テレメトリ経路の検証サービスを起動します: ${project_name}"
-API_PORT="${api_port}" docker compose -p "${project_name}" up \
-  --build -d --wait postgres mqtt migrate telemetry-ingestor api
+API_PORT="${api_port}" DRONE_COUNT=1 docker compose -p "${project_name}" up \
+  --build -d --wait postgres mqtt migrate telemetry-ingestor simulator api
 
 echo "固定テレメトリをMQTTへ送信し、APIへの反映を最大30秒待ちます。"
+fixed_telemetry_verified=false
 for attempt in {1..30}; do
   docker compose -p "${project_name}" exec -T mqtt \
     mosquitto_pub -h localhost -p 1883 -q 1 -t "${topic}" -m "${payload}"
@@ -83,10 +115,26 @@ for attempt in {1..30}; do
   if curl --fail --silent --show-error "${api_url}" >"${response_file}" 2>/dev/null &&
     matches_expected_telemetry; then
     echo "MQTTからAPIまで固定テレメトリが一致しました（試行 ${attempt}/30）。"
+    fixed_telemetry_verified=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "${fixed_telemetry_verified}" != true ]]; then
+  echo "固定テレメトリを30秒以内にAPIから取得できませんでした。" >&2
+  exit 1
+fi
+
+echo "シミュレータのテレメトリがAPIへ反映されるまで最大30秒待ちます。"
+for attempt in {1..30}; do
+  if curl --fail --silent --show-error "${simulator_api_url}" \
+    >"${simulator_response_file}" 2>/dev/null && matches_simulator_telemetry; then
+    echo "シミュレータからAPIまでのテレメトリ経路を確認しました（試行 ${attempt}/30）。"
     exit 0
   fi
   sleep 1
 done
 
-echo "固定テレメトリを30秒以内にAPIから取得できませんでした。" >&2
+echo "シミュレータのテレメトリを30秒以内にAPIから取得できませんでした。" >&2
 exit 1

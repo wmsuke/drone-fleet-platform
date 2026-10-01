@@ -109,13 +109,13 @@ docker compose logs -f
 
 ### テレメトリ経路の結合テスト
 
-仮想ドローンと同じ形式の固定テレメトリをMosquittoへ送信し、MQTT受信処理、PostgreSQLを経由してAPIから同じ値を取得できることを検証する。
+シミュレータを1台起動し、生成したテレメトリがMosquitto、MQTT受信処理、PostgreSQLを経由してAPIへ到達することを検証する。あわせて、固定テレメトリをMosquittoへ送信し、APIから取得した全項目が一致することを確認する。
 
 ```bash
 pnpm test:telemetry-path
 ```
 
-テストは専用のComposeプロジェクトを使用する。APIへの反映を最大30秒待ち、成功・失敗を問わずコンテナ、ネットワーク、volumeを削除する。失敗時はPostgreSQL、Mosquitto、マイグレーション、MQTT受信処理、APIの状態とログを出力する。外部のAWSや実機には接続しない。Pull Requestと`main`へのpushでも同じテストを実行する。
+テストは専用のComposeプロジェクトを使用する。固定テレメトリとシミュレータのテレメトリは、それぞれAPIへの反映を最大30秒待つ。成功・失敗を問わずコンテナ、ネットワーク、volumeを削除する。失敗時はPostgreSQL、Mosquitto、マイグレーション、MQTT受信処理、シミュレータ、APIの状態とログを出力する。外部のAWSや実機には接続しない。Pull Requestと`main`へのpushでも同じテストを実行する。
 
 ダッシュボードの開発サーバーは、`.env`の`VITE_API_BASE_URL`を接続先として起動する。
 
