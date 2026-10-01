@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import type { DeviceRepository } from "./repository.js";
@@ -23,8 +24,20 @@ const DEFAULT_COMMAND_LIMIT = 100;
 export function buildApi(
   repository: DeviceRepository,
   commandService: CommandService,
+  options: { dashboardOrigin?: string | null } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (
+    options.dashboardOrigin !== undefined &&
+    options.dashboardOrigin !== null
+  ) {
+    const dashboardOrigin = options.dashboardOrigin;
+    void app.register(cors, {
+      origin(origin, callback) {
+        callback(null, origin === dashboardOrigin);
+      },
+    });
+  }
 
   app.get("/devices", async () => {
     const devices = await repository.list();

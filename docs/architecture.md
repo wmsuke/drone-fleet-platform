@@ -133,7 +133,7 @@ Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、
 
 ### apps/dashboard
 
-React、Vite、TanStack Query、React Routerによる画面基盤を実装済みである。API接続先は`VITE_API_BASE_URL`で指定し、未設定、読み込み中、通信失敗を画面に表示する。APIからデータを取得し、MQTTやDBには直接接続しない。機体一覧や詳細などの各画面は後続Issueで追加する。
+React、Vite、TanStack Query、React Routerによる画面基盤を実装済みである。API接続先は`VITE_API_BASE_URL`で指定し、未設定、読み込み中、通信失敗を画面に表示する。ローカル開発で別originになるAPIは、`DASHBOARD_ORIGIN`と一致するダッシュボードだけにCORSレスポンスを返す。APIからデータを取得し、MQTTやDBには直接接続しない。機体一覧や詳細などの各画面は後続Issueで追加する。
 
 - 総台数とオンライン・オフラインの台数
 - 各機体の接続状態、バッテリー残量、最終受信時刻

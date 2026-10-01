@@ -26,7 +26,9 @@ async function main(): Promise<void> {
     createCommandRepository(db),
     createCommandPublisher(mqttClient),
   );
-  const app = buildApi(createDeviceRepository(db), commandService);
+  const app = buildApi(createDeviceRepository(db), commandService, {
+    dashboardOrigin: config.dashboardOrigin,
+  });
 
   const shutdown = createShutdown(app, mqttClient, client);
   process.once("SIGINT", () => void shutdown());
