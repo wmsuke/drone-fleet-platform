@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { NavLink, Route, Routes, useParams } from "react-router-dom";
+import { NavLink, Route, Routes } from "react-router-dom";
 
+import { DeviceDetailPage } from "./device-detail.js";
 import { DeviceListPage } from "./device-list.js";
 
 export interface DashboardAppProps {
@@ -44,17 +45,6 @@ function HomePage({ apiBaseUrl }: { apiBaseUrl: string | null }) {
   );
 }
 
-function DevicePage() {
-  const { deviceId } = useParams();
-  return (
-    <section className="panel">
-      <p className="eyebrow">Device</p>
-      <h2>{deviceId}</h2>
-      <p className="lead">機体詳細は後続Issueで実装する。</p>
-    </section>
-  );
-}
-
 function NotFoundPage() {
   return (
     <section className="panel">
@@ -72,7 +62,10 @@ export function DashboardApp({ apiBaseUrl }: DashboardAppProps) {
     <Layout>
       <Routes>
         <Route path="/" element={<HomePage apiBaseUrl={apiBaseUrl} />} />
-        <Route path="/devices/:deviceId" element={<DevicePage />} />
+        <Route
+          path="/devices/:deviceId"
+          element={<DeviceDetailPage apiBaseUrl={apiBaseUrl} />}
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>
