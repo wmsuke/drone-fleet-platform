@@ -18,34 +18,70 @@ describe("calculateDroneState", () => {
     expect(second.temperature).not.toBe(first.temperature);
   });
 
-  it("returns the same state for the same sequence", () => {
-    expect(calculateDroneState(17)).toEqual(calculateDroneState(17));
+  it("returns the same state series for the same seed and device", () => {
+    const first = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "demo-seed", "drone-004"),
+    );
+    const second = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "demo-seed", "drone-004"),
+    );
+
+    expect(second).toEqual(first);
   });
 
-  it("starts at the configured base state", () => {
-    expect(calculateDroneState(0)).toEqual({
-      battery: 100,
-      latitude: 35.681236,
-      longitude: 139.768125,
-      altitude: 0,
-      temperature: 25,
-      status: "IDLE",
-    });
+  it("changes the state series when the seed changes", () => {
+    const first = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "seed-a", "drone-001"),
+    );
+    const second = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "seed-b", "drone-001"),
+    );
+
+    expect(second).not.toEqual(first);
   });
 
-  it("reaches the altitude and temperature boundaries", () => {
-    expect(calculateDroneState(10).temperature).toBe(30);
-    expect(calculateDroneState(20).altitude).toBe(50);
-    expect(calculateDroneState(20).status).toBe("FLYING");
-    expect(calculateDroneState(30).temperature).toBe(20);
-    expect(calculateDroneState(40).altitude).toBe(0);
-    expect(calculateDroneState(40).status).toBe("IDLE");
+  it("creates a stable, distinct series for each device", () => {
+    const firstDevice = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "fleet-seed", "drone-001"),
+    );
+    const secondDevice = Array.from({ length: 20 }, (_, sequence) =>
+      calculateDroneState(sequence, "fleet-seed", "drone-002"),
+    );
+
+    expect(secondDevice).not.toEqual(firstDevice);
+    expect(
+      Array.from({ length: 20 }, (_, sequence) =>
+        calculateDroneState(sequence, "fleet-seed", "drone-002"),
+      ),
+    ).toEqual(secondDevice);
   });
 
   it("stops battery depletion at zero", () => {
-    expect(calculateDroneState(199).battery).toBe(0.5);
     expect(calculateDroneState(200).battery).toBe(0);
     expect(calculateDroneState(Number.MAX_SAFE_INTEGER).battery).toBe(0);
+  });
+
+  it("compares reproducible messages without time-dependent timestamps", () => {
+    const withoutTimestamp = (timestamp: string) =>
+      Array.from({ length: 10 }, (_, sequence) => {
+        const message = createTelemetryMessage(
+          "drone-003",
+          sequence,
+          timestamp,
+          undefined,
+          "repeatable-demo",
+        );
+        return {
+          schemaVersion: message.schemaVersion,
+          deviceId: message.deviceId,
+          sequence: message.sequence,
+          payload: message.payload,
+        };
+      });
+
+    expect(withoutTimestamp("2026-09-25T08:00:00.000Z")).toEqual(
+      withoutTimestamp("2026-10-01T09:30:00.000Z"),
+    );
   });
 
   it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
@@ -57,7 +93,13 @@ describe("calculateDroneState", () => {
 
   it("keeps all generated values inside the protocol ranges", () => {
     for (let sequence = 0; sequence <= 240; sequence += 1) {
-      const message = createTelemetryMessage("drone-001", sequence, timestamp);
+      const message = createTelemetryMessage(
+        "drone-001",
+        sequence,
+        timestamp,
+        undefined,
+        "range-test",
+      );
 
       expect(telemetryMessageSchema.safeParse(message).success).toBe(true);
     }

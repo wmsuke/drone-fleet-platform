@@ -121,6 +121,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       connectClient,
@@ -179,6 +180,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async () => client,
@@ -223,6 +225,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async () => client,
@@ -263,6 +266,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async () => client,
@@ -304,6 +308,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async () => client,
@@ -324,6 +329,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async (_url, options) => {
@@ -355,6 +361,7 @@ describe("startSimulator", () => {
       {
         deviceId: "drone-001",
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
       },
       async (_url, options) => {

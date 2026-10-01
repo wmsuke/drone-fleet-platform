@@ -30,6 +30,7 @@ export async function startSimulatorFleet(
           {
             deviceId: createDeviceId(index),
             mqttUrl: config.mqttUrl,
+            simulationSeed: config.simulationSeed,
             telemetryIntervalMs: config.telemetryIntervalMs,
           },
           connectClient,

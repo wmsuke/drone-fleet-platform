@@ -77,6 +77,7 @@ describe("startSimulatorFleet", () => {
       {
         droneCount: 10,
         mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "fleet-test",
         telemetryIntervalMs: 5000,
       },
       connectClient,
@@ -132,6 +133,7 @@ describe("startSimulatorFleet", () => {
         {
           droneCount: 2,
           mqttUrl: "mqtt://127.0.0.1:1883",
+          simulationSeed: "fleet-test",
           telemetryIntervalMs: 5000,
         },
         connectClient,
