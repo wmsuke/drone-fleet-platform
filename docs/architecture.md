@@ -92,7 +92,7 @@ scripts/
 └── verify-mqtt.sh
 ```
 
-Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード基盤を実装済みである。以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード、全サービスのDocker Compose構成を実装済みである。以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -162,7 +162,7 @@ Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-flee
 
 ### infra
 
-`local`にはMosquittoのローカル設定を置く。Phase 1でローカルサービスの構成を追加する。Phase 2以降のAWS環境に使用する`terraform`は未作成である。
+`local`にはMosquittoのローカル設定を置く。ルートの`compose.yaml`はPostgreSQLとMosquittoのhealthcheck、DBマイグレーション、MQTT受信処理、API、仮想ドローン、ダッシュボードの起動順を管理する。通常はAPIとダッシュボードだけをlocalhostへ公開する。ホスト側の開発コマンドでPostgreSQLとMosquittoへ接続するときは`compose.dev.yaml`を併用する。停止時は依存関係と逆の順序でサービスを終了し、シミュレータと各サービスが接続を閉じてから基盤サービスを停止する。Phase 2以降のAWS環境に使用する`terraform`は未作成である。
 
 ## Phase 1のデータの流れ
 

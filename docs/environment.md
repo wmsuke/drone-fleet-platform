@@ -12,7 +12,7 @@ cp .env.example .env
 
 `.env.example`にはローカル開発用のダミー値だけを置く。コピー後の`.env`はGitの管理対象外であり、必要に応じて各自の環境で値を変更する。
 
-現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。シミュレータを`node --env-file=.env`で起動すると、ルートの`.env`からMQTT接続先とシミュレータ設定を読み込む。DBマイグレーションも同じ`.env`からPostgreSQL接続設定を読み込む。
+現在の変数は、Docker Composeと各サービスで共有するローカル構成の初期値である。Compose内ではPostgreSQLとMosquittoの接続先をサービス名へ上書きする。シミュレータをホストから`node --env-file=.env`で起動する場合は、ルートの`.env`からMQTT接続先とシミュレータ設定を読み込む。DBマイグレーションも同じ`.env`からPostgreSQL接続設定を読み込む。
 
 ## 設定項目
 
@@ -30,10 +30,11 @@ cp .env.example .env
 | `API_PORT` | HTTP APIの待受ポート |
 | `DASHBOARD_ORIGIN` | APIがCORSで許可するダッシュボードのorigin |
 | `VITE_API_BASE_URL` | ダッシュボードが接続するHTTP APIのベースURL |
+| `DASHBOARD_PORT` | Composeがホストへ公開するダッシュボードのポート |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 
-値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSからDocker Composeの各サービスへ接続する値である。アプリをComposeへ追加するときは、接続先をそれぞれ`postgres`と`mqtt`へ上書きする。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
+値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSから各サービスへ接続する値である。Compose内のアプリには、接続先をそれぞれ`postgres`と`mqtt`として渡す。通常の一括起動ではPostgreSQLとMosquittoをホストへ公開しない。ホスト側の開発コマンドから接続するときだけ`compose.dev.yaml`を併用する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。
 
 ## 秘密情報の扱い
 
