@@ -353,6 +353,112 @@ a {
   font-size: 0.85rem;
 }
 
+.command-section {
+  margin: 0 0 40px;
+  padding: 22px;
+  border: 1px solid rgb(19 42 42 / 10%);
+  border-radius: 18px;
+  background: #f9fbf9;
+}
+
+.command-actions,
+.confirmation-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.command-button,
+.confirmation-actions button {
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.command-button:disabled,
+.confirmation-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.command-return {
+  color: #fff;
+  background: #176b54;
+}
+
+.command-reboot {
+  color: #7a2d25;
+  border-color: #d8a29a;
+  background: #fff6f4;
+}
+
+.command-confirmation {
+  margin-top: 18px;
+  padding: 18px;
+  border-left: 4px solid #c57345;
+  border-radius: 10px;
+  background: #fff8ee;
+}
+
+.command-confirmation p {
+  margin: 8px 0 14px;
+  color: #506663;
+}
+
+.risk-confirmation {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+  color: #6e3b2d;
+  font-weight: 700;
+}
+
+.risk-confirmation input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+}
+
+.confirmation-actions button {
+  border-color: rgb(19 42 42 / 16%);
+  background: #fff;
+}
+
+.confirmation-actions .confirm-command {
+  color: #fff;
+  border-color: #7a2d25;
+  background: #7a2d25;
+}
+
+.command-result {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 16px 0 0;
+  padding: 13px 15px;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+.command-result span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.command-success {
+  color: #145c45;
+  background: #e2f4e9;
+}
+
+.command-error {
+  color: #7a2d25;
+  background: #fff0ed;
+}
+
 @media (max-width: 620px) {
   .app-shell {
     width: min(100% - 24px, 1120px);
@@ -396,5 +502,10 @@ a {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .command-actions,
+  .command-button {
+    width: 100%;
   }
 }
