@@ -75,6 +75,7 @@ function acknowledgementRepository(): CommandAcknowledgementRepository {
 describe("startTelemetryIngestor", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("subscribes to all telemetry topics and handles consecutive messages", async () => {
@@ -219,7 +220,12 @@ describe("startTelemetryIngestor", () => {
     await ingestor.shutdown();
   });
 
-  it("records MQTT receipts and writes metrics after in-flight work", async () => {
+  it("measures DB completion from the MQTT receipt before validation", async () => {
+    const monotonicNow = vi
+      .spyOn(performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(150)
+      .mockReturnValueOnce(180);
     const client = new FakeMqttClient();
     const writeFile = vi.fn().mockResolvedValue(undefined);
     const metrics = createLoadMetrics(
@@ -263,6 +269,12 @@ describe("startTelemetryIngestor", () => {
       dbSaveSucceeded: 1,
       dbSaveFailed: 0,
     });
+    expect(report.timings.mqttReceiveToDbCompleteMs).toMatchObject({
+      count: 1,
+      minMs: 30,
+      maxMs: 30,
+    });
+    expect(monotonicNow).toHaveBeenCalledTimes(3);
     expect(writeFile).toHaveBeenCalledOnce();
   });
 });

@@ -77,6 +77,8 @@ export async function startTelemetryIngestor(
             metrics,
           )
         : (() => {
+            const mqttReceivedAtMonotonic =
+              metrics === undefined ? undefined : performance.now();
             metrics?.recordMqttReceived();
             return ingestTelemetry(
               topic,
@@ -86,6 +88,7 @@ export async function startTelemetryIngestor(
               logger,
               packet.retain,
               metrics,
+              mqttReceivedAtMonotonic,
             );
           })();
     inFlight.add(task);

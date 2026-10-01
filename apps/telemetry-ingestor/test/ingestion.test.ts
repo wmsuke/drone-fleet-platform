@@ -116,6 +116,10 @@ describe("ingestTelemetry", () => {
   });
 
   it("records validation and DB persistence outcomes separately", async () => {
+    const monotonicNow = vi
+      .spyOn(performance, "now")
+      .mockReturnValueOnce(140)
+      .mockReturnValueOnce(260);
     const metrics = createLoadMetrics(
       {
         testId: "test-1",
@@ -141,6 +145,7 @@ describe("ingestTelemetry", () => {
       logger,
       false,
       metrics,
+      0,
     );
     await ingestTelemetry(
       topic,
@@ -150,6 +155,7 @@ describe("ingestTelemetry", () => {
       logger,
       false,
       metrics,
+      100,
     );
     await ingestTelemetry(
       topic,
@@ -159,6 +165,7 @@ describe("ingestTelemetry", () => {
       logger,
       false,
       metrics,
+      200,
     );
 
     const report = metrics.snapshot();
@@ -173,6 +180,13 @@ describe("ingestTelemetry", () => {
       minMs: 1000,
       maxMs: 1000,
     });
-    expect(report.timings.mqttReceiveToDbCompleteMs.count).toBe(2);
+    expect(report.timings.mqttReceiveToDbCompleteMs).toMatchObject({
+      count: 2,
+      minMs: 40,
+      maxMs: 60,
+      sumMs: 100,
+    });
+    expect(monotonicNow).toHaveBeenCalledTimes(2);
+    monotonicNow.mockRestore();
   });
 });
