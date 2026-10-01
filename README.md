@@ -2,11 +2,11 @@
 
 ドローンの状態監視と遠隔コマンドを扱うデバイス管理基盤。
 
-まずはTypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認できるようにする。その後、AWS IoTとの接続、通信断からの復旧、OTA、ROS 2との連携を追加していく。
+TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認する。帰還・再起動コマンドの送信とACKの追跡まで、AWSアカウントや実機なしで試せる。
 
 ## 開発状況
 
-開発基盤を整えるPhase 0は完了し、Phase 1の機能実装を進めている。現在は次の範囲を利用できる。
+Phase 1のローカル最小構成まで実装済みで、`v0.1.0`として次の範囲を利用できる。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -19,6 +19,69 @@
 - 登録済みデバイスの一覧・詳細・テレメトリ履歴API
 - RETURN_HOME・REBOOTコマンドの送信APIとコマンド履歴API
 - React・Vite・TanStack Queryによるダッシュボード基盤、機体一覧・詳細画面、コマンド操作・履歴表示
+- MQTTからAPIまでの結合テストと、シードによるシミュレーションの再現
+
+## ローカルデモ
+
+Docker EngineとDocker Compose v2があれば、全サービスと仮想ドローン10台をまとめて起動できる。初回はイメージのビルドを含むため数分かかる場合がある。
+
+```bash
+git clone https://github.com/wmsuke/drone-fleet-platform.git
+cd drone-fleet-platform
+cp .env.example .env
+docker compose up --build -d --wait
+```
+
+起動後に[http://localhost:5173](http://localhost:5173)を開く。機体一覧に`drone-001`から`drone-010`までが表示され、約5秒ごとにテレメトリが更新される。
+
+![オンラインの仮想ドローン10台を表示した機体一覧](docs/dashboard-overview.jpg)
+
+コマンドとACKは次の手順で確認できる。
+
+1. 一覧から任意の機体の「機体詳細を見る」を押す。
+2. 「帰還させる」または「再起動する」を押し、確認画面から実行する。
+3. コマンド履歴が「ACK受信済み」になることを確認する。画面は5秒ごとに更新される。
+4. 帰還では飛行状態が「帰還中」になり、再起動では一時切断後にオンラインへ戻る。
+
+![最新テレメトリとACK受信済みのコマンド履歴](docs/dashboard-device-detail.jpg)
+
+APIから10台を確認する場合は、次のURLを使用する。
+
+```bash
+curl http://127.0.0.1:3000/devices
+```
+
+デモを終了する。PostgreSQLとMosquittoのデータはvolumeに残る。
+
+```bash
+docker compose down
+```
+
+保存データも削除して初回状態へ戻す場合は、`docker compose down --volumes`を使用する。
+
+### 構成とデータの流れ
+
+```mermaid
+flowchart LR
+    Simulator["仮想ドローン ×10"] -->|"テレメトリ・接続状態・ACK"| MQTT["Mosquitto"]
+    MQTT --> Ingestor["MQTT受信処理"]
+    Ingestor --> DB["PostgreSQL"]
+    Dashboard["ダッシュボード"] -->|"HTTP"| API["Fleet API"]
+    API --> DB
+    API -->|"コマンド"| MQTT
+    MQTT -->|"コマンド"| Simulator
+```
+
+詳しいサービス構成は[システム構成](docs/architecture.md)、MQTTトピックとメッセージ形式は[通信仕様](docs/protocol.md)、Phaseごとの対象範囲は[ロードマップ](docs/roadmap.md)を参照する。
+
+### v0.1.0の制約
+
+- ローカルのDocker Compose環境を対象とし、AWS IoT Coreや実機には接続しない。
+- MosquittoはComposeネットワーク内で匿名接続を許可する開発用設定であり、外部公開を想定しない。
+- 操作できるコマンドは`RETURN_HOME`と`REBOOT`のみである。
+- ACKは仮想ドローンがコマンドを受領したことを示し、実行完了を示すものではない。
+- モデル名とソフトウェアバージョンはPhase 1のメッセージに含まれないため、画面では未登録と表示する。
+- 認証・認可、通信断からの再送・復旧、OTA、ROS 2連携は後続Phaseで扱う。
 
 ## 開発環境
 
@@ -54,7 +117,7 @@ pnpm check
 cp .env.example .env
 ```
 
-サンプル値はローカル開発専用である。シミュレータは起動時に`.env`からMQTT接続先、deviceId、送信間隔を読み込む。ブローカー単体の送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
+サンプル値はローカル開発専用である。シミュレータは起動時に`.env`からMQTT接続先、台数、シード、送信間隔を読み込む。ブローカー単体の送受信検証に`.env`は必要ない。設定項目と秘密情報の扱いは[環境変数と秘密情報](docs/environment.md)を参照する。
 
 個別のコマンドは次のとおり。
 

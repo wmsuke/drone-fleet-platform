@@ -6,7 +6,7 @@
 
 AWS接続や通信断対応は後続のPhaseで追加する。AWS対応後も、ローカルだけで動作する構成を維持する。
 
-Phase 0では、TypeScriptのモノレポ、各サービスのプレースホルダー、Mosquitto、共通検証コマンド、CIを実装した。テレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードはPhase 1で実装する。
+Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。
 
 ## Phase 1のローカル構成
 
@@ -28,7 +28,7 @@ flowchart LR
     Broker -->|"コマンド"| Simulator
 ```
 
-Phase 1では、Docker Composeで以下を起動する。Phase 0の`compose.yaml`に含まれるのはMosquittoのみである。
+Phase 1では、Docker Composeで以下を起動する。
 
 - Mosquitto
 - PostgreSQL
@@ -45,16 +45,16 @@ Phase 1では、Docker Composeで以下を起動する。Phase 0の`compose.yaml
 |---|---|---|
 | 言語・実行環境 | TypeScript / Node.js | Phase 0で導入済み |
 | モノレポ | pnpm workspace | Phase 0で導入済み |
-| HTTP API | Fastify | Phase 1で導入予定 |
-| 入力検証 | Zod | Phase 1で導入予定 |
-| データベース | PostgreSQL | Phase 1で導入予定 |
-| ORM・マイグレーション | Drizzle ORM | Phase 1で導入予定 |
-| MQTTクライアント | mqtt.js | Phase 1で導入予定 |
+| HTTP API | Fastify | Phase 1で導入済み |
+| 入力検証 | Zod | Phase 1で導入済み |
+| データベース | PostgreSQL | Phase 1で導入済み |
+| ORM・マイグレーション | Drizzle ORM | Phase 1で導入済み |
+| MQTTクライアント | mqtt.js | Phase 1で導入済み |
 | MQTTブローカー | Eclipse Mosquitto | Phase 0で導入済み |
 | フロントエンド | React / Vite / TanStack Query | Phase 1で導入済み |
-| テスト | Vitest | Phase 0で実行基盤を導入済み、機能テストは未実装 |
-| 画面のE2Eテスト | Playwright | Phase 1で導入予定 |
-| ローカル実行 | Docker Compose | Phase 0でMosquittoに使用 |
+| テスト | Vitest | Phase 1の単体・結合テストを実装済み |
+| 画面のE2Eテスト | Playwright | 未導入 |
+| ローカル実行 | Docker Compose | Phase 1の全サービスに使用 |
 | CI | GitHub Actions | Phase 0で導入済み |
 | 静的検査・整形 | ESLint / Prettier | Phase 0で導入済み |
 
@@ -89,10 +89,11 @@ docs/
 
 scripts/
 ├── scan-secrets.sh
+├── test-telemetry-path.sh
 └── verify-mqtt.sh
 ```
 
-Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード、全サービスのDocker Compose構成を実装済みである。以下の機能はIssue単位で追加する。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード、全サービスのDocker Compose構成を実装済みである。`infra/terraform`はPhase 2で追加する。
 
 ### apps/api
 
@@ -143,7 +144,7 @@ React、Vite、TanStack Query、React Routerによる画面基盤と機体一覧
 
 ### packages/protocol
 
-Phase 1で、デバイスと基盤の間で共有する通信仕様を実装する。
+デバイスと基盤の間で共有する通信仕様を実装済みである。
 
 - MQTTトピック
 - メッセージの型
@@ -154,7 +155,7 @@ Phase 1で、デバイスと基盤の間で共有する通信仕様を実装す�
 
 ### packages/database
 
-Phase 1で、DBスキーマ、接続処理、マイグレーションを配置する。APIとMQTT受信処理から利用する。
+DBスキーマ、接続処理、マイグレーションを配置し、APIとMQTT受信処理から利用する。
 
 ### packages/config
 
