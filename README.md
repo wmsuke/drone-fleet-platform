@@ -128,10 +128,35 @@ cp .env.example .env
 | `pnpm typecheck`           | 全workspaceの型チェック                    |
 | `pnpm test`                | Vitestによるテスト                         |
 | `pnpm build`               | 全workspaceのビルド                        |
+| `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
+
+### 負荷生成器
+
+`apps/load-generator`は通常のシミュレータとは別に、指定範囲のdeviceIdからローカルMosquittoへテレメトリを送る。AWS固有の接続処理は含まない。件数上限または時間上限に達すると送信を止め、MQTT接続を閉じて`LOAD_REPORT_PATH`へJSONレポートを保存する。
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d --wait mqtt
+
+LOAD_TEST_ID=local-100 \
+LOAD_SESSION_ID=worker-1 \
+LOAD_DEVICE_START=1 \
+LOAD_DEVICE_COUNT=100 \
+LOAD_CONNECTION_RATE_PER_SECOND=25 \
+LOAD_TELEMETRY_INTERVAL_MS=1000 \
+LOAD_SIMULATION_SEED=demo-seed \
+LOAD_MAX_MESSAGES=10000 \
+LOAD_MAX_DURATION_MS=60000 \
+LOAD_REPORT_PATH=load-results/local-100-worker-1.json \
+pnpm load:local
+```
+
+deviceIdは`load-000001`の形式で、`LOAD_DEVICE_START`から`LOAD_DEVICE_COUNT`台を割り当てる。複数プロセスでは開始位置が重ならないように指定する。たとえば100台ずつ分ける場合、1つ目を開始位置1、2つ目を101とする。`LOAD_CONNECTION_RATE_PER_SECOND`は1秒あたりの新規接続数である。
+
+レポートには試験ID、セッションID、全設定、開始・終了時刻、停止理由、送信試行・成功・失敗数、機体ごとの最終sequenceを記録する。テレメトリ本体は[通信仕様](docs/protocol.md)のproduction schemaをそのまま使い、試験IDなどは追加しない。負荷検証全体の方針とAWSの費用上限は[負荷検証の提案](docs/proposals/load-testing.md)を参照する。
 
 ## 全サービスの一括起動
 

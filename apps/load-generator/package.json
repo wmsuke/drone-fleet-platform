@@ -1,0 +1,22 @@
+{
+  "name": "@drone-fleet/load-generator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@drone-fleet/config": "workspace:*",
+    "@types/node": "^26.6.3",
+    "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@drone-fleet/protocol": "workspace:*",
+    "mqtt": "^5.16.0"
+  }
+}
