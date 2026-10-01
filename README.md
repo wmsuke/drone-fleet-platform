@@ -129,7 +129,7 @@ cp .env.example .env
 | `pnpm test`                | Vitestによるテスト                         |
 | `pnpm build`               | 全workspaceのビルド                        |
 | `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
-| `pnpm test:load-report`    | 負荷試験レポートの小規模E2E               |
+| `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
 
