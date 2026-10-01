@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { ApiError, fetchDevice, type LatestTelemetry } from "./api.js";
 import { CommandControls } from "./command-controls.js";
+import { CommandHistory } from "./command-history.js";
 
 export const DEVICE_DETAIL_REFRESH_INTERVAL_MS = 5_000;
 
@@ -144,6 +145,7 @@ export function DeviceDetailPage({
             </div>
           </dl>
           <CommandControls apiBaseUrl={apiBaseUrl} deviceId={deviceId} />
+          <CommandHistory apiBaseUrl={apiBaseUrl} deviceId={deviceId} />
           {device.data.latestTelemetry === null ? (
             <div className="empty-state">
               <strong>テレメトリはまだありません。</strong>

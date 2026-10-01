@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import {
@@ -20,6 +20,7 @@ export function CommandControls({
   apiBaseUrl: string;
   deviceId: string;
 }) {
+  const queryClient = useQueryClient();
   const [selectedCommand, setSelectedCommand] = useState<CommandType | null>(
     null,
   );
@@ -32,6 +33,7 @@ export function CommandControls({
       setLastCommand(response);
       setSelectedCommand(null);
       setRebootAccepted(false);
+      void queryClient.invalidateQueries({ queryKey: ["commands", deviceId] });
     },
     onSettled() {
       sendingRef.current = false;
