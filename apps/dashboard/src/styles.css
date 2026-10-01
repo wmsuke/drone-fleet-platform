@@ -273,6 +273,86 @@ a {
   text-align: center;
 }
 
+.back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  color: #176b54;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.detail-content {
+  margin-top: 36px;
+}
+
+.detail-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0 24px;
+  border-bottom: 1px solid rgb(19 42 42 / 10%);
+  color: #506663;
+}
+
+.device-profile,
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 40px;
+}
+
+.device-profile div,
+.detail-metric {
+  padding: 16px;
+  border-radius: 14px;
+  background: #f5f8f5;
+}
+
+.device-profile dt,
+.detail-metric dt {
+  color: #667b77;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.device-profile dd,
+.detail-metric dd {
+  margin: 5px 0 0;
+  font-weight: 800;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.sequence-label {
+  color: #667b77;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.detail-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.measurement-time {
+  margin: 18px 0 0;
+  color: #667b77;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 620px) {
   .app-shell {
     width: min(100% - 24px, 1120px);
@@ -290,7 +370,8 @@ a {
   }
 
   .summary-grid,
-  .device-grid {
+  .device-grid,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -309,5 +390,11 @@ a {
 
   .notice {
     width: 100%;
+  }
+
+  .detail-status-row,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
