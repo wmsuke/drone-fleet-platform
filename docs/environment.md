@@ -30,6 +30,9 @@ cp .env.example .env
 | `LOAD_TEST_ID` | 負荷試験を識別するID |
 | `LOAD_SESSION_ID` | 負荷生成器またはingestorプロセスを識別するセッションID |
 | `LOAD_METRICS_REPORT_PATH` | ingestorの負荷試験レポート保存先 |
+| `LOAD_GENERATOR_REPORT_PATHS` | 集約するgeneratorレポートのパス（カンマ区切り） |
+| `LOAD_INGESTOR_REPORT_PATHS` | 集約するingestorレポートのパス（カンマ区切り） |
+| `LOAD_AGGREGATE_REPORT_PATH` | 集約レポートの保存先 |
 | `API_HOST` | HTTP APIの待受ホスト |
 | `API_PORT` | HTTP APIの待受ポート |
 | `DASHBOARD_ORIGIN` | APIがCORSで許可するダッシュボードのorigin |

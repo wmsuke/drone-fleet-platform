@@ -129,10 +129,11 @@ cp .env.example .env
 | `pnpm test`                | Vitestによるテスト                         |
 | `pnpm build`               | 全workspaceのビルド                        |
 | `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
+| `pnpm test:load-report`    | 負荷試験レポートの小規模E2E               |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
 
-Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
+Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、負荷試験レポートの小規模E2Eを実行する。
 
 ### 負荷生成器
 
@@ -168,6 +169,14 @@ LOAD_METRICS_REPORT_PATH=load-results/local-100-ingestor-1-ingestor.json
 ```
 
 ingestorの停止時にJSONレポートを保存する。レポートではMQTT受信、protocol検証、DB保存の成功・失敗を別々に数え、device timestampからMQTT受信までの遅延と、MQTT受信からDB transaction完了までの時間を別のヒストグラムへ記録する。ヒストグラムは固定bucketの非累積件数、合計、最小、最大を保持し、p50/p95/p99を近似集計できる。負の受信遅延も送受信ホスト間の時計ずれとして捨てずに記録する。
+
+generator、ingestor、PostgreSQLの結果を同じtestIdで突き合わせる小規模E2Eは次で実行する。
+
+```bash
+pnpm test:load-report
+```
+
+専用Compose projectでPostgreSQL、Mosquitto、telemetry-ingestor、APIを起動し、deviceId範囲を分けた2つのgeneratorを並行実行する。集約レポートには送信、受信、検証、DB保存、実保存、欠損、OFFLINE遷移の件数と、受信遅延・DB保存時間のp50/p95/p99を記録する。DBの照合はgenerator sessionごとのdeviceIdとdevice timestampの範囲で行うため、別sessionでsequenceが0へ戻っても混在しない。件数が一致しない場合はsession別の送信・保存・欠損数を表示して失敗する。成功・失敗を問わずComposeのコンテナ、ネットワーク、volumeと一時ディレクトリを削除する。
 
 ## 全サービスの一括起動
 

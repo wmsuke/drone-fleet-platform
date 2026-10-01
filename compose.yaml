@@ -63,7 +63,7 @@ services:
       LOAD_SESSION_ID: ${LOAD_SESSION_ID:-ingestor-1}
       LOAD_METRICS_REPORT_PATH: ${LOAD_METRICS_REPORT_PATH:-load-results/local-load-ingestor-1-ingestor.json}
     volumes:
-      - ./load-results:/workspace/load-results
+      - ${LOAD_RESULTS_DIR:-./load-results}:/workspace/load-results
     depends_on:
       migrate:
         condition: service_completed_successfully
