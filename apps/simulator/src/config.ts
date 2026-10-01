@@ -1,11 +1,14 @@
 export interface SimulatorConfig {
   droneCount: number;
   mqttUrl: string;
+  simulationSeed: string;
   telemetryIntervalMs: number;
 }
 
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
 export const MAX_DRONE_COUNT = 1_000;
+export const DEFAULT_SIMULATION_SEED = "default";
+export const MAX_SIMULATION_SEED_LENGTH = 128;
 
 function parseInteger(
   value: string,
@@ -46,14 +49,24 @@ export function loadSimulatorConfig(
     1,
     MAX_TIMER_DELAY_MS,
   );
+  const simulationSeed = environment.SIMULATION_SEED ?? DEFAULT_SIMULATION_SEED;
 
   if (host.length === 0) {
     throw new TypeError("MQTT_HOST must not be empty");
+  }
+  if (
+    simulationSeed.length === 0 ||
+    simulationSeed.length > MAX_SIMULATION_SEED_LENGTH
+  ) {
+    throw new TypeError(
+      `SIMULATION_SEED must be between 1 and ${MAX_SIMULATION_SEED_LENGTH} characters`,
+    );
   }
 
   return {
     droneCount,
     mqttUrl: `mqtt://${host}:${port}`,
+    simulationSeed,
     telemetryIntervalMs,
   };
 }

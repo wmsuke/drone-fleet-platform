@@ -11,6 +11,7 @@ describe("loadSimulatorConfig", () => {
     expect(loadSimulatorConfig({})).toEqual({
       droneCount: 10,
       mqttUrl: "mqtt://127.0.0.1:1883",
+      simulationSeed: "default",
       telemetryIntervalMs: 5000,
     });
   });
@@ -21,11 +22,13 @@ describe("loadSimulatorConfig", () => {
         MQTT_HOST: "mqtt.example.test",
         MQTT_PORT: "2883",
         DRONE_COUNT: "3",
+        SIMULATION_SEED: "demo-2026",
         TELEMETRY_INTERVAL_MS: "1000",
       }),
     ).toEqual({
       droneCount: 3,
       mqttUrl: "mqtt://mqtt.example.test:2883",
+      simulationSeed: "demo-2026",
       telemetryIntervalMs: 1000,
     });
   });
@@ -62,6 +65,8 @@ describe("loadSimulatorConfig", () => {
       { TELEMETRY_INTERVAL_MS: String(MAX_TIMER_DELAY_MS + 1) },
     ],
     ["non-numeric interval", { TELEMETRY_INTERVAL_MS: "fast" }],
+    ["empty simulation seed", { SIMULATION_SEED: "" }],
+    ["too long simulation seed", { SIMULATION_SEED: "x".repeat(129) }],
   ])("rejects %s", (_name, environment) => {
     expect(() => loadSimulatorConfig(environment)).toThrow(TypeError);
   });

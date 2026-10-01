@@ -48,8 +48,9 @@ export function createTelemetryMessage(
   sequence: number,
   timestamp: string,
   status?: TelemetryMessage["payload"]["status"],
+  simulationSeed?: string,
 ): TelemetryMessage {
-  const state = calculateDroneState(sequence);
+  const state = calculateDroneState(sequence, simulationSeed, deviceId);
 
   return telemetryMessageSchema.parse({
     schemaVersion: 1,

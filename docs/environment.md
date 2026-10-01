@@ -32,6 +32,7 @@ cp .env.example .env
 | `VITE_API_BASE_URL` | ダッシュボードが接続するHTTP APIのベースURL |
 | `DASHBOARD_PORT` | Composeがホストへ公開するダッシュボードのポート |
 | `DRONE_COUNT` | シミュレータが起動する仮想ドローンの台数 |
+| `SIMULATION_SEED` | シミュレータの状態系列を再現するシード |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
 
 値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSから各サービスへ接続する値である。Compose内のアプリには、接続先をそれぞれ`postgres`と`mqtt`として渡す。通常の一括起動ではPostgreSQLとMosquittoをホストへ公開しない。ホスト側の開発コマンドから接続するときだけ`compose.dev.yaml`を併用する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。

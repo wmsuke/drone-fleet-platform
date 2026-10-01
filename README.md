@@ -209,6 +209,12 @@ node --env-file=.env apps/simulator/dist/index.js
 
 台数を変更する場合は`.env`の`DRONE_COUNT`へ1〜1000の整数を指定する。不正な値では起動せずエラーを表示する。1000台規模の性能はPhase 1の保証対象外とする。
 
+`SIMULATION_SEED`へ1〜128文字のシードを指定すると、同じシード、台数、deviceId、sequenceから同じ状態系列を再現できる。未指定時は`default`を使用する。時刻は実際のメッセージ作成時刻を使うため再現対象に含まれない。別の系列を確認する場合はシードを変更する。
+
+```dotenv
+SIMULATION_SEED=demo-2026
+```
+
 シミュレータを`Ctrl+C`で終了すると、全機体がOFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
 
 確認後はブローカーを停止する。

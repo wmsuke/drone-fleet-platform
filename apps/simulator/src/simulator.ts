@@ -22,6 +22,7 @@ export interface RunningSimulator {
 export interface SimulatorDeviceConfig {
   deviceId: string;
   mqttUrl: string;
+  simulationSeed: string;
   telemetryIntervalMs: number;
 }
 
@@ -94,6 +95,7 @@ export async function startSimulator(
         sequence,
         new Date().toISOString(),
         flightStatus,
+        config.simulationSeed,
       );
       await client.publishAsync(telemetryTopic, JSON.stringify(telemetry), {
         qos: 0,
