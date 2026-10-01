@@ -58,14 +58,15 @@ cp .env.example .env
 
 個別のコマンドは次のとおり。
 
-| コマンド           | 内容                                       |
-| ------------------ | ------------------------------------------ |
-| `pnpm check`       | lint、型チェック、テスト、ビルドを順に実行 |
-| `pnpm lint`        | ESLintとPrettierによる静的検査             |
-| `pnpm typecheck`   | 全workspaceの型チェック                    |
-| `pnpm test`        | Vitestによるテスト                         |
-| `pnpm build`       | 全workspaceのビルド                        |
-| `pnpm verify:mqtt` | Mosquittoの起動とMQTT送受信を検証          |
+| コマンド                   | 内容                                       |
+| -------------------------- | ------------------------------------------ |
+| `pnpm check`               | lint、型チェック、テスト、ビルドを順に実行 |
+| `pnpm lint`                | ESLintとPrettierによる静的検査             |
+| `pnpm typecheck`           | 全workspaceの型チェック                    |
+| `pnpm test`                | Vitestによるテスト                         |
+| `pnpm build`               | 全workspaceのビルド                        |
+| `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
+| `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが依存関係をインストールし、`pnpm check`を実行する。
 
@@ -105,6 +106,16 @@ docker compose down --volumes
 ```bash
 docker compose logs -f
 ```
+
+### テレメトリ経路の結合テスト
+
+仮想ドローンと同じ形式の固定テレメトリをMosquittoへ送信し、MQTT受信処理、PostgreSQLを経由してAPIから同じ値を取得できることを検証する。
+
+```bash
+pnpm test:telemetry-path
+```
+
+テストは専用のComposeプロジェクトを使用する。APIへの反映を最大30秒待ち、成功・失敗を問わずコンテナ、ネットワーク、volumeを削除する。失敗時はPostgreSQL、Mosquitto、マイグレーション、MQTT受信処理、APIの状態とログを出力する。外部のAWSや実機には接続しない。Pull Requestと`main`へのpushでも同じテストを実行する。
 
 ダッシュボードの開発サーバーは、`.env`の`VITE_API_BASE_URL`を接続先として起動する。
 
