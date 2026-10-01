@@ -1,5 +1,5 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
-import { connectAsync, type IClientOptions } from "mqtt";
+import { connect, type IClientOptions } from "mqtt";
 
 import type { LoadGeneratorConfig } from "./config.js";
 import {
@@ -19,13 +19,18 @@ export interface LoadGeneratorMqttClient {
   endAsync(force?: boolean): Promise<void>;
 }
 
-export type ConnectLoadGeneratorClient = (
+export interface OpeningLoadGeneratorConnection {
+  client: LoadGeneratorMqttClient;
+  connected: Promise<void>;
+}
+
+export type OpenLoadGeneratorConnection = (
   url: string,
   options: IClientOptions,
-) => Promise<LoadGeneratorMqttClient>;
+) => OpeningLoadGeneratorConnection;
 
 export interface LoadGeneratorDependencies {
-  connectClient?: ConnectLoadGeneratorClient;
+  openConnection?: OpenLoadGeneratorConnection;
   now?: () => Date;
   writeReport?: (path: string, report: LoadGeneratorReport) => Promise<void>;
   signal?: AbortSignal;
@@ -71,14 +76,46 @@ async function waitForConnectionSlot(
   }
 }
 
+function openMqttConnection(
+  url: string,
+  options: IClientOptions,
+): OpeningLoadGeneratorConnection {
+  const client = connect(url, options);
+  client.on("error", () => undefined);
+  const connected = new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      client.off("connect", onConnect);
+      client.off("error", onError);
+      client.off("close", onClose);
+    };
+    const onConnect = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+    const onClose = (): void => {
+      cleanup();
+      reject(new Error("MQTT connection closed before it was established"));
+    };
+    client.once("connect", onConnect);
+    client.once("error", onError);
+    client.once("close", onClose);
+  });
+  return { client, connected };
+}
+
 export async function runLoadGenerator(
   config: LoadGeneratorConfig,
   dependencies: LoadGeneratorDependencies = {},
 ): Promise<LoadGeneratorReport> {
-  const connectClient = dependencies.connectClient ?? connectAsync;
+  const openConnection = dependencies.openConnection ?? openMqttConnection;
   const now = dependencies.now ?? (() => new Date());
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
   const startedAt = now().toISOString();
+  const deadlineMs = new Date(startedAt).getTime() + config.maxDurationMs;
   const devices: DeviceRuntime[] = createLoadDeviceIds(
     config.deviceStart,
     config.deviceCount,
@@ -167,11 +204,38 @@ export async function runLoadGenerator(
       if (stopReason !== undefined) {
         break;
       }
-      device.client = await connectClient(config.mqttUrl, {
+      const remainingDurationMs = deadlineMs - now().getTime();
+      if (remainingDurationMs <= 0) {
+        requestStop("MAX_DURATION");
+        break;
+      }
+      const opening = openConnection(config.mqttUrl, {
         clean: true,
         clientId: `load-${config.sessionId}-${device.deviceId}`,
+        connectTimeout: Math.max(1, Math.floor(remainingDurationMs)),
         reconnectPeriod: 0,
       });
+      const connectionResult = opening.connected.then(
+        () => ({ status: "connected" as const }),
+        (error: unknown) => ({ status: "failed" as const, error }),
+      );
+      const result = await Promise.race([
+        connectionResult,
+        stopped.then(() => ({ status: "stopped" as const })),
+      ]);
+      if (result.status === "stopped") {
+        await opening.client.endAsync(true);
+        break;
+      }
+      if (result.status === "failed") {
+        await opening.client.endAsync(true);
+        throw result.error;
+      }
+      if (stopReason !== undefined) {
+        await opening.client.endAsync(true);
+        break;
+      }
+      device.client = opening.client;
       publish(device);
       if (stopReason === undefined) {
         device.timer = setInterval(

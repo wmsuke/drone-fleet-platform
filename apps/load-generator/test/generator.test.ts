@@ -34,21 +34,21 @@ function createHarness(options: { failPublish?: boolean } = {}) {
     publishAsync: ReturnType<typeof vi.fn>;
   }> = [];
   let writtenReport: LoadGeneratorReport | undefined;
-  const connectClient = vi.fn(async () => {
+  const openConnection = vi.fn(() => {
     const publishAsync = options.failPublish
       ? vi.fn().mockRejectedValue(new Error("publish failed"))
       : vi.fn().mockResolvedValue(undefined);
     const endAsync = vi.fn().mockResolvedValue(undefined);
     const client = { publishAsync, endAsync };
     clients.push({ client, publishAsync, endAsync });
-    return client;
+    return { client, connected: Promise.resolve() };
   });
   const writeReport = vi.fn(async (_path, report: LoadGeneratorReport) => {
     writtenReport = report;
   });
   return {
     clients,
-    connectClient,
+    openConnection,
     writeReport,
     getWrittenReport: () => writtenReport,
   };
@@ -74,7 +74,7 @@ describe("runLoadGenerator", () => {
     vi.useFakeTimers();
     const harness = createHarness();
     const running = runLoadGenerator(createConfig(), {
-      connectClient: harness.connectClient,
+      openConnection: harness.openConnection,
       writeReport: harness.writeReport,
     });
 
@@ -108,7 +108,7 @@ describe("runLoadGenerator", () => {
         maxDurationMs: 50,
       }),
       {
-        connectClient: harness.connectClient,
+        openConnection: harness.openConnection,
         writeReport: harness.writeReport,
       },
     );
@@ -122,15 +122,44 @@ describe("runLoadGenerator", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("cancels a pending connection when the duration limit is reached", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const publishAsync = vi.fn().mockResolvedValue(undefined);
+    const endAsync = vi.fn().mockResolvedValue(undefined);
+    const openConnection = vi.fn(() => ({
+      client: { publishAsync, endAsync },
+      connected: new Promise<void>(() => undefined),
+    }));
+    const writeReport = vi.fn().mockResolvedValue(undefined);
+    const running = runLoadGenerator(
+      createConfig({ deviceCount: 1, maxMessages: 100, maxDurationMs: 50 }),
+      { openConnection, writeReport },
+    );
+
+    await vi.advanceTimersByTimeAsync(50);
+    const report = await running;
+
+    expect(report.stopReason).toBe("MAX_DURATION");
+    expect(report.counters.attempted).toBe(0);
+    expect(publishAsync).not.toHaveBeenCalled();
+    expect(endAsync).toHaveBeenCalledExactlyOnceWith(true);
+    expect(openConnection).toHaveBeenCalledWith(
+      "mqtt://localhost:1883",
+      expect.objectContaining({ connectTimeout: 50 }),
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("applies the configured connection rate between devices", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const harness = createHarness();
     const connectionTimes: number[] = [];
-    const connectClient = vi.fn(
-      async (...arguments_: Parameters<typeof harness.connectClient>) => {
+    const openConnection = vi.fn(
+      (...arguments_: Parameters<typeof harness.openConnection>) => {
         connectionTimes.push(Date.now());
-        return harness.connectClient(...arguments_);
+        return harness.openConnection(...arguments_);
       },
     );
 
@@ -143,7 +172,7 @@ describe("runLoadGenerator", () => {
         maxDurationMs: 20_000,
       }),
       {
-        connectClient,
+        openConnection,
         writeReport: harness.writeReport,
       },
     );
@@ -154,7 +183,7 @@ describe("runLoadGenerator", () => {
 
     expect(connectionTimes).toEqual([0, 500, 1_000]);
     expect(report.stopReason).toBe("MAX_MESSAGES");
-    expect(connectClient).toHaveBeenCalledTimes(3);
+    expect(openConnection).toHaveBeenCalledTimes(3);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -164,7 +193,7 @@ describe("runLoadGenerator", () => {
     const report = await runLoadGenerator(
       createConfig({ deviceCount: 1, maxMessages: 1 }),
       {
-        connectClient: harness.connectClient,
+        openConnection: harness.openConnection,
         writeReport: harness.writeReport,
       },
     );
