@@ -6,7 +6,7 @@ Backend、AWS、IoTの実装から始め、Edge、ROS 2、ドローンシミュ�
 
 ## 現在の状況
 
-Phase 0は完了した。TypeScriptのモノレポ、Mosquittoのローカル構成と送受信検証、環境変数と秘密情報の方針、品質チェックとシークレット検査のCI、開発手順、設計文書、初期ADR、ライセンスを整備した。次はPhase 1の機能実装に進む。
+Phase 1まで完了した。Docker Composeで仮想ドローン10台、Mosquitto、PostgreSQL、MQTT受信処理、API、ダッシュボードを起動し、テレメトリの表示とコマンドACKの追跡をローカルで確認できる。次はPhase 2のAWS IoT接続に進む。
 
 日付による期限は設けず、各Phaseの完了条件を満たした時点で次へ進む。個別の作業と進捗はGitHub Issueで管理する。
 
