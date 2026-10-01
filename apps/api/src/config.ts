@@ -1,7 +1,33 @@
 export interface ApiConfig {
+  dashboardOrigin: string | null;
   host: string;
   port: number;
   mqttUrl: string;
+}
+
+function parseDashboardOrigin(value: string | undefined): string | null {
+  if (value === undefined) {
+    return null;
+  }
+  const normalized = value.trim().replace(/\/+$/, "");
+  if (normalized.length === 0) {
+    throw new TypeError("DASHBOARD_ORIGIN must not be empty");
+  }
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new TypeError("DASHBOARD_ORIGIN must be an HTTP(S) origin");
+  }
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.origin !== normalized ||
+    url.username.length > 0 ||
+    url.password.length > 0
+  ) {
+    throw new TypeError("DASHBOARD_ORIGIN must be an HTTP(S) origin");
+  }
+  return url.origin;
 }
 
 export function loadApiConfig(
@@ -20,6 +46,7 @@ export function loadApiConfig(
     throw new TypeError("MQTT_PORT must be an integer between 1 and 65535");
   }
   return {
+    dashboardOrigin: parseDashboardOrigin(environment.DASHBOARD_ORIGIN),
     host: environment.API_HOST ?? "127.0.0.1",
     port,
     mqttUrl: `mqtt://${mqttHost}:${mqttPort}`,

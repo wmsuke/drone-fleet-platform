@@ -47,6 +47,40 @@ function commands(
 }
 
 describe("GET /devices", () => {
+  it("allows the configured dashboard origin", async () => {
+    const app = buildApi(repository(), commands(), {
+      dashboardOrigin: "http://localhost:5173",
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices",
+      headers: { origin: "http://localhost:5173" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBe(
+      "http://localhost:5173",
+    );
+  });
+
+  it("does not allow an origin other than the configured dashboard", async () => {
+    const app = buildApi(repository(), commands(), {
+      dashboardOrigin: "http://localhost:5173",
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/devices",
+      headers: { origin: "https://untrusted.example.test" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
   it("returns registered devices", async () => {
     const expected = [
       {
