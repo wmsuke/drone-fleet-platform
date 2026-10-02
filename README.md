@@ -25,11 +25,11 @@ Phase 1のローカル最小構成まで実装済みで、`v0.1.0`として次�
 
 Apple M2 / 16 GiBのローカル環境で、1,000 / 3,000 / 10,000台、テレメトリ間隔5秒 / 1秒を段階的に検証した。全generatorのMQTT接続完了後に5秒warmupを流し、共通の30秒計測窓でMQTT → ingestor → PostgreSQL → APIを測定している。
 
-- 3,000 devices @ 1s: 3/3試行で初期基準を満たし、欠損率0%、レスポンスbody受信完了までのAPI p95は208〜231msだった。
-- 10,000 devices @ 5s: 3/3試行で初期基準を満たしたが、API p95は最大415ms、DB保存p95は最大30秒まで悪化した。
+- 3,000 devices @ 1s: DB保存のbatch化後も3/3試行で欠損率0%。DB保存p95は変更前の30〜60秒から50msへ改善した。
+- 10,000 devices @ 5s: 3/3試行で欠損率0%。DB保存p95は変更前の1〜30秒から50〜500msへ改善した。
 - 10,000 devices @ 1s: warmupでDB backlogとingestorのメモリ増加が発生し、計測対象を保存できなかった。
 
-message loss、受信遅延、DB保存時間、API p50 / p95 / p99、CPU、メモリ、誤OFFLINEを記録している。詳細は[ローカル段階負荷試験](docs/load-testing/2026-10-02-local.md)を参照する。
+message loss、受信遅延、DB保存時間、API p50 / p95 / p99、CPU、メモリ、誤OFFLINEを記録している。詳細は[ローカル段階負荷試験](docs/load-testing/2026-10-02-local.md)と[バッチ保存の比較](docs/load-testing/2026-10-02-batch-ingestion.md)を参照する。
 
 ## ローカルデモ
 

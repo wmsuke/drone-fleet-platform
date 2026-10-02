@@ -6,7 +6,7 @@ import {
   parseTelemetry,
   type IngestionLogger,
 } from "../src/ingestion.js";
-import type { TelemetryRepository } from "../src/repository.js";
+import type { TelemetryPersistence } from "../src/batch-writer.js";
 import { createLoadMetrics } from "../src/metrics.js";
 
 const topic = "fleet/v1/devices/drone-001/telemetry";
@@ -31,7 +31,7 @@ function payload(input: unknown = message): Buffer {
 
 function createDependencies() {
   const saved: Array<{ message: TelemetryMessage; receivedAt: Date }> = [];
-  const repository: TelemetryRepository = {
+  const repository: TelemetryPersistence = {
     async save(savedMessage, receivedAt) {
       saved.push({ message: savedMessage, receivedAt });
     },
@@ -100,7 +100,7 @@ describe("ingestTelemetry", () => {
 
   it("logs a save error without rejecting the receive loop", async () => {
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
-    const repository: TelemetryRepository = {
+    const repository: TelemetryPersistence = {
       async save() {
         throw new Error("database unavailable");
       },
@@ -129,7 +129,7 @@ describe("ingestTelemetry", () => {
       { now: () => new Date("2026-09-29T02:00:02.000Z") },
     );
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
-    const repository: TelemetryRepository = {
+    const repository: TelemetryPersistence = {
       save: vi
         .fn()
         .mockResolvedValueOnce(undefined)

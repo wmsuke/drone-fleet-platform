@@ -72,6 +72,14 @@ function acknowledgementRepository(): CommandAcknowledgementRepository {
   return { acknowledge: vi.fn(async () => "updated") };
 }
 
+const ingestorConfig = {
+  mqttUrl: "mqtt://127.0.0.1:1883",
+  offlineTimeoutMs: 15_000,
+  telemetryBatchSize: 1,
+  telemetryFlushIntervalMs: 50,
+  telemetryMaxBufferSize: 100,
+};
+
 describe("startTelemetryIngestor", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -83,8 +91,8 @@ describe("startTelemetryIngestor", () => {
     let connection: { url: string; options: IClientOptions } | undefined;
     const saved: string[] = [];
     const repository: TelemetryRepository = {
-      async save(message) {
-        saved.push(message.deviceId);
+      async saveBatch(entries) {
+        saved.push(...entries.map((entry) => entry.message.deviceId));
       },
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
@@ -94,7 +102,7 @@ describe("startTelemetryIngestor", () => {
     };
     const ackRepository = acknowledgementRepository();
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      ingestorConfig,
       repository,
       statusRepository,
       ackRepository,
@@ -153,7 +161,7 @@ describe("startTelemetryIngestor", () => {
       releaseSave = resolve;
     });
     const repository: TelemetryRepository = {
-      async save() {
+      async saveBatch() {
         markSaveStarted();
         await saveBlocker;
       },
@@ -164,7 +172,7 @@ describe("startTelemetryIngestor", () => {
       markTimedOut: vi.fn(async () => 0),
     };
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      ingestorConfig,
       repository,
       statusRepository,
       acknowledgementRepository(),
@@ -192,18 +200,90 @@ describe("startTelemetryIngestor", () => {
     expect(shutdownCompleted).toBe(true);
   });
 
+  it("disconnects MQTT and flushes a partial batch during shutdown", async () => {
+    const client = new FakeMqttClient();
+    const repository: TelemetryRepository = {
+      saveBatch: vi.fn(async () => {
+        expect(client.endForces).toEqual([false]);
+      }),
+    };
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
+    };
+    const ingestor = await startTelemetryIngestor(
+      { ...ingestorConfig, telemetryBatchSize: 10 },
+      repository,
+      statusRepository,
+      acknowledgementRepository(),
+      { warn: vi.fn(), error: vi.fn() },
+      async () => client,
+    );
+
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry",
+      validTelemetryPayload(),
+    );
+    await ingestor.shutdown();
+
+    expect(repository.saveBatch).toHaveBeenCalledOnce();
+  });
+
+  it("records and logs every message in a failed batch", async () => {
+    const client = new FakeMqttClient();
+    const error = new Error("database unavailable");
+    const repository: TelemetryRepository = {
+      saveBatch: vi.fn().mockRejectedValue(error),
+    };
+    const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
+    const metrics = createLoadMetrics({
+      testId: "test-1",
+      sessionId: "ingestor-a",
+      reportPath: "/tmp/metrics.json",
+    });
+    const statusRepository: DeviceStatusRepository = {
+      saveStatus: vi.fn(async () => 0),
+      markTimedOut: vi.fn(async () => 0),
+    };
+    const ingestor = await startTelemetryIngestor(
+      ingestorConfig,
+      repository,
+      statusRepository,
+      acknowledgementRepository(),
+      logger,
+      async () => client,
+      metrics,
+    );
+
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry",
+      validTelemetryPayload(),
+    );
+    await vi.waitFor(() => expect(logger.error).toHaveBeenCalledOnce());
+    await ingestor.shutdown();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "テレメトリの保存に失敗しました",
+      expect.objectContaining({ deviceId: "drone-001", error }),
+    );
+    expect(metrics.snapshot().counters).toMatchObject({
+      dbSaveSucceeded: 0,
+      dbSaveFailed: 1,
+    });
+  });
+
   it("marks devices offline after the configured receipt timeout", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-29T02:00:15.000Z"));
     const client = new FakeMqttClient();
-    const repository: TelemetryRepository = { save: vi.fn() };
+    const repository: TelemetryRepository = { saveBatch: vi.fn() };
     const statusRepository: DeviceStatusRepository = {
       saveStatus: vi.fn(async () => 0),
       markTimedOut: vi.fn(async () => 0),
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      ingestorConfig,
       repository,
       statusRepository,
       acknowledgementRepository(),
@@ -236,13 +316,13 @@ describe("startTelemetryIngestor", () => {
       },
       { writeFile },
     );
-    const repository: TelemetryRepository = { save: vi.fn() };
+    const repository: TelemetryRepository = { saveBatch: vi.fn() };
     const statusRepository: DeviceStatusRepository = {
       saveStatus: vi.fn(async () => 0),
       markTimedOut: vi.fn(async () => 0),
     };
     const ingestor = await startTelemetryIngestor(
-      { mqttUrl: "mqtt://127.0.0.1:1883", offlineTimeoutMs: 15_000 },
+      ingestorConfig,
       repository,
       statusRepository,
       acknowledgementRepository(),

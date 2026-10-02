@@ -4,7 +4,7 @@ import {
   type TelemetryMessage,
 } from "@drone-fleet/protocol";
 
-import type { TelemetryRepository } from "./repository.js";
+import type { TelemetryPersistence } from "./batch-writer.js";
 import type { LoadMetrics } from "./metrics.js";
 
 export interface IngestionLogger {
@@ -54,7 +54,7 @@ export async function ingestTelemetry(
   topic: string,
   payload: Buffer,
   receivedAt: Date,
-  repository: TelemetryRepository,
+  repository: TelemetryPersistence,
   logger: IngestionLogger,
   isRetained = false,
   metrics?: LoadMetrics,

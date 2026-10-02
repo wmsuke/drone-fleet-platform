@@ -86,24 +86,26 @@ integration("device connection status repository", () => {
       new Date("2026-09-29T02:00:16.000Z"),
       true,
     );
-    await telemetryRepository.save(
+    await telemetryRepository.saveBatch([
       {
-        schemaVersion: 1,
-        deviceId,
-        sequence: 0,
-        timestamp: "2026-09-29T02:00:17.000Z",
-        payload: {
-          battery: 100,
-          latitude: 35,
-          longitude: 139,
-          altitude: 0,
-          temperature: 25,
-          status: "IDLE",
+        message: {
+          schemaVersion: 1,
+          deviceId,
+          sequence: 0,
+          timestamp: "2026-09-29T02:00:17.000Z",
+          payload: {
+            battery: 100,
+            latitude: 35,
+            longitude: 139,
+            altitude: 0,
+            temperature: 25,
+            status: "IDLE",
+          },
         },
+        receivedAt: new Date("2026-09-29T02:00:17.000Z"),
+        isRetained: true,
       },
-      new Date("2026-09-29T02:00:17.000Z"),
-      true,
-    );
+    ]);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
       lastReceivedAt: new Date("2026-09-29T02:00:01.000Z"),
@@ -143,23 +145,26 @@ integration("device connection status repository", () => {
       connectionStatus: "OFFLINE",
     });
 
-    await telemetryRepository.save(
+    await telemetryRepository.saveBatch([
       {
-        schemaVersion: 1,
-        deviceId,
-        sequence: 1,
-        timestamp: "2026-09-29T02:00:20.000Z",
-        payload: {
-          battery: 100,
-          latitude: 35,
-          longitude: 139,
-          altitude: 0,
-          temperature: 25,
-          status: "IDLE",
+        message: {
+          schemaVersion: 1,
+          deviceId,
+          sequence: 1,
+          timestamp: "2026-09-29T02:00:20.000Z",
+          payload: {
+            battery: 100,
+            latitude: 35,
+            longitude: 139,
+            altitude: 0,
+            temperature: 25,
+            status: "IDLE",
+          },
         },
+        receivedAt: new Date("2026-09-29T02:00:20.000Z"),
+        isRetained: false,
       },
-      new Date("2026-09-29T02:00:20.000Z"),
-    );
+    ]);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
     });
@@ -175,23 +180,26 @@ integration("device connection status repository", () => {
       updatedAt: new Date("2026-09-29T02:00:35.000Z"),
     });
 
-    await telemetryRepository.save(
+    await telemetryRepository.saveBatch([
       {
-        schemaVersion: 1,
-        deviceId,
-        sequence: 2,
-        timestamp: "2026-09-29T02:00:36.000Z",
-        payload: {
-          battery: 99,
-          latitude: 35,
-          longitude: 139,
-          altitude: 0,
-          temperature: 25,
-          status: "IDLE",
+        message: {
+          schemaVersion: 1,
+          deviceId,
+          sequence: 2,
+          timestamp: "2026-09-29T02:00:36.000Z",
+          payload: {
+            battery: 99,
+            latitude: 35,
+            longitude: 139,
+            altitude: 0,
+            temperature: 25,
+            status: "IDLE",
+          },
         },
+        receivedAt: new Date("2026-09-29T02:00:36.000Z"),
+        isRetained: false,
       },
-      new Date("2026-09-29T02:00:36.000Z"),
-    );
+    ]);
     await expect(readDevice()).resolves.toMatchObject({
       connectionStatus: "ONLINE",
       lastReceivedAt: new Date("2026-09-29T02:00:36.000Z"),

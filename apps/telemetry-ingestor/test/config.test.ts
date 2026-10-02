@@ -7,6 +7,9 @@ describe("loadTelemetryIngestorConfig", () => {
     expect(loadTelemetryIngestorConfig({})).toEqual({
       mqttUrl: "mqtt://127.0.0.1:1883",
       offlineTimeoutMs: 15_000,
+      telemetryBatchSize: 100,
+      telemetryFlushIntervalMs: 50,
+      telemetryMaxBufferSize: 10_000,
     });
   });
 
@@ -17,7 +20,21 @@ describe("loadTelemetryIngestorConfig", () => {
         MQTT_PORT: "2883",
         OFFLINE_TIMEOUT_MS: "30000",
       }),
-    ).toEqual({ mqttUrl: "mqtt://mqtt:2883", offlineTimeoutMs: 30_000 });
+    ).toMatchObject({ mqttUrl: "mqtt://mqtt:2883", offlineTimeoutMs: 30_000 });
+  });
+
+  it("reads telemetry batch settings", () => {
+    expect(
+      loadTelemetryIngestorConfig({
+        TELEMETRY_BATCH_SIZE: "25",
+        TELEMETRY_FLUSH_INTERVAL_MS: "100",
+        TELEMETRY_MAX_BUFFER_SIZE: "500",
+      }),
+    ).toMatchObject({
+      telemetryBatchSize: 25,
+      telemetryFlushIntervalMs: 100,
+      telemetryMaxBufferSize: 500,
+    });
   });
 
   it("enables load metrics only when explicitly configured", () => {
@@ -66,6 +83,9 @@ describe("loadTelemetryIngestorConfig", () => {
     ["non-integer port", { MQTT_PORT: "1883.5" }],
     ["zero timeout", { OFFLINE_TIMEOUT_MS: "0" }],
     ["non-integer timeout", { OFFLINE_TIMEOUT_MS: "15000.5" }],
+    ["zero batch size", { TELEMETRY_BATCH_SIZE: "0" }],
+    ["invalid flush interval", { TELEMETRY_FLUSH_INTERVAL_MS: "1.5" }],
+    ["zero buffer size", { TELEMETRY_MAX_BUFFER_SIZE: "0" }],
     ["invalid metrics flag", { LOAD_METRICS_ENABLED: "1" }],
     ["missing test ID", { LOAD_METRICS_ENABLED: "true" }],
     [
