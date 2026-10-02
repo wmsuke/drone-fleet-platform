@@ -27,6 +27,16 @@ MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protoc
 
 Phase 0の動作確認で使う`fleet/test`、`fleet/test/verify-*`、`fleet/health`はブローカー検証専用であり、Phase 1の通信仕様には含めない。
 
+### AWS IoT Coreでの識別と認可
+
+Phase 2でも上表のproduction topicを変更しない。デバイスはThing name、MQTT clientId、メッセージ内とtopic内のdeviceIdを一致させる。
+
+デバイスごとに異なるX.509証明書とIoT Policyを使用し、自機のtelemetry・status・ACKのpublishと、自機宛てcommandのsubscribe・receiveだけを許可する。接続時のclientIdも対象deviceIdへ固定する。他機体のtopic、`+`や`#`を含むclientId、自機の権限外のpublish・subscribeは拒否する。
+
+telemetry-ingestorとAPIはデバイス証明書を使わず、サービスごとに独立したバックエンド証明書と固定clientIdを使う。telemetry-ingestorはtelemetry・status・ACKのsubscribe / receive、APIはcommandのpublishだけを許可する。
+
+AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持する。Basic Ingestの`$aws/rules/<ruleName>/` prefixはPhase 2.5の負荷確認時だけproduction topicの前へ付け、通常のデバイス通信には使わない。詳細は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
+
 ## 配信設定
 
 | メッセージ | QoS | retain |

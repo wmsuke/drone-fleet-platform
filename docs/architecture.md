@@ -257,10 +257,29 @@ Phase 2ではAWS IoT Coreへの接続を追加する。
 - デバイスごとのIDと証明書
 - mTLS接続
 - IoT Policyによる権限制御
-- クラウド側の受信処理とコマンド送信
+- telemetry-ingestorによるクラウド側の受信処理
+- APIによるコマンド送信
 - Terraformによる環境構築
 
-ローカルのMosquitto構成も残し、共通の通信仕様を使う。AWS側の受信処理にはIoT RuleやLambdaなどを検討し、具体的な構成はPhase 2で決める。
+```mermaid
+flowchart LR
+    Device["デバイス"]
+    Broker["AWS IoT Core"]
+    Ingestor["telemetry-ingestor"]
+    API["API"]
+    DB["PostgreSQL"]
+
+    Device -->|"telemetry / status / ACK"| Broker
+    Broker --> Ingestor
+    Ingestor --> DB
+    API -->|"command"| Broker
+    Broker --> Device
+    API --> DB
+```
+
+通常運用ではtelemetry-ingestorとAPIが別々のバックエンド証明書でAWS IoT Coreへ直接MQTT接続する。新しいCloud AdapterやIoT Ruleは通常経路へ追加しない。topic、payload、QoS、retain、検証、DB処理はローカルのMosquittoと共通にし、接続先、mTLS、clientId、再接続だけをtransport固有にする。デバイスはThing name、clientId、deviceIdを一致させ、機体ごとに異なる証明書と最小権限のIoT Policyを使う。
+
+Phase 2.5のBasic IngestとIoT Ruleは、短時間のテレメトリ負荷確認専用とし、通常運用の双方向経路とは分ける。接続経路、サービスの責務、認証情報の管理、採用しなかった案は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
 ## 負荷検証
 
@@ -288,3 +307,4 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 - [ADR 0001: pnpmでTypeScriptのモノレポを構成する](adr/0001-monorepo.md)
 - [ADR 0002: デバイスとの通信にMQTTを使う](adr/0002-mqtt-protocol.md)
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](adr/0003-database.md)
+- [ADR 0004: AWS IoT Coreへ既存サービスを直接MQTT接続する](adr/0004-aws-iot-connection-and-credentials.md)
