@@ -22,6 +22,8 @@ function createConfig(
     maxMessages: 5,
     maxDurationMs: 1000,
     mqttUrl: "mqtt://localhost:1883",
+    transport: "local",
+    topicPrefix: "",
     reportPath: "/tmp/load-result.json",
     ...overrides,
   };
@@ -241,5 +243,53 @@ describe("runLoadGenerator", () => {
       lastSequence: 0,
     });
     expect(harness.getWrittenReport()).toEqual(report);
+  });
+
+  it("uses mTLS and the Basic Ingest topic for AWS IoT", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => Buffer.from(path));
+
+    await runLoadGenerator(
+      createConfig({
+        deviceCount: 1,
+        maxMessages: 1,
+        mqttUrl: "mqtts://example-ats.iot.ap-northeast-1.amazonaws.com:8883",
+        transport: "aws-iot",
+        topicPrefix: "$aws/rules/drone_fleet_load_test/",
+        awsIot: {
+          ruleName: "drone_fleet_load_test",
+          monthToDateMessages: 10,
+          caPath: "/secure/ca.pem",
+          certificatePath: "/secure/cert.pem",
+          privateKeyPath: "/secure/key.pem",
+        },
+      }),
+      {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+        readCredential,
+      },
+    );
+
+    expect(readCredential.mock.calls.map(([path]) => path)).toEqual([
+      "/secure/ca.pem",
+      "/secure/cert.pem",
+      "/secure/key.pem",
+    ]);
+    expect(harness.openConnection).toHaveBeenCalledWith(
+      "mqtts://example-ats.iot.ap-northeast-1.amazonaws.com:8883",
+      expect.objectContaining({
+        protocol: "mqtts",
+        rejectUnauthorized: true,
+        ca: Buffer.from("/secure/ca.pem"),
+        cert: Buffer.from("/secure/cert.pem"),
+        key: Buffer.from("/secure/key.pem"),
+      }),
+    );
+    expect(harness.clients[0]?.publishAsync).toHaveBeenCalledWith(
+      "$aws/rules/drone_fleet_load_test/fleet/v1/devices/load-000001/telemetry",
+      expect.any(String),
+      { qos: 0, retain: false },
+    );
   });
 });
