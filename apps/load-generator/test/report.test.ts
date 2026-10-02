@@ -35,6 +35,8 @@ describe("writeLoadGeneratorReport", () => {
         maxMessages: 1,
         maxDurationMs: 1000,
         mqttUrl: "mqtt://localhost:1883",
+        transport: "local",
+        topicPrefix: "",
       },
       startedAt: "2026-10-01T00:00:00.000Z",
       endedAt: "2026-10-01T00:00:01.000Z",

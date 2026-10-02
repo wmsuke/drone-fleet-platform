@@ -1,4 +1,5 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
+import { readFile } from "node:fs/promises";
 import { connect, type IClientOptions } from "mqtt";
 
 import type { LoadGeneratorConfig } from "./config.js";
@@ -36,6 +37,7 @@ export interface LoadGeneratorDependencies {
   writeReport?: (path: string, report: LoadGeneratorReport) => Promise<void>;
   writeReady?: (path: string) => Promise<void>;
   signal?: AbortSignal;
+  readCredential?: (path: string) => Promise<Buffer>;
 }
 
 interface DeviceRuntime extends DeviceSendResult {
@@ -117,6 +119,17 @@ export async function runLoadGenerator(
   const now = dependencies.now ?? (() => new Date());
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
   const writeReady = dependencies.writeReady ?? writeLoadGeneratorReady;
+  const readCredential = dependencies.readCredential ?? readFile;
+  const transportOptions: IClientOptions =
+    config.awsIot === undefined
+      ? {}
+      : {
+          protocol: "mqtts",
+          ca: await readCredential(config.awsIot.caPath),
+          cert: await readCredential(config.awsIot.certificatePath),
+          key: await readCredential(config.awsIot.privateKeyPath),
+          rejectUnauthorized: true,
+        };
   const processStartedAtMs = now().getTime();
   const measurementStartAtMs =
     config.measurementStartAt?.getTime() ?? processStartedAtMs;
@@ -188,7 +201,7 @@ export async function runLoadGenerator(
     );
     const publishing = device.client
       .publishAsync(
-        createTelemetryTopic(device.deviceId),
+        `${config.topicPrefix}${createTelemetryTopic(device.deviceId)}`,
         JSON.stringify(telemetry),
         { qos: 0, retain: false },
       )
@@ -228,8 +241,12 @@ export async function runLoadGenerator(
         break;
       }
       const opening = openConnection(config.mqttUrl, {
+        ...transportOptions,
         clean: true,
-        clientId: `load-${config.sessionId}-${device.deviceId}`,
+        clientId:
+          config.transport === "aws-iot"
+            ? device.deviceId
+            : `load-${config.sessionId}-${device.deviceId}`,
         connectTimeout: Math.max(1, Math.floor(remainingDurationMs)),
         reconnectPeriod: 0,
       });
@@ -316,6 +333,17 @@ export async function runLoadGenerator(
             measurementDurationMs: config.measurementDurationMs,
           }),
       mqttUrl: config.mqttUrl,
+      transport: config.transport,
+      topicPrefix: config.topicPrefix,
+      ...(config.awsIot === undefined
+        ? {}
+        : {
+            awsIot: {
+              ruleName: config.awsIot.ruleName,
+              monthToDateMessages: config.awsIot.monthToDateMessages,
+              projectMonthlyMessageLimit: 200_000,
+            },
+          }),
       ...(config.readyPath === undefined
         ? {}
         : { readyPath: config.readyPath }),

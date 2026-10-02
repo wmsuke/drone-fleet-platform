@@ -1,8 +1,6 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { LoadGeneratorConfig } from "./config.js";
-
 export type StopReason = "MAX_MESSAGES" | "MAX_DURATION" | "SIGNAL" | "ERROR";
 
 export interface DeviceSendResult {
@@ -17,11 +15,25 @@ export interface LoadGeneratorReport {
   schemaVersion: 1;
   testId: string;
   sessionId: string;
-  config: Omit<
-    LoadGeneratorConfig,
-    "testId" | "sessionId" | "reportPath" | "measurementStartAt"
-  > & {
+  config: {
+    deviceStart: number;
+    deviceCount: number;
+    connectionRatePerSecond: number;
+    telemetryIntervalMs: number;
+    simulationSeed: string;
+    maxMessages: number;
+    maxDurationMs: number;
     measurementStartAt?: string;
+    measurementDurationMs?: number;
+    mqttUrl: string;
+    transport: "local" | "aws-iot";
+    topicPrefix: string;
+    readyPath?: string;
+    awsIot?: {
+      ruleName: string;
+      monthToDateMessages: number;
+      projectMonthlyMessageLimit: number;
+    };
   };
   startedAt: string;
   endedAt: string;

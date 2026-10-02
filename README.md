@@ -156,6 +156,8 @@ cp .env.example .env
 | `pnpm test`                | Vitestによるテスト                         |
 | `pnpm build`               | 全workspaceのビルド                        |
 | `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
+| `pnpm load:aws`            | AWS IoT向け短時間負荷生成器                |
+| `pnpm probe:aws-iot`       | Basic Ingest経路を1件で確認                |
 | `pnpm load:test:local`     | Docker Composeで段階負荷試験を1回実行      |
 | `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
@@ -166,7 +168,7 @@ Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check
 
 ### 負荷生成器
 
-`apps/load-generator`は通常のシミュレータとは別に、指定範囲のdeviceIdからローカルMosquittoへテレメトリを送る。AWS固有の接続処理は含まない。件数上限または時間上限に達すると送信を止め、MQTT接続を閉じて`LOAD_REPORT_PATH`へJSONレポートを保存する。
+`apps/load-generator`は通常のシミュレータとは別に、指定範囲のdeviceIdからローカルMosquittoまたはAWS IoT Coreへテレメトリを送る。件数上限または時間上限に達すると送信を止め、MQTT接続を閉じて`LOAD_REPORT_PATH`へJSONレポートを保存する。AWSモードはBillingの事前確認と月間200,000件の自主上限を必須にし、Basic IngestへmTLSで送信する。手順は[AWS IoTクラウド経路の短時間確認](docs/load-testing/aws-iot-free-tier.md)を参照する。
 
 ```bash
 docker compose -f compose.yaml -f compose.dev.yaml up -d --wait mqtt
