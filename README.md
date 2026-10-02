@@ -27,7 +27,7 @@ Apple M2 / 16 GiBのローカル環境で、1,000 / 3,000 / 10,000台、テレ�
 
 - 3,000 devices @ 1s: DB保存のbatch化後も3/3試行で欠損率0%。DB保存p95は変更前の30〜60秒から50msへ改善した。
 - 10,000 devices @ 5s: 3/3試行で欠損率0%。DB保存p95は変更前の1〜30秒から50〜500msへ改善した。
-- 10,000 devices @ 1s: warmupでDB backlogとingestorのメモリ増加が発生し、計測対象を保存できなかった。
+- 10,000 devices @ 1s: batch化前はwarmupでDB backlogとingestorのメモリ増加が発生し、計測対象を保存できなかった。batch化後は未再計測。
 
 message loss、受信遅延、DB保存時間、API p50 / p95 / p99、CPU、メモリ、誤OFFLINEを記録している。詳細は[ローカル段階負荷試験](docs/load-testing/2026-10-02-local.md)と[バッチ保存の比較](docs/load-testing/2026-10-02-batch-ingestion.md)を参照する。
 
