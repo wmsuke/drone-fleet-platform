@@ -29,9 +29,21 @@ trap cleanup EXIT INT TERM
 compose up --build --detach --wait postgres mqtt migrate telemetry-ingestor api
 
 set +e
-compose run --rm --no-deps load-generator-a &
+compose run --rm --no-deps \
+  -e LOAD_SESSION_ID=generator-a \
+  -e LOAD_DEVICE_START=1 \
+  -e LOAD_DEVICE_COUNT=2 \
+  -e LOAD_SIMULATION_SEED=e2e-a \
+  -e LOAD_REPORT_PATH=/workspace/load-results/generator-a.json \
+  load-generator &
 generator_a_pid=$!
-compose run --rm --no-deps load-generator-b &
+compose run --rm --no-deps \
+  -e LOAD_SESSION_ID=generator-b \
+  -e LOAD_DEVICE_START=3 \
+  -e LOAD_DEVICE_COUNT=2 \
+  -e LOAD_SIMULATION_SEED=e2e-b \
+  -e LOAD_REPORT_PATH=/workspace/load-results/generator-b.json \
+  load-generator &
 generator_b_pid=$!
 wait "$generator_a_pid"
 generator_a_status=$?
@@ -41,7 +53,7 @@ set -e
 
 if [ "$generator_a_status" -ne 0 ] || [ "$generator_b_status" -ne 0 ]; then
   echo "負荷生成器が失敗しました: generator-a=$generator_a_status generator-b=$generator_b_status" >&2
-  compose logs load-generator-a load-generator-b telemetry-ingestor >&2
+  compose logs telemetry-ingestor >&2
   exit 1
 fi
 

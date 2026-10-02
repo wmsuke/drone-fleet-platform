@@ -1,5 +1,5 @@
 services:
-  load-generator-a:
+  load-generator:
     build:
       context: .
       target: runtime
@@ -8,40 +8,15 @@ services:
       MQTT_HOST: mqtt
       MQTT_PORT: 1883
       LOAD_TEST_ID: ${LOAD_TEST_ID}
-      LOAD_SESSION_ID: generator-a
-      LOAD_DEVICE_START: 1
-      LOAD_DEVICE_COUNT: 2
-      LOAD_CONNECTION_RATE_PER_SECOND: 50
-      LOAD_TELEMETRY_INTERVAL_MS: 50
-      LOAD_SIMULATION_SEED: e2e-a
-      LOAD_MAX_MESSAGES: 6
-      LOAD_MAX_DURATION_MS: 10000
-      LOAD_REPORT_PATH: /workspace/load-results/generator-a.json
-    volumes:
-      - ${LOAD_RESULTS_DIR}:/workspace/load-results
-    depends_on:
-      telemetry-ingestor:
-        condition: service_started
-    restart: "no"
-
-  load-generator-b:
-    build:
-      context: .
-      target: runtime
-    command: ["node", "apps/load-generator/dist/index.js"]
-    environment:
-      MQTT_HOST: mqtt
-      MQTT_PORT: 1883
-      LOAD_TEST_ID: ${LOAD_TEST_ID}
-      LOAD_SESSION_ID: generator-b
-      LOAD_DEVICE_START: 3
-      LOAD_DEVICE_COUNT: 2
-      LOAD_CONNECTION_RATE_PER_SECOND: 50
-      LOAD_TELEMETRY_INTERVAL_MS: 50
-      LOAD_SIMULATION_SEED: e2e-b
-      LOAD_MAX_MESSAGES: 6
-      LOAD_MAX_DURATION_MS: 10000
-      LOAD_REPORT_PATH: /workspace/load-results/generator-b.json
+      LOAD_SESSION_ID: ${LOAD_GENERATOR_SESSION_ID:-generator-1}
+      LOAD_DEVICE_START: ${LOAD_DEVICE_START:-1}
+      LOAD_DEVICE_COUNT: ${LOAD_DEVICE_COUNT:-2}
+      LOAD_CONNECTION_RATE_PER_SECOND: ${LOAD_CONNECTION_RATE_PER_SECOND:-50}
+      LOAD_TELEMETRY_INTERVAL_MS: ${LOAD_TELEMETRY_INTERVAL_MS:-50}
+      LOAD_SIMULATION_SEED: ${LOAD_SIMULATION_SEED:-local-load}
+      LOAD_MAX_MESSAGES: ${LOAD_MAX_MESSAGES:-6}
+      LOAD_MAX_DURATION_MS: ${LOAD_MAX_DURATION_MS:-10000}
+      LOAD_REPORT_PATH: ${LOAD_REPORT_PATH:-/workspace/load-results/generator-1.json}
     volumes:
       - ${LOAD_RESULTS_DIR}:/workspace/load-results
     depends_on:
@@ -61,7 +36,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-drone_fleet}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
       LOAD_TEST_ID: ${LOAD_TEST_ID}
-      LOAD_GENERATOR_REPORT_PATHS: /workspace/load-results/generator-a.json,/workspace/load-results/generator-b.json
+      LOAD_GENERATOR_REPORT_PATHS: ${LOAD_GENERATOR_REPORT_PATHS:-/workspace/load-results/generator-a.json,/workspace/load-results/generator-b.json}
       LOAD_INGESTOR_REPORT_PATHS: /workspace/load-results/ingestor.json
       LOAD_AGGREGATE_REPORT_PATH: /workspace/load-results/report.json
     volumes:

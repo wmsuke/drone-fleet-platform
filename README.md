@@ -129,6 +129,7 @@ cp .env.example .env
 | `pnpm test`                | Vitestによるテスト                         |
 | `pnpm build`               | 全workspaceのビルド                        |
 | `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
+| `pnpm load:test:local`     | Docker Composeで段階負荷試験を1回実行      |
 | `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
@@ -158,6 +159,17 @@ pnpm load:local
 deviceIdは`load-000001`の形式で、`LOAD_DEVICE_START`から`LOAD_DEVICE_COUNT`台を割り当てる。複数プロセスでは開始位置が重ならないように指定する。たとえば100台ずつ分ける場合、1つ目を開始位置1、2つ目を101とする。`LOAD_CONNECTION_RATE_PER_SECOND`は1秒あたりの新規接続数である。
 
 レポートには試験ID、セッションID、全設定、開始・終了時刻、停止理由、送信試行・成功・失敗数、機体ごとの最終sequenceを記録する。テレメトリ本体は[通信仕様](docs/protocol.md)のproduction schemaをそのまま使い、試験IDなどは追加しない。負荷検証全体の方針とAWSの費用上限は[負荷検証の提案](docs/proposals/load-testing.md)を参照する。
+
+段階負荷試験は、たとえば次のように1条件ずつ実行する。結果は`load-results/<test-id>/`に保存される。
+
+```bash
+LOAD_DEVICE_COUNT=3000 \
+LOAD_TELEMETRY_INTERVAL_MS=1000 \
+LOAD_TRIAL=1 \
+pnpm load:test:local
+```
+
+既定値は計測30秒、ウォームアップ10秒、クールダウン60秒、1シャード500台である。`LOAD_MEASUREMENT_MS`、`LOAD_WARMUP_SECONDS`、`LOAD_COOLDOWN_SECONDS`、`LOAD_DEVICES_PER_SHARD`で変更できる。2026年10月2日の段階負荷試験結果は[ローカル段階負荷試験](docs/load-testing/2026-10-02-local.md)に記録している。
 
 telemetry-ingestor側の受信・検証・DB保存を計測する場合は、`.env`で次を設定してからingestorを起動する。通常起動では`LOAD_METRICS_ENABLED=false`のため計測処理は動かない。
 
