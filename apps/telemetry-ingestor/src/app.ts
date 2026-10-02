@@ -79,7 +79,6 @@ export async function startTelemetryIngestor(
         : (() => {
             const mqttReceivedAtMonotonic =
               metrics === undefined ? undefined : performance.now();
-            metrics?.recordMqttReceived();
             return ingestTelemetry(
               topic,
               payload,
@@ -113,7 +112,7 @@ export async function startTelemetryIngestor(
       const task = statusRepository
         .markTimedOut(cutoff, updatedAt)
         .then((offlineTransitions) => {
-          metrics?.recordOfflineTransitions(offlineTransitions);
+          metrics?.recordOfflineTransitions(offlineTransitions, updatedAt);
         });
       inFlight.add(task);
       void task

@@ -3,6 +3,33 @@ import { describe, expect, it, vi } from "vitest";
 import { createLoadMetrics } from "../src/metrics.js";
 
 describe("createLoadMetrics", () => {
+  it("excludes warmup and post-measurement events", () => {
+    const metrics = createLoadMetrics({
+      testId: "test-1",
+      sessionId: "ingestor-a",
+      reportPath: "/tmp/metrics.json",
+      measurementStartAt: new Date("2026-10-01T00:00:10.000Z"),
+      measurementEndAt: new Date("2026-10-01T00:00:20.000Z"),
+    });
+
+    expect(
+      metrics.recordMqttReceived(new Date("2026-10-01T00:00:09.999Z")),
+    ).toBe(false);
+    expect(
+      metrics.recordMqttReceived(new Date("2026-10-01T00:00:10.000Z")),
+    ).toBe(true);
+    expect(
+      metrics.recordMqttReceived(new Date("2026-10-01T00:00:20.000Z")),
+    ).toBe(false);
+    metrics.recordOfflineTransitions(2, new Date("2026-10-01T00:00:15.000Z"));
+    metrics.recordOfflineTransitions(3, new Date("2026-10-01T00:00:20.000Z"));
+
+    expect(metrics.snapshot().counters).toMatchObject({
+      mqttReceived: 1,
+      offlineTransitions: 2,
+    });
+  });
+
   it("keeps stage counters and the two timing distributions separate", () => {
     const metrics = createLoadMetrics(
       {

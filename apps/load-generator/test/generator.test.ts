@@ -46,10 +46,12 @@ function createHarness(options: { failPublish?: boolean } = {}) {
   const writeReport = vi.fn(async (_path, report: LoadGeneratorReport) => {
     writtenReport = report;
   });
+  const writeReady = vi.fn().mockResolvedValue(undefined);
   return {
     clients,
     openConnection,
     writeReport,
+    writeReady,
     getWrittenReport: () => writtenReport,
   };
 }
@@ -70,6 +72,39 @@ describe("createLoadDeviceIds", () => {
 });
 
 describe("runLoadGenerator", () => {
+  it("sends during warmup but reports only the shared measurement window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const harness = createHarness();
+    const running = runLoadGenerator(
+      createConfig({
+        deviceCount: 1,
+        telemetryIntervalMs: 50,
+        maxMessages: 100,
+        maxDurationMs: 2_000,
+        measurementStartAt: new Date(1_000),
+        measurementDurationMs: 100,
+        readyPath: "/tmp/ready",
+      }),
+      {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+        writeReady: harness.writeReady,
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(1_100);
+    const report = await running;
+
+    expect(harness.clients[0]?.publishAsync.mock.calls.length).toBeGreaterThan(
+      report.counters.attempted,
+    );
+    expect(report.counters).toEqual({ attempted: 2, succeeded: 2, failed: 0 });
+    expect(report.startedAt).toBe("1970-01-01T00:00:01.000Z");
+    expect(report.endedAt).toBe("1970-01-01T00:00:01.100Z");
+    expect(harness.writeReady).toHaveBeenCalledExactlyOnceWith("/tmp/ready");
+  });
+
   it("stops at the message limit, records counters and closes every client", async () => {
     vi.useFakeTimers();
     const harness = createHarness();

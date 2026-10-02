@@ -65,9 +65,9 @@ export async function readIngestorReport(
   return report as unknown as IngestorReport;
 }
 
-export async function writeLoadTestReport(
+export async function writeJsonReport(
   path: string,
-  report: LoadTestReport,
+  report: unknown,
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temporaryPath = `${path}.${process.pid}.tmp`;
@@ -77,4 +77,11 @@ export async function writeLoadTestReport(
     "utf8",
   );
   await rename(temporaryPath, path);
+}
+
+export function writeLoadTestReport(
+  path: string,
+  report: LoadTestReport,
+): Promise<void> {
+  return writeJsonReport(path, report);
 }

@@ -75,12 +75,12 @@ class Histogram {
 }
 
 export interface LoadMetrics {
-  recordMqttReceived(): void;
+  recordMqttReceived(measuredAt?: Date): boolean;
   recordValidationSuccess(deviceTimestamp: string, receivedAt: Date): void;
   recordValidationFailure(): void;
   recordDbSaveSuccess(durationMs: number): void;
   recordDbSaveFailure(durationMs: number): void;
-  recordOfflineTransitions(count: number): void;
+  recordOfflineTransitions(count: number, updatedAt?: Date): void;
   writeReport(endedAt?: Date): Promise<LoadMetricsReport>;
   snapshot(endedAt?: Date): LoadMetricsReport;
 }
@@ -110,7 +110,7 @@ export function createLoadMetrics(
 ): LoadMetrics {
   const now = dependencies.now ?? (() => new Date());
   const reportWriter = dependencies.writeFile ?? writeJsonReport;
-  const startedAt = now();
+  const startedAt = config.measurementStartAt ?? now();
   const counters = {
     mqttReceived: 0,
     validationSucceeded: 0,
@@ -121,8 +121,14 @@ export function createLoadMetrics(
   };
   const receiveLatency = new Histogram();
   const saveDuration = new Histogram();
+  const isMeasured = (at: Date): boolean =>
+    (config.measurementStartAt === undefined ||
+      at >= config.measurementStartAt) &&
+    (config.measurementEndAt === undefined || at < config.measurementEndAt);
 
-  const snapshot = (endedAt = now()): LoadMetricsReport => ({
+  const snapshot = (
+    endedAt = config.measurementEndAt ?? now(),
+  ): LoadMetricsReport => ({
     schemaVersion: 1,
     testId: config.testId,
     sessionId: config.sessionId,
@@ -136,8 +142,10 @@ export function createLoadMetrics(
   });
 
   return {
-    recordMqttReceived() {
+    recordMqttReceived(measuredAt = now()) {
+      if (!isMeasured(measuredAt)) return false;
       counters.mqttReceived += 1;
+      return true;
     },
     recordValidationSuccess(deviceTimestamp, receivedAt) {
       counters.validationSucceeded += 1;
@@ -156,11 +164,12 @@ export function createLoadMetrics(
       counters.dbSaveFailed += 1;
       saveDuration.record(durationMs);
     },
-    recordOfflineTransitions(count) {
+    recordOfflineTransitions(count, updatedAt = now()) {
+      if (!isMeasured(updatedAt)) return;
       counters.offlineTransitions += count;
     },
     snapshot,
-    async writeReport(endedAt = now()) {
+    async writeReport(endedAt = config.measurementEndAt ?? now()) {
       const report = snapshot(endedAt);
       await reportWriter(config.reportPath, report);
       return report;

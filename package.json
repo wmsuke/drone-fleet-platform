@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . && pnpm format:check",
     "load:local": "pnpm --filter @drone-fleet/load-generator build && node --env-file-if-exists=.env apps/load-generator/dist/index.js",
+    "load:test:local": "./scripts/run-local-load-trial.sh",
     "test": "vitest run --passWithNoTests",
     "test:load-report": "./scripts/test-load-report-e2e.sh",
     "telemetry:test:integration": "pnpm --filter @drone-fleet/telemetry-ingestor test:integration",
