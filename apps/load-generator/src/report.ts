@@ -17,7 +17,12 @@ export interface LoadGeneratorReport {
   schemaVersion: 1;
   testId: string;
   sessionId: string;
-  config: Omit<LoadGeneratorConfig, "testId" | "sessionId" | "reportPath">;
+  config: Omit<
+    LoadGeneratorConfig,
+    "testId" | "sessionId" | "reportPath" | "measurementStartAt"
+  > & {
+    measurementStartAt?: string;
+  };
   startedAt: string;
   endedAt: string;
   stopReason: StopReason;
@@ -41,4 +46,9 @@ export async function writeLoadGeneratorReport(
     "utf8",
   );
   await rename(temporaryPath, path);
+}
+
+export async function writeLoadGeneratorReady(path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, "ready\n", "utf8");
 }

@@ -4,6 +4,7 @@ import { connect, type IClientOptions } from "mqtt";
 import type { LoadGeneratorConfig } from "./config.js";
 import {
   writeLoadGeneratorReport,
+  writeLoadGeneratorReady,
   type DeviceSendResult,
   type LoadGeneratorReport,
   type StopReason,
@@ -33,6 +34,7 @@ export interface LoadGeneratorDependencies {
   openConnection?: OpenLoadGeneratorConnection;
   now?: () => Date;
   writeReport?: (path: string, report: LoadGeneratorReport) => Promise<void>;
+  writeReady?: (path: string) => Promise<void>;
   signal?: AbortSignal;
 }
 
@@ -114,8 +116,15 @@ export async function runLoadGenerator(
   const openConnection = dependencies.openConnection ?? openMqttConnection;
   const now = dependencies.now ?? (() => new Date());
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
-  const startedAt = now().toISOString();
-  const deadlineMs = new Date(startedAt).getTime() + config.maxDurationMs;
+  const writeReady = dependencies.writeReady ?? writeLoadGeneratorReady;
+  const processStartedAtMs = now().getTime();
+  const measurementStartAtMs =
+    config.measurementStartAt?.getTime() ?? processStartedAtMs;
+  const deadlineMs =
+    config.measurementStartAt === undefined
+      ? processStartedAtMs + config.maxDurationMs
+      : measurementStartAtMs + (config.measurementDurationMs ?? 0);
+  const startedAt = new Date(measurementStartAtMs).toISOString();
   const devices: DeviceRuntime[] = createLoadDeviceIds(
     config.deviceStart,
     config.deviceCount,
@@ -143,17 +152,20 @@ export async function runLoadGenerator(
   };
   const durationTimer = setTimeout(
     () => requestStop("MAX_DURATION"),
-    config.maxDurationMs,
+    Math.max(0, deadlineMs - now().getTime()),
   );
   const abort = (): void => requestStop("SIGNAL");
   dependencies.signal?.addEventListener("abort", abort, { once: true });
 
   let executionError: unknown;
   const publish = (device: DeviceRuntime): void => {
+    const sentAt = now();
+    const measured =
+      sentAt.getTime() >= measurementStartAtMs && sentAt.getTime() < deadlineMs;
     if (
       stopReason !== undefined ||
       device.client === undefined ||
-      counters.attempted >= config.maxMessages
+      (measured && counters.attempted >= config.maxMessages)
     ) {
       if (counters.attempted >= config.maxMessages) {
         requestStop("MAX_MESSAGES");
@@ -163,13 +175,15 @@ export async function runLoadGenerator(
 
     const sequence = device.nextSequence;
     device.nextSequence += 1;
-    device.lastSequence = sequence;
-    device.attempted += 1;
-    counters.attempted += 1;
+    if (measured) {
+      device.lastSequence = sequence;
+      device.attempted += 1;
+      counters.attempted += 1;
+    }
     const telemetry = createLoadTelemetry(
       device.deviceId,
       sequence,
-      now().toISOString(),
+      sentAt.toISOString(),
       config.simulationSeed,
     );
     const publishing = device.client
@@ -179,12 +193,16 @@ export async function runLoadGenerator(
         { qos: 0, retain: false },
       )
       .then(() => {
-        device.succeeded += 1;
-        counters.succeeded += 1;
+        if (measured) {
+          device.succeeded += 1;
+          counters.succeeded += 1;
+        }
       })
       .catch(() => {
-        device.failed += 1;
-        counters.failed += 1;
+        if (measured) {
+          device.failed += 1;
+          counters.failed += 1;
+        }
       })
       .finally(() => {
         inFlight.delete(publishing);
@@ -247,6 +265,9 @@ export async function runLoadGenerator(
         await waitForConnectionSlot(connectionDelayMs, stopped);
       }
     }
+    if (stopReason === undefined && config.readyPath !== undefined) {
+      await writeReady(config.readyPath);
+    }
     if (stopReason === undefined) {
       await stopped;
     }
@@ -288,10 +309,22 @@ export async function runLoadGenerator(
       simulationSeed: config.simulationSeed,
       maxMessages: config.maxMessages,
       maxDurationMs: config.maxDurationMs,
+      ...(config.measurementStartAt === undefined
+        ? {}
+        : {
+            measurementStartAt: config.measurementStartAt.toISOString(),
+            measurementDurationMs: config.measurementDurationMs,
+          }),
       mqttUrl: config.mqttUrl,
+      ...(config.readyPath === undefined
+        ? {}
+        : { readyPath: config.readyPath }),
     },
     startedAt,
-    endedAt: now().toISOString(),
+    endedAt:
+      stopReason === "MAX_DURATION"
+        ? new Date(deadlineMs).toISOString()
+        : now().toISOString(),
     stopReason: stopReason ?? "ERROR",
     counters,
     devices: devices.map((device) => ({

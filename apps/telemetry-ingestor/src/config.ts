@@ -8,6 +8,8 @@ export interface LoadMetricsConfig {
   testId: string;
   sessionId: string;
   reportPath: string;
+  measurementStartAt?: Date;
+  measurementEndAt?: Date;
 }
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -66,6 +68,27 @@ export function loadTelemetryIngestorConfig(
           reportPath:
             environment.LOAD_METRICS_REPORT_PATH ??
             `load-results/${testId}-${sessionId}-ingestor.json`,
+          ...(environment.LOAD_MEASUREMENT_START_AT === undefined ||
+          environment.LOAD_MEASUREMENT_START_AT.length === 0
+            ? {}
+            : (() => {
+                const measurementStartAt = new Date(
+                  environment.LOAD_MEASUREMENT_START_AT,
+                );
+                const measurementEndAt = new Date(
+                  environment.LOAD_MEASUREMENT_END_AT ?? "",
+                );
+                if (
+                  !Number.isFinite(measurementStartAt.getTime()) ||
+                  !Number.isFinite(measurementEndAt.getTime()) ||
+                  measurementEndAt <= measurementStartAt
+                ) {
+                  throw new TypeError(
+                    "LOAD_MEASUREMENT_START_AT and LOAD_MEASUREMENT_END_AT must be a valid increasing interval",
+                  );
+                }
+                return { measurementStartAt, measurementEndAt };
+              })()),
         };
       })()
     : undefined;

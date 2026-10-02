@@ -45,6 +45,19 @@ describe("loadLoadGeneratorConfig", () => {
     });
   });
 
+  it("reads the shared measurement window", () => {
+    expect(
+      loadLoadGeneratorConfig({
+        ...validEnvironment,
+        LOAD_MEASUREMENT_START_AT: "2026-10-01T00:00:10.000Z",
+        LOAD_MEASUREMENT_DURATION_MS: "30000",
+      }),
+    ).toMatchObject({
+      measurementStartAt: new Date("2026-10-01T00:00:10.000Z"),
+      measurementDurationMs: 30_000,
+    });
+  });
+
   it.each([
     ["LOAD_TEST_ID", ""],
     ["LOAD_SESSION_ID", "invalid id"],

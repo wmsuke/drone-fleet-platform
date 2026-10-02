@@ -45,6 +45,21 @@ describe("loadTelemetryIngestorConfig", () => {
     ).toBe("/tmp/ingestor.json");
   });
 
+  it("reads the load measurement window", () => {
+    expect(
+      loadTelemetryIngestorConfig({
+        LOAD_METRICS_ENABLED: "true",
+        LOAD_TEST_ID: "local-1000",
+        LOAD_SESSION_ID: "ingestor-a",
+        LOAD_MEASUREMENT_START_AT: "2026-10-01T00:00:10.000Z",
+        LOAD_MEASUREMENT_END_AT: "2026-10-01T00:00:40.000Z",
+      }).loadMetrics,
+    ).toMatchObject({
+      measurementStartAt: new Date("2026-10-01T00:00:10.000Z"),
+      measurementEndAt: new Date("2026-10-01T00:00:40.000Z"),
+    });
+  });
+
   it.each([
     ["empty host", { MQTT_HOST: "" }],
     ["zero port", { MQTT_PORT: "0" }],

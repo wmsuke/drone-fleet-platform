@@ -30,6 +30,7 @@ interface ProbeOptions {
   durationMs: number;
   intervalMs: number;
   timeoutMs: number;
+  startAt?: Date;
 }
 
 function percentile(sorted: number[], ratio: number): number | null {
@@ -53,6 +54,10 @@ export async function runApiProbe(
     dependencies.wait ??
     ((milliseconds: number) =>
       new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  if (options.startAt !== undefined) {
+    const delayMs = options.startAt.getTime() - now().getTime();
+    if (delayMs > 0) await wait(delayMs);
+  }
   const startedAt = now();
   const deadline = monotonicNow() + options.durationMs;
   const timings: number[] = [];
@@ -123,12 +128,22 @@ async function main(): Promise<void> {
       "LOAD_TEST_ID, LOAD_API_URL and LOAD_API_REPORT_PATH are required",
     );
   }
+  const startAt = (() => {
+    const raw = process.env.LOAD_API_START_AT;
+    if (raw === undefined) return undefined;
+    const value = new Date(raw);
+    if (!Number.isFinite(value.getTime())) {
+      throw new TypeError("LOAD_API_START_AT must be an ISO date");
+    }
+    return value;
+  })();
   const report = await runApiProbe({
     testId,
     targetUrl,
     durationMs: positiveInteger("LOAD_API_DURATION_MS"),
     intervalMs: positiveInteger("LOAD_API_INTERVAL_MS"),
     timeoutMs: positiveInteger("LOAD_API_TIMEOUT_MS"),
+    ...(startAt === undefined ? {} : { startAt }),
   });
   await writeJsonReport(outputPath, report);
   console.log(

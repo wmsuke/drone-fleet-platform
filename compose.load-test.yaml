@@ -1,4 +1,9 @@
 services:
+  telemetry-ingestor:
+    environment:
+      LOAD_MEASUREMENT_START_AT: ${LOAD_MEASUREMENT_START_AT:-}
+      LOAD_MEASUREMENT_END_AT: ${LOAD_MEASUREMENT_END_AT:-}
+
   load-generator:
     build:
       context: .
@@ -16,7 +21,10 @@ services:
       LOAD_SIMULATION_SEED: ${LOAD_SIMULATION_SEED:-local-load}
       LOAD_MAX_MESSAGES: ${LOAD_MAX_MESSAGES:-6}
       LOAD_MAX_DURATION_MS: ${LOAD_MAX_DURATION_MS:-10000}
+      LOAD_MEASUREMENT_START_AT: ${LOAD_MEASUREMENT_START_AT:-}
+      LOAD_MEASUREMENT_DURATION_MS: ${LOAD_MEASUREMENT_DURATION_MS:-}
       LOAD_REPORT_PATH: ${LOAD_REPORT_PATH:-/workspace/load-results/generator-1.json}
+      LOAD_READY_PATH: ${LOAD_READY_PATH:-}
     volumes:
       - ${LOAD_RESULTS_DIR}:/workspace/load-results
     depends_on:

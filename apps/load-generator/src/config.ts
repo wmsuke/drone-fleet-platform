@@ -13,8 +13,11 @@ export interface LoadGeneratorConfig {
   simulationSeed: string;
   maxMessages: number;
   maxDurationMs: number;
+  measurementStartAt?: Date;
+  measurementDurationMs?: number;
   mqttUrl: string;
   reportPath: string;
+  readyPath?: string;
 }
 
 function required(environment: NodeJS.ProcessEnv, name: string): string {
@@ -98,6 +101,24 @@ export function loadLoadGeneratorConfig(
     1,
     MAX_TIMER_DELAY_MS,
   );
+  const measurementStartAt = (() => {
+    const raw = environment.LOAD_MEASUREMENT_START_AT;
+    if (raw === undefined || raw.length === 0) return undefined;
+    const value = new Date(raw);
+    if (!Number.isFinite(value.getTime())) {
+      throw new TypeError("LOAD_MEASUREMENT_START_AT must be an ISO date");
+    }
+    return value;
+  })();
+  const measurementDurationMs =
+    measurementStartAt === undefined
+      ? undefined
+      : integer(
+          environment,
+          "LOAD_MEASUREMENT_DURATION_MS",
+          1,
+          MAX_TIMER_DELAY_MS,
+        );
   const mqttHost = environment.MQTT_HOST ?? "localhost";
   if (mqttHost.length === 0) {
     throw new TypeError("MQTT_HOST must not be empty");
@@ -119,9 +140,16 @@ export function loadLoadGeneratorConfig(
     simulationSeed,
     maxMessages,
     maxDurationMs,
+    ...(measurementStartAt === undefined
+      ? {}
+      : { measurementStartAt, measurementDurationMs }),
     mqttUrl: `mqtt://${mqttHost}:${mqttPort}`,
     reportPath:
       environment.LOAD_REPORT_PATH ??
       `load-results/${testId}-${sessionId}.json`,
+    ...(environment.LOAD_READY_PATH === undefined ||
+    environment.LOAD_READY_PATH.length === 0
+      ? {}
+      : { readyPath: environment.LOAD_READY_PATH }),
   };
 }

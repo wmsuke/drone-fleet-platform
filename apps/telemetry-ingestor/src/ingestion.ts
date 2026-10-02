@@ -66,7 +66,9 @@ export async function ingestTelemetry(
       : (mqttReceivedAtMonotonic ?? performance.now());
   const parsed = parseTelemetry(topic, payload);
   if (!parsed.success) {
-    metrics?.recordValidationFailure();
+    if (metrics?.recordMqttReceived(receivedAt) === true) {
+      metrics.recordValidationFailure();
+    }
     logger.warn("テレメトリを保存しませんでした", {
       reason: parsed.reason,
       topic,
@@ -74,17 +76,27 @@ export async function ingestTelemetry(
     return false;
   }
 
-  metrics?.recordValidationSuccess(parsed.message.timestamp, receivedAt);
+  const measured =
+    metrics?.recordMqttReceived(new Date(parsed.message.timestamp)) ?? false;
+  const measuredMetrics = measured ? metrics : undefined;
+  measuredMetrics?.recordValidationSuccess(
+    parsed.message.timestamp,
+    receivedAt,
+  );
 
   try {
     await repository.save(parsed.message, receivedAt, isRetained);
     if (measurementStartedAt !== undefined) {
-      metrics?.recordDbSaveSuccess(performance.now() - measurementStartedAt);
+      measuredMetrics?.recordDbSaveSuccess(
+        performance.now() - measurementStartedAt,
+      );
     }
     return true;
   } catch (error) {
     if (measurementStartedAt !== undefined) {
-      metrics?.recordDbSaveFailure(performance.now() - measurementStartedAt);
+      measuredMetrics?.recordDbSaveFailure(
+        performance.now() - measurementStartedAt,
+      );
     }
     logger.error("テレメトリの保存に失敗しました", {
       deviceId: parsed.message.deviceId,
