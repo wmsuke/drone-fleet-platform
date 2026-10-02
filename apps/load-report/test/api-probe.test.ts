@@ -10,7 +10,10 @@ describe("runApiProbe", () => {
     timeout.name = "TimeoutError";
     const request = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce({ ok: true } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
+      } as unknown as Response)
       .mockRejectedValueOnce(timeout);
 
     const report = await runApiProbe(
@@ -43,5 +46,45 @@ describe("runApiProbe", () => {
       p95Ms: 10,
       p99Ms: 10,
     });
+  });
+
+  it("waits for the response body before recording latency", async () => {
+    let finishBody: (() => void) | undefined;
+    const bodyCompleted = new Promise<ArrayBuffer>((resolve) => {
+      finishBody = () => resolve(new ArrayBuffer(0));
+    });
+    const monotonicValues = [0, 0, 0, 25, 25, 25];
+    const probe = runApiProbe(
+      {
+        testId: "test-1",
+        targetUrl: "http://api/devices",
+        durationMs: 1,
+        intervalMs: 1,
+        timeoutMs: 50,
+      },
+      {
+        fetch: vi.fn<typeof fetch>().mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => bodyCompleted,
+        } as unknown as Response),
+        monotonicNow: vi.fn(() => monotonicValues.shift() ?? 25),
+        now: () => new Date("2026-10-01T00:00:00.000Z"),
+        wait: vi.fn().mockResolvedValue(undefined),
+      },
+    );
+    let settled = false;
+    void probe.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishBody?.();
+    const report = await probe;
+
+    expect(report.counters.succeeded).toBe(1);
+    expect(report.timings.p95Ms).toBe(25);
   });
 });

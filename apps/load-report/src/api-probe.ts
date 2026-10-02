@@ -70,8 +70,9 @@ export async function runApiProbe(
       const response = await request(options.targetUrl, {
         signal: AbortSignal.timeout(options.timeoutMs),
       });
-      const elapsed = monotonicNow() - requestStartedAt;
       if (response.ok) {
+        await response.arrayBuffer();
+        const elapsed = monotonicNow() - requestStartedAt;
         counters.succeeded += 1;
         timings.push(elapsed);
       } else {
