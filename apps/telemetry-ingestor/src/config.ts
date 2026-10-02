@@ -1,6 +1,9 @@
 export interface TelemetryIngestorConfig {
   mqttUrl: string;
   offlineTimeoutMs: number;
+  telemetryBatchSize: number;
+  telemetryFlushIntervalMs: number;
+  telemetryMaxBufferSize: number;
   loadMetrics?: LoadMetricsConfig;
 }
 
@@ -39,6 +42,18 @@ function parsePort(value: string): number {
     throw new TypeError("MQTT_PORT must be an integer between 1 and 65535");
   }
   return port;
+}
+
+function positiveInteger(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  defaultValue: string,
+): number {
+  const value = Number(environment[name] ?? defaultValue);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`${name} must be a positive integer`);
+  }
+  return value;
 }
 
 export function loadTelemetryIngestorConfig(
@@ -95,6 +110,21 @@ export function loadTelemetryIngestorConfig(
   return {
     mqttUrl: `mqtt://${host}:${port}`,
     offlineTimeoutMs,
+    telemetryBatchSize: positiveInteger(
+      environment,
+      "TELEMETRY_BATCH_SIZE",
+      "100",
+    ),
+    telemetryFlushIntervalMs: positiveInteger(
+      environment,
+      "TELEMETRY_FLUSH_INTERVAL_MS",
+      "50",
+    ),
+    telemetryMaxBufferSize: positiveInteger(
+      environment,
+      "TELEMETRY_MAX_BUFFER_SIZE",
+      "10000",
+    ),
     ...(loadMetrics === undefined ? {} : { loadMetrics }),
   };
 }

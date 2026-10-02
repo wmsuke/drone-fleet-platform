@@ -26,6 +26,9 @@ cp .env.example .env
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
+| `TELEMETRY_BATCH_SIZE` | telemetryをDBへ保存する1バッチの最大件数（既定値: `100`） |
+| `TELEMETRY_FLUSH_INTERVAL_MS` | 未満バッチをDBへ保存する最大待機時間（既定値: `50`） |
+| `TELEMETRY_MAX_BUFFER_SIZE` | 保存待ち・保存中telemetryの上限件数（既定値: `10000`） |
 | `LOAD_METRICS_ENABLED` | telemetry-ingestorの負荷試験メトリクスを有効にするか |
 | `LOAD_TEST_ID` | 負荷試験を識別するID |
 | `LOAD_SESSION_ID` | 負荷生成器またはingestorプロセスを識別するセッションID |

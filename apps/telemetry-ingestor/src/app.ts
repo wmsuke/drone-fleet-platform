@@ -4,6 +4,7 @@ import {
   ingestAcknowledgement,
   type CommandAcknowledgementRepository,
 } from "./acknowledgement.js";
+import { TelemetryBatchWriter } from "./batch-writer.js";
 import type { TelemetryIngestorConfig } from "./config.js";
 import { ingestTelemetry, type IngestionLogger } from "./ingestion.js";
 import { createLoadMetrics, type LoadMetrics } from "./metrics.js";
@@ -47,6 +48,11 @@ export async function startTelemetryIngestor(
     (config.loadMetrics === undefined
       ? undefined
       : createLoadMetrics(config.loadMetrics));
+  const telemetryWriter = new TelemetryBatchWriter(repository, {
+    batchSize: config.telemetryBatchSize,
+    flushIntervalMs: config.telemetryFlushIntervalMs,
+    maxBufferSize: config.telemetryMaxBufferSize,
+  });
   const client = await connectClient(config.mqttUrl, {
     clean: true,
     clientId: "telemetry-ingestor",
@@ -83,7 +89,7 @@ export async function startTelemetryIngestor(
               topic,
               payload,
               receivedAt,
-              repository,
+              telemetryWriter,
               logger,
               packet.retain,
               metrics,
@@ -136,6 +142,7 @@ export async function startTelemetryIngestor(
         disconnectError = error;
       }
 
+      await telemetryWriter.shutdown();
       await Promise.allSettled([...inFlight]);
 
       let reportError: unknown;
