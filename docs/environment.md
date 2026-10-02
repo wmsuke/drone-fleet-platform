@@ -25,6 +25,15 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
+| `LOAD_TRANSPORT` | 負荷生成器の接続先（`local`または`aws-iot`） |
+| `AWS_IOT_ENDPOINT` | AWS IoT CoreのATS endpoint |
+| `AWS_IOT_PORT` | AWS IoT CoreのmTLSポート |
+| `AWS_IOT_RULE_NAME` | Basic Ingestで呼び出すIoT Rule名 |
+| `AWS_IOT_FREE_TIER_CONFIRMED` | Billingで対象期間と残量を確認したか |
+| `AWS_IOT_MONTH_TO_DATE_MESSAGES` | 当月にプロジェクトで使用済みのAWS IoTメッセージ件数 |
+| `AWS_IOT_CA_PATH` | Amazon Root CAのローカルパス |
+| `AWS_IOT_CERTIFICATE_PATH` | デバイス証明書のローカルパス |
+| `AWS_IOT_PRIVATE_KEY_PATH` | デバイス秘密鍵のローカルパス |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
 | `TELEMETRY_BATCH_SIZE` | telemetryをDBへ保存する1バッチの最大件数（既定値: `100`） |
 | `TELEMETRY_FLUSH_INTERVAL_MS` | 未満バッチをDBへ保存する最大待機時間（既定値: `50`） |
