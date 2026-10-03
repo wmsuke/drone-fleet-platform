@@ -281,6 +281,8 @@ flowchart LR
 
 Phase 2.5のBasic IngestとIoT Ruleは、短時間のテレメトリ負荷確認専用とし、通常運用の双方向経路とは分ける。接続経路、サービスの責務、認証情報の管理、採用しなかった案は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
+Phase 2のThing、バックエンド用IoT Policy、ATS endpointは`infra/terraform`で管理する。証明書と秘密鍵はTerraformで生成せず、証明書の関連付けは後続Issueで追加する。plan、apply、output確認、destroyの手順は[Phase 2 AWS基盤のTerraform手順](aws/phase2-terraform.md)に記載する。
+
 ## 負荷検証
 
 継続的な性能限界はローカル構成で測る。AWS IoT Coreでは、無料利用枠の範囲で証明書認証、接続レート、同時接続、クラウド経路を短時間確認する。
