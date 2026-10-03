@@ -8,7 +8,7 @@
 - telemetry-ingestor用IoT Policy
 - API用IoT Policy
 
-AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出す。通常通信はmessage brokerを使うため、IoT Rule、Lambda、SQS、Kinesis、RDS、EC2、CloudWatch Logsは作成しない。デバイス証明書とPolicy attachmentは#93、デバイス用Policyは#94で追加する。
+AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出す。通常通信はmessage brokerを使うため、IoT Rule、Lambda、SQS、Kinesis、RDS、EC2、CloudWatch Logsは作成しない。デバイス証明書はTerraformの外で発行し、Thingへ関連付ける。発行・失効手順は[デバイス証明書の発行と失効](device-certificates.md)を参照する。デバイス用PolicyとcertificateへのPolicy attachmentは#94で追加する。
 
 サンプルの2台では、planに`aws_iot_thing`が2件、`aws_iot_policy`が2件だけ現れることを確認する。data sourceはリソース件数に含めない。
 
