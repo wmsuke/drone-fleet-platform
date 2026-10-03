@@ -174,27 +174,41 @@ async function cleanupIssuedCertificate(
   execute,
 ) {
   if (certificateId === undefined || certificateArn === undefined) return;
+  const cleanupErrors = [];
+  const runCleanupOperation = async (arguments_) => {
+    try {
+      await runAws(execute, region, arguments_);
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  };
   if (attached) {
-    await runAws(execute, region, [
+    await runCleanupOperation([
       "detach-thing-principal",
       "--thing-name",
       deviceId,
       "--principal",
       certificateArn,
-    ]).catch(() => undefined);
+    ]);
   }
-  await runAws(execute, region, [
+  await runCleanupOperation([
     "update-certificate",
     "--certificate-id",
     certificateId,
     "--new-status",
     "INACTIVE",
-  ]).catch(() => undefined);
-  await runAws(execute, region, [
+  ]);
+  await runCleanupOperation([
     "delete-certificate",
     "--certificate-id",
     certificateId,
-  ]).catch(() => undefined);
+  ]);
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      cleanupErrors,
+      "issued certificate cleanup failed",
+    );
+  }
 }
 
 export async function verifyDeviceCredentialFiles(options, dependencies = {}) {
@@ -269,6 +283,7 @@ export async function issueDeviceCertificate(options, dependencies = {}) {
     region: options.region,
     attached: false,
   };
+  let credentialDirectory = temporaryDirectory;
 
   try {
     await execute(
@@ -348,6 +363,7 @@ export async function issueDeviceCertificate(options, dependencies = {}) {
     issued.attached = true;
     await rm(csrPath);
     await rename(temporaryDirectory, deviceDirectory);
+    credentialDirectory = deviceDirectory;
     await verifyDeviceCredentialFiles(options, { execute });
     return {
       deviceId: options.deviceId,
@@ -355,8 +371,16 @@ export async function issueDeviceCertificate(options, dependencies = {}) {
       deviceDirectory,
     };
   } catch (error) {
-    await cleanupIssuedCertificate(issued, execute);
-    await rm(temporaryDirectory, { recursive: true, force: true });
+    try {
+      await cleanupIssuedCertificate(issued, execute);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "certificate issuance and cleanup failed",
+        { cause: cleanupError },
+      );
+    }
+    await rm(credentialDirectory, { recursive: true, force: true });
     throw error;
   }
 }

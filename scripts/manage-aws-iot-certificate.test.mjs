@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -65,6 +72,7 @@ function createFakeExecute(options = {}) {
     if (operation === "attach-thing-principal") {
       if (options.failAttach === true) throw new Error("aws failed");
       principals.set(valueAfter("--thing-name"), [valueAfter("--principal")]);
+      await options.afterAttach?.();
       return { exitCode: 0, stdout: "{}" };
     }
     if (operation === "list-attached-policies") {
@@ -104,7 +112,7 @@ function createFakeExecute(options = {}) {
     throw new Error(`unexpected AWS operation: ${operation}`);
   });
 
-  return { execute, calls, policies };
+  return { execute, calls, policies, statuses };
 }
 
 async function createFixture() {
@@ -258,6 +266,37 @@ describe("AWS IoT device certificate management", () => {
       .map(({ arguments_ }) => arguments_[1]);
     expect(operations).toEqual(
       expect.arrayContaining(["update-certificate", "delete-certificate"]),
+    );
+  });
+
+  it("cleans up AWS and local credentials when final verification fails after rename", async () => {
+    const fixture = await createFixture();
+    const fake = createFakeExecute({
+      afterAttach: () => chmod(fixture.rootCaPath, 0o644),
+    });
+    const options = {
+      deviceId: "dev-drone-001",
+      outputDirectory: fixture.outputDirectory,
+      rootCaPath: fixture.rootCaPath,
+      region: "ap-northeast-1",
+    };
+    await expect(
+      issueDeviceCertificate(options, { execute: fake.execute }),
+    ).rejects.toThrow("root CA must have mode 600");
+
+    expect(fake.statuses.size).toBe(0);
+    await expect(
+      stat(join(fixture.outputDirectory, options.deviceId)),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const operations = fake.calls
+      .filter(({ command }) => command === "aws")
+      .map(({ arguments_ }) => arguments_[1]);
+    expect(operations).toEqual(
+      expect.arrayContaining([
+        "detach-thing-principal",
+        "update-certificate",
+        "delete-certificate",
+      ]),
     );
   });
 

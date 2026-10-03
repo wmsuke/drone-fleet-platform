@@ -130,6 +130,6 @@ AWS操作が途中で失敗した場合はローカルのmanifestと秘密鍵を
 
 ## 未確認範囲
 
-単体テストでは、2台への異なる証明書発行、permission、ローカル・AWS側の重複検知、PolicyとThingのdetach、無効化、削除、発行失敗時のcleanup、manifestの証明書ARN改ざん拒否を偽のAWS応答で確認する。
+単体テストでは、2台への異なる証明書発行、permission、ローカル・AWS側の重複検知、PolicyとThingのdetach、無効化、削除、発行失敗時のcleanup、manifestのdeviceId・region・証明書ARNとIDの不整合拒否を偽のAWS応答で確認する。
 
 AWS認証情報がない環境では、実際の証明書発行・失効は確認できない。実AWSで確認していない場合は、PRへ未確認範囲として明記する。
