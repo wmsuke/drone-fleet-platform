@@ -11,6 +11,7 @@
   },
   "scripts": {
     "api:test:integration": "pnpm --filter @drone-fleet/api test:integration",
+    "aws:iot:certificate": "node scripts/manage-aws-iot-certificate.mjs",
     "build": "pnpm -r --if-present build",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "pnpm --filter @drone-fleet/database db:generate",
