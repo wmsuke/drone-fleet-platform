@@ -150,11 +150,15 @@ async function assertIgnoredByGit(path, execute) {
 }
 
 async function runAws(execute, region, arguments_) {
-  return execute(
-    "aws",
-    ["iot", ...arguments_, "--region", region, "--output", "json"],
-    {},
-  );
+  try {
+    return await execute(
+      "aws",
+      ["iot", ...arguments_, "--region", region, "--output", "json"],
+      {},
+    );
+  } catch (error) {
+    throw new Error(`aws iot ${arguments_[0]} failed`, { cause: error });
+  }
 }
 
 function parseJson(output, operation) {
@@ -290,7 +294,7 @@ export async function issueDeviceCertificate(options, dependencies = {}) {
     const certificateResult = await runAws(execute, options.region, [
       "create-certificate-from-csr",
       "--certificate-signing-request",
-      `fileb://${csrPath}`,
+      `file://${csrPath}`,
       "--set-as-active",
     ]);
     const certificate = parseJson(

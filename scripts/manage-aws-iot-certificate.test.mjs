@@ -158,6 +158,15 @@ describe("AWS IoT device certificate management", () => {
     }
     expect(JSON.stringify(fake.calls)).not.toContain("TEST-PRIVATE-KEY");
     expect(JSON.stringify(fake.calls)).not.toContain("TEST-CERTIFICATE");
+    const createCalls = fake.calls.filter(
+      ({ arguments_ }) => arguments_[1] === "create-certificate-from-csr",
+    );
+    expect(createCalls).toHaveLength(2);
+    for (const { arguments_ } of createCalls) {
+      expect(
+        arguments_[arguments_.indexOf("--certificate-signing-request") + 1],
+      ).toMatch(/^file:\/\//);
+    }
   });
 
   it("rejects local and remote duplicate issuance", async () => {
@@ -240,7 +249,7 @@ describe("AWS IoT device certificate management", () => {
 
     await expect(
       issueDeviceCertificate(options, { execute: fake.execute }),
-    ).rejects.toThrow("aws failed");
+    ).rejects.toThrow("aws iot attach-thing-principal failed");
     await expect(
       stat(join(fixture.outputDirectory, options.deviceId)),
     ).rejects.toMatchObject({ code: "ENOENT" });
