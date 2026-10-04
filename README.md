@@ -347,6 +347,8 @@ SIMULATION_SEED=demo-2026
 
 シミュレータを`Ctrl+C`で終了すると、全機体がOFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
 
+AWS IoT Coreへ接続する場合は、[AWS IoT Coreへシミュレータを接続する](docs/aws/simulator.md)に従ってtransportと機体ごとのmTLS認証情報を設定する。ローカルMosquittoの起動方法と既定値は変わらない。
+
 確認後はブローカーを停止する。
 
 ```bash

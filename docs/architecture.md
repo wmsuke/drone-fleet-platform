@@ -131,7 +131,7 @@ Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、
 - RETURN_HOMEによる飛行状態の変更
 - REBOOTによる正常切断と再接続後のONLINE通知
 
-`DRONE_COUNT`で起動台数を指定し、既定値は10台とする。deviceIdは`drone-001`から連番で割り当て、機体ごとに独立したMQTTクライアントを使用する。`SIMULATION_SEED`は既定値を`default`とし、1〜128文字を受け付ける。1000台規模の動作保証はPhase 1に含めない。
+`DRONE_COUNT`で起動台数を指定し、既定値は10台とする。deviceIdは`DEVICE_ID_PREFIX`（既定値`drone`）と連番から割り当て、機体ごとに独立したMQTTクライアントを使用する。`MQTT_TRANSPORT=local`では従来どおりMosquittoへ接続する。`aws-iot`ではATS endpointとRoot CAを共通にし、deviceIdごとのクライアント証明書・秘密鍵を読み込んでThing名と同じclientIdでmTLS接続する。`SIMULATION_SEED`は既定値を`default`とし、1〜128文字を受け付ける。1000台規模の動作保証はPhase 1に含めない。
 
 機体状態はテレメトリのsequenceを時間ステップとして決定論的に計算する。シードとdeviceIdから安定した32bit値を作り、機体ごとの位相、初期バッテリー、位置中心、温度差へ反映する。同じシード、deviceId、sequenceからは同じ状態を生成し、シードまたはdeviceIdが異なる場合は別の系列になる。メッセージ作成時刻は実時刻を使うため再現対象に含めない。バッテリーは1ステップにつき0.5ポイント減少して0で下げ止まり、緯度・経度、高度、温度は40ステップ周期で変化する。
 

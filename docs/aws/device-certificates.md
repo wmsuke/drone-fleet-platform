@@ -93,8 +93,7 @@ pnpm aws:iot:certificate -- issue \
 ```dotenv
 AWS_IOT_ENDPOINT=example-ats.iot.ap-northeast-1.amazonaws.com
 AWS_IOT_ROOT_CA_PATH=secrets/aws-iot/AmazonRootCA1.pem
-AWS_IOT_DEVICE_CERTIFICATE_PATH=secrets/aws-iot/dev-drone-001/device.pem.crt
-AWS_IOT_DEVICE_PRIVATE_KEY_PATH=secrets/aws-iot/dev-drone-001/private.pem.key
+AWS_IOT_DEVICE_CREDENTIALS_DIR=secrets/aws-iot
 ```
 
 endpointは`terraform -chdir=infra/terraform output -raw iot_ats_endpoint`で取得する。この設定例はダミーのendpointとdeviceIdを使う。証明書と秘密鍵の実値は`.env.example`、Issue、PR、CI artifactへ貼り付けない。

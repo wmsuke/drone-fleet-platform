@@ -21,6 +21,7 @@ export interface RunningSimulator {
 
 export interface SimulatorDeviceConfig {
   deviceId: string;
+  mqttClientOptions?: IClientOptions;
   mqttUrl: string;
   simulationSeed: string;
   telemetryIntervalMs: number;
@@ -50,9 +51,23 @@ export type ConnectSimulatorClient = (
   options: IClientOptions,
 ) => Promise<SimulatorMqttClient>;
 
+export type ConnectAsync = (
+  url: string,
+  options: IClientOptions,
+  allowRetries: boolean,
+) => Promise<SimulatorMqttClient>;
+
+export function createConnectSimulatorClient(
+  mqttConnectAsync: ConnectAsync = connectAsync,
+): ConnectSimulatorClient {
+  return async (url, options) => mqttConnectAsync(url, options, false);
+}
+
+export const connectSimulatorClient = createConnectSimulatorClient();
+
 export async function startSimulator(
   config: SimulatorDeviceConfig,
-  connectClient: ConnectSimulatorClient = connectAsync,
+  connectClient: ConnectSimulatorClient = connectSimulatorClient,
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
   const telemetryTopic = createTelemetryTopic(config.deviceId);
@@ -70,8 +85,10 @@ export async function startSimulator(
     retain: true,
   });
   const client = await connectClient(config.mqttUrl, {
+    ...config.mqttClientOptions,
     clean: true,
-    clientId: `simulator-${config.deviceId}`,
+    clientId:
+      config.mqttClientOptions?.clientId ?? `simulator-${config.deviceId}`,
     will: createWill(),
   });
 

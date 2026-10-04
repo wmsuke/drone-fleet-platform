@@ -7,6 +7,7 @@ import type { IClientOptions } from "mqtt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createConnectSimulatorClient,
   startSimulator,
   type ConnectSimulatorClient,
   type SimulatorMqttClient,
@@ -106,6 +107,64 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("fails the initial connection without retrying indefinitely", async () => {
+    const connectionError = new Error("connection rejected");
+    const mqttConnectAsync = vi.fn(async () => {
+      throw connectionError;
+    });
+    const connectClient = createConnectSimulatorClient(mqttConnectAsync);
+
+    await expect(
+      connectClient("mqtts://example.iot:8883", { clientId: "drone-001" }),
+    ).rejects.toBe(connectionError);
+    expect(mqttConnectAsync).toHaveBeenCalledWith(
+      "mqtts://example.iot:8883",
+      { clientId: "drone-001" },
+      false,
+    );
+  });
+
+  it("passes transport-specific TLS options while enforcing a clean connection and LWT", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    let connectionOptions: IClientOptions | undefined;
+
+    const simulator = await startSimulator(
+      {
+        deviceId: "dev-drone-001",
+        mqttClientOptions: {
+          ca: Buffer.from("ca"),
+          cert: Buffer.from("certificate"),
+          clean: false,
+          clientId: "dev-drone-001",
+          key: Buffer.from("private-key"),
+          rejectUnauthorized: true,
+        },
+        mqttUrl: "mqtts://example.iot:8883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+      },
+      async (_url, options) => {
+        connectionOptions = options;
+        client.options = options;
+        return client;
+      },
+    );
+
+    expect(connectionOptions).toMatchObject({
+      clean: true,
+      clientId: "dev-drone-001",
+      rejectUnauthorized: true,
+      will: {
+        topic: "fleet/v1/devices/dev-drone-001/status",
+        qos: 1,
+        retain: true,
+      },
+    });
+
+    await simulator.shutdown();
+  });
+
   it("publishes LWT, ONLINE, telemetry, and OFFLINE before disconnecting", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-25T08:00:00.000Z"));
