@@ -45,9 +45,10 @@ run "phase2_foundation_plan" {
   assert {
     condition = (
       jsondecode(aws_iot_policy.device.policy).Statement[0].Resource == "arn:aws:iot:ap-northeast-1:123456789012:client/$${iot:Connection.Thing.ThingName}" &&
-      jsondecode(aws_iot_policy.device.policy).Statement[0].Condition.Bool["iot:Connection.Thing.IsAttached"] == "true"
+      jsondecode(aws_iot_policy.device.policy).Statement[0].Condition.Bool["iot:Connection.Thing.IsAttached"] == "true" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[0].Condition["ForAllValues:StringEquals"]["iot:ConnectAttributes"] == ["LastWill"]
     )
-    error_message = "device policy must only connect as its attached Thing"
+    error_message = "device policy must only connect as its attached Thing with no connect attribute other than LastWill"
   }
 
   assert {

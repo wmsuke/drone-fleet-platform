@@ -23,6 +23,9 @@ resource "aws_iot_policy" "device" {
           Bool = {
             "iot:Connection.Thing.IsAttached" = "true"
           }
+          "ForAllValues:StringEquals" = {
+            "iot:ConnectAttributes" = ["LastWill"]
+          }
         }
       },
       {

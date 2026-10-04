@@ -4,14 +4,16 @@
 
 ## 許可する操作
 
-| 操作                | 対象                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| connect             | clientIdが`${iot:Connection.Thing.ThingName}`と一致し、証明書がThingへattach済みの場合だけ |
-| publish             | 自機の`telemetry`、`status`、`command-acks`                                                |
-| retained publish    | 自機の`status`だけ                                                                         |
-| subscribe / receive | 自機の`commands`だけ                                                                       |
+| 操作                | 対象                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| connect             | clientIdが`${iot:Connection.Thing.ThingName}`と一致し、証明書がThingへattach済みの場合だけ。接続属性は`LastWill`だけを許可する |
+| publish             | 自機の`telemetry`、`status`、`command-acks`                                                                                    |
+| retained publish    | 自機の`status`だけ                                                                                                             |
+| subscribe / receive | 自機の`commands`だけ                                                                                                           |
 
 Policyは`${iot:ClientId}`をtopicへ使わない。clientIdに`+`や`#`を指定して権限を広げられないよう、`iot:Connect`のresourceをThing名へ固定し、全statementへ`iot:Connection.Thing.IsAttached = true`を指定する。
+
+simulatorは接続時に自機の`status` topicへretain付きLWTを設定する。Connect Policyの`iot:ConnectAttributes`には`LastWill`だけを指定し、Phase 2で使わない`PersistentConnect`や将来追加される接続属性は許可しない。LWTのpublish先は通常のstatus publishと同じPolicyで自機topicだけに制限する。LWTを付けないclean connectも許可する。
 
 telemetry-ingestor用PolicyとAPI用Policyは別リソースであり、デバイス証明書にはattachしない。デバイスPolicyには全機体を表すtopic wildcardやバックエンド用clientIdを含めない。
 
@@ -49,9 +51,10 @@ device_certificate_arns = {
 正常系では次を確認する。
 
 1. `dev-drone-001`の証明書とclientIdで接続できる。
-2. 自機の`telemetry`、retain付き`status`、`command-acks`へpublishできる。
-3. 自機の`commands`をsubscribeし、AWS IoT Coreからpublishしたcommandを受信できる。
-4. `dev-drone-002`も同じ操作を自機topicで実行できる。
+2. 自機の`status` topicへretain付きLWTを設定して接続できる。
+3. 自機の`telemetry`、retain付き`status`、`command-acks`へpublishできる。
+4. 自機の`commands`をsubscribeし、AWS IoT Coreからpublishしたcommandを受信できる。
+5. `dev-drone-002`も同じ操作を自機topicで実行できる。
 
 異常系では`dev-drone-001`の証明書を使い、次が拒否されることを確認する。
 
