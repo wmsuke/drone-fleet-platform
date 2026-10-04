@@ -18,6 +18,15 @@ output "device_thing_names" {
   value       = sort(keys(aws_iot_thing.device))
 }
 
+output "device_policy" {
+  description = "デバイス共通IoT Policyの識別子とattach件数"
+  value = {
+    policy_name      = aws_iot_policy.device.name
+    policy_arn       = aws_iot_policy.device.arn
+    attachment_count = length(aws_iot_policy_attachment.device)
+  }
+}
+
 output "telemetry_ingestor" {
   description = "telemetry-ingestorの接続とPolicy識別子"
   value = {

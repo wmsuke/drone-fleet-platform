@@ -10,7 +10,7 @@
 - Amazon Root CA 1を[AWS公式サイト](https://www.amazontrust.com/repository/AmazonRootCA1.pem)から取得済みである。
 - 証明書の保存先がGit管理外である。
 
-必要なAWS権限は次のとおりである。IoT Policyの作成・attachは#94で行う。
+必要なAWS権限は次のとおりである。IoT Policyの作成・attachは[デバイス用IoT Policy](device-policy.md)の手順で行う。
 
 - `iot:DescribeThing`
 - `iot:ListThingPrincipals`

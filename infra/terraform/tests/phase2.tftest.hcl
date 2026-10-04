@@ -21,11 +21,58 @@ run "phase2_foundation_plan" {
     environment = "dev"
     aws_region  = "ap-northeast-1"
     device_ids  = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+      dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/1111111111111111111111111111111111111111111111111111111111111111"
+    }
   }
 
   assert {
     condition     = length(aws_iot_thing.device) == 2
     error_message = "plan must create one Thing for each deviceId"
+  }
+
+  assert {
+    condition     = length(aws_iot_policy_attachment.device) == 2
+    error_message = "plan must attach the device policy to every device certificate"
+  }
+
+  assert {
+    condition     = output.device_policy.attachment_count == 2
+    error_message = "device policy output must report every certificate attachment"
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iot_policy.device.policy).Statement[0].Resource == "arn:aws:iot:ap-northeast-1:123456789012:client/$${iot:Connection.Thing.ThingName}" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[0].Condition.Bool["iot:Connection.Thing.IsAttached"] == "true" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[0].Condition["ForAllValues:StringEquals"]["iot:ConnectAttributes"] == ["LastWill"]
+    )
+    error_message = "device policy must only connect as its attached Thing with no connect attribute other than LastWill"
+  }
+
+  assert {
+    condition = toset(jsondecode(aws_iot_policy.device.policy).Statement[1].Resource) == toset([
+      "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry",
+      "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/command-acks",
+    ])
+    error_message = "device policy must publish only its telemetry and ACK topics"
+  }
+
+  assert {
+    condition = (
+      toset(jsondecode(aws_iot_policy.device.policy).Statement[2].Action) == toset(["iot:Publish", "iot:RetainPublish"]) &&
+      jsondecode(aws_iot_policy.device.policy).Statement[2].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/status"
+    )
+    error_message = "device policy must restrict retained publish to its status topic"
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iot_policy.device.policy).Statement[3].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[4].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands"
+    )
+    error_message = "device policy must subscribe to and receive only its command topic"
   }
 
   assert {

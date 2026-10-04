@@ -32,3 +32,22 @@ variable "device_ids" {
     error_message = "device_ids must contain only 1-64 letters, numbers, hyphens, or underscores"
   }
 }
+
+variable "device_certificate_arns" {
+  description = "deviceIdごとに#93で発行したAWS IoT certificate ARN"
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = toset(keys(var.device_certificate_arns)) == var.device_ids
+    error_message = "device_certificate_arns must contain exactly one certificate ARN for each device_id"
+  }
+
+  validation {
+    condition = alltrue([
+      for certificate_arn in values(var.device_certificate_arns) :
+      can(regex("^arn:[a-z0-9-]+:iot:${var.aws_region}:[0-9]{12}:cert/[a-fA-F0-9]{64}$", certificate_arn))
+    ])
+    error_message = "device_certificate_arns must contain AWS IoT certificate ARNs in aws_region"
+  }
+}
