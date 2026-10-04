@@ -145,9 +145,9 @@ Phase 2.5のBasic IngestではIoT Ruleの起動とaction、action先サービス
 
 Phase 2の後続Issueでは、このADRを前提に次を実装する。
 
-1. #92: Thing、IoT Policy、certificate attachment、endpoint出力のTerraform。
+1. #92: Thing、バックエンド用IoT Policy、endpoint出力のTerraform。
 2. #93: Git管理外で鍵を生成し、CSRから証明書を登録・無効化・削除する手順。
-3. #94: Thingと証明書の対応に基づくデバイス単位のIoT Policy。
+3. #94: Thingと証明書の対応に基づくデバイス単位のIoT Policyとcertificate attachment。
 4. #95、#96、#97: simulator、telemetry-ingestor、APIのtransport設定とmTLS接続。
 5. #98: 他機体topicの拒否、telemetry / status / command / ACKのAWS結合テスト。
 6. #99: 作成・削除手順、利用料確認、証明書ローテーション手順。
