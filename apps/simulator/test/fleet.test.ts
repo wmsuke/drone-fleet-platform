@@ -52,6 +52,10 @@ describe("createDeviceId", () => {
     expect(createDeviceId(index)).toBe(expected);
   });
 
+  it("uses the configured device ID prefix", () => {
+    expect(createDeviceId(1, "dev-drone")).toBe("dev-drone-001");
+  });
+
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects invalid index %s",
     (index) => {
@@ -75,8 +79,9 @@ describe("startSimulatorFleet", () => {
 
     const fleet = await startSimulatorFleet(
       {
+        deviceIdPrefix: "drone",
         droneCount: 10,
-        mqttUrl: "mqtt://127.0.0.1:1883",
+        mqttTransport: { type: "local", url: "mqtt://127.0.0.1:1883" },
         simulationSeed: "fleet-test",
         telemetryIntervalMs: 5000,
       },
@@ -131,8 +136,9 @@ describe("startSimulatorFleet", () => {
     await expect(
       startSimulatorFleet(
         {
+          deviceIdPrefix: "drone",
           droneCount: 2,
-          mqttUrl: "mqtt://127.0.0.1:1883",
+          mqttTransport: { type: "local", url: "mqtt://127.0.0.1:1883" },
           simulationSeed: "fleet-test",
           telemetryIntervalMs: 5000,
         },
@@ -141,5 +147,62 @@ describe("startSimulatorFleet", () => {
     ).rejects.toThrow("connection failed");
     expect(firstClient.endForces).toEqual([false]);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("starts AWS devices with distinct client IDs and credentials", async () => {
+    vi.useFakeTimers();
+    const clients: FakeMqttClient[] = [];
+    const connectionOptions: IClientOptions[] = [];
+    const connectClient: ConnectSimulatorClient = async (_url, options) => {
+      const client = new FakeMqttClient();
+      client.options = options;
+      clients.push(client);
+      connectionOptions.push(options);
+      return client;
+    };
+
+    const fleet = await startSimulatorFleet(
+      {
+        deviceIdPrefix: "dev-drone",
+        droneCount: 2,
+        mqttTransport: {
+          type: "aws-iot",
+          endpoint: "example.iot",
+          rootCaPath: "/ca",
+          deviceCredentialsDirectory: "/devices",
+        },
+        simulationSeed: "fleet-test",
+        telemetryIntervalMs: 5000,
+      },
+      connectClient,
+      async (deviceId) => ({
+        url: "mqtts://example.iot:8883",
+        clientOptions: {
+          ca: Buffer.from("ca"),
+          cert: Buffer.from(`cert-${deviceId}`),
+          clientId: deviceId,
+          key: Buffer.from(`key-${deviceId}`),
+          rejectUnauthorized: true,
+        },
+      }),
+    );
+
+    expect(connectionOptions.map(({ clientId }) => clientId)).toEqual([
+      "dev-drone-001",
+      "dev-drone-002",
+    ]);
+    expect(connectionOptions.map(({ cert }) => cert?.toString())).toEqual([
+      "cert-dev-drone-001",
+      "cert-dev-drone-002",
+    ]);
+    expect(connectionOptions.map(({ key }) => key?.toString())).toEqual([
+      "key-dev-drone-001",
+      "key-dev-drone-002",
+    ]);
+    expect(connectionOptions.every(({ will }) => will?.retain === true)).toBe(
+      true,
+    );
+
+    await fleet.shutdown();
   });
 });
