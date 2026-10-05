@@ -17,6 +17,8 @@ readonly log_dir="$(mktemp -d)"
 ingestor_pid=""
 simulator_pid=""
 api_pid=""
+inactive_certificate_id=""
+certificate_inactivated=false
 
 stop_process() {
   local pid="$1"
@@ -32,6 +34,11 @@ cleanup() {
   stop_process "${api_pid}"
   stop_process "${ingestor_pid}"
   docker stop "${container_name}" >/dev/null 2>&1 || true
+  if [[ "${result}" -ne 0 && "${certificate_inactivated}" == true ]]; then
+    echo "E2EがINACTIVEにした証明書をACTIVEへ戻します" >&2
+    aws iot update-certificate --profile "${aws_profile}" --region "${aws_region}" \
+      --certificate-id "${inactive_certificate_id}" --new-status ACTIVE || true
+  fi
   if [[ "${result}" -ne 0 ]]; then
     echo "AWS IoT E2Eに失敗しました。秘密情報を含まないサービスログを確認してください: ${log_dir}" >&2
   else
@@ -124,9 +131,24 @@ for _ in {1..60}; do
       for await (const chunk of process.stdin) chunks.push(chunk);
       const devices=JSON.parse(Buffer.concat(chunks).toString());
       const targets=devices.filter(({deviceId}) => ["dev-drone-001","dev-drone-002"].includes(deviceId));
-      if (targets.length !== 2 || targets.some(({connectionStatus,latestTelemetry}) => connectionStatus !== "ONLINE" || latestTelemetry === null)) process.exit(1);
+      if (targets.length !== 2 || targets.some(({connectionStatus}) => connectionStatus !== "ONLINE")) process.exit(1);
     ' 2>/dev/null; then
-    break
+    devices_ready=true
+    for device_id in "${device_one}" "${device_two}"; do
+      if ! curl --fail --silent "http://127.0.0.1:${api_port}/devices/${device_id}" | \
+        node --input-type=module -e '
+          const expected=process.argv[1]; const chunks=[];
+          for await (const chunk of process.stdin) chunks.push(chunk);
+          const device=JSON.parse(Buffer.concat(chunks).toString());
+          if (device.deviceId !== expected || device.connectionStatus !== "ONLINE" || device.latestTelemetry === null) process.exit(1);
+        ' "${device_id}" 2>/dev/null; then
+        devices_ready=false
+        break
+      fi
+    done
+    if [[ "${devices_ready}" == true ]]; then
+      break
+    fi
   fi
   sleep 1
 done
@@ -136,8 +158,19 @@ curl --fail --silent "http://127.0.0.1:${api_port}/devices" | \
     for await (const chunk of process.stdin) chunks.push(chunk);
     const devices=JSON.parse(Buffer.concat(chunks).toString());
     const targets=devices.filter(({deviceId}) => ["dev-drone-001","dev-drone-002"].includes(deviceId));
-    if (targets.length !== 2 || targets.some(({connectionStatus,latestTelemetry}) => connectionStatus !== "ONLINE" || latestTelemetry === null)) process.exit(1);
+    if (targets.length !== 2 || targets.some(({connectionStatus}) => connectionStatus !== "ONLINE")) process.exit(1);
   '
+
+for device_id in "${device_one}" "${device_two}"; do
+  curl --fail --silent "http://127.0.0.1:${api_port}/devices/${device_id}" | \
+    node --input-type=module -e '
+      const expected=process.argv[1]; const chunks=[];
+      for await (const chunk of process.stdin) chunks.push(chunk);
+      const device=JSON.parse(Buffer.concat(chunks).toString());
+      if (device.deviceId !== expected || device.connectionStatus !== "ONLINE" || device.latestTelemetry === null) process.exit(1);
+    ' "${device_id}"
+done
+echo "2台のtelemetry保存とONLINEを確認しました"
 
 for device_id in "${device_one}" "${device_two}"; do
   command_file="${log_dir}/${device_id}-command.json"
@@ -177,6 +210,7 @@ node apps/simulator/scripts/probe-aws-iot-policy.mjs cross-device \
 inactive_certificate_id="$(node -e 'const fs=require("node:fs"); process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).certificateId)' "${credentials_dir}/${device_two}/manifest.json")"
 aws iot update-certificate --profile "${aws_profile}" --region "${aws_region}" \
   --certificate-id "${inactive_certificate_id}" --new-status INACTIVE
+certificate_inactivated=true
 node apps/simulator/scripts/probe-aws-iot-policy.mjs inactive-certificate \
   --endpoint "${endpoint}" --credentials-dir "${credentials_dir}" \
   --device-id "${device_two}"

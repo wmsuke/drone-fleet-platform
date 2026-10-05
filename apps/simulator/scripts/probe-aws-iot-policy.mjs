@@ -1,19 +1,28 @@
 #!/usr/bin/env node
 
-/* global console, process, setTimeout */
+/* global clearTimeout, console, process, setTimeout */
 
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { connectAsync } from "mqtt";
+import { connect, connectAsync } from "mqtt";
 
 const TIMEOUT_MS = 10_000;
 
-function timeout(label) {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`${label} timed out`)), TIMEOUT_MS);
-  });
+export class ProbeTimeoutError extends Error {}
+
+function timeout(label, timeoutMs) {
+  let timer;
+  return {
+    promise: new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new ProbeTimeoutError(`${label} timed out`)),
+        timeoutMs,
+      );
+    }),
+    cancel: () => clearTimeout(timer),
+  };
 }
 
 async function loadConnection(endpoint, credentialsDirectory, deviceId) {
@@ -38,13 +47,40 @@ async function loadConnection(endpoint, credentialsDirectory, deviceId) {
   };
 }
 
-async function expectRejected(operation, label) {
+export async function expectRejected(operation, label, timeoutMs = TIMEOUT_MS) {
+  const deadline = timeout(label, timeoutMs);
   try {
-    await Promise.race([operation(), timeout(label)]);
-  } catch {
+    await Promise.race([operation(), deadline.promise]);
+  } catch (error) {
+    if (error instanceof ProbeTimeoutError) {
+      throw error;
+    }
     return;
+  } finally {
+    deadline.cancel();
   }
   throw new Error(`${label} was unexpectedly allowed`);
+}
+
+function observeOperation(client, operation, label) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const cleanup = () => {
+      client.off("close", onClose);
+      client.off("error", onError);
+    };
+    const reject = (error) => {
+      cleanup();
+      rejectPromise(error);
+    };
+    const onClose = () => reject(new Error(`${label} disconnected`));
+    const onError = (error) => reject(error);
+    client.once("close", onClose);
+    client.once("error", onError);
+    operation().then((value) => {
+      cleanup();
+      resolvePromise(value);
+    }, reject);
+  });
 }
 
 export async function verifyCrossDevicePolicy({
@@ -68,23 +104,28 @@ export async function verifyCrossDevicePolicy({
   try {
     await expectRejected(
       () =>
-        publishClient.publishAsync(
-          `fleet/v1/devices/${targetDeviceId}/telemetry`,
-          JSON.stringify({
-            schemaVersion: 1,
-            deviceId: targetDeviceId,
-            sequence: 0,
-            timestamp: new Date().toISOString(),
-            payload: {
-              battery: 100,
-              latitude: 0,
-              longitude: 0,
-              altitude: 0,
-              temperature: 20,
-              status: "IDLE",
-            },
-          }),
-          { qos: 1, retain: false },
+        observeOperation(
+          publishClient,
+          () =>
+            publishClient.publishAsync(
+              `fleet/v1/devices/${targetDeviceId}/telemetry`,
+              JSON.stringify({
+                schemaVersion: 1,
+                deviceId: targetDeviceId,
+                sequence: 0,
+                timestamp: new Date().toISOString(),
+                payload: {
+                  battery: 100,
+                  latitude: 0,
+                  longitude: 0,
+                  altitude: 0,
+                  temperature: 20,
+                  status: "IDLE",
+                },
+              }),
+              { qos: 1, retain: false },
+            ),
+          "cross-device publish",
         ),
       "cross-device publish",
     );
@@ -101,9 +142,14 @@ export async function verifyCrossDevicePolicy({
   try {
     await expectRejected(
       () =>
-        subscribeClient.subscribeAsync(
-          `fleet/v1/devices/${targetDeviceId}/commands`,
-          { qos: 1 },
+        observeOperation(
+          subscribeClient,
+          () =>
+            subscribeClient.subscribeAsync(
+              `fleet/v1/devices/${targetDeviceId}/commands`,
+              { qos: 1 },
+            ),
+          "cross-device subscribe",
         ),
       "cross-device subscribe",
     );
@@ -122,14 +168,24 @@ export async function verifyCertificateRejected({
     credentialsDirectory,
     deviceId,
   );
-  await expectRejected(async () => {
-    const client = await connectAsync(
-      connection.url,
-      connection.options,
-      false,
-    );
-    await client.endAsync(true);
-  }, "inactive certificate connection");
+  await expectRejected(
+    () =>
+      new Promise((resolvePromise, rejectPromise) => {
+        const client = connect(connection.url, connection.options);
+        let accepted = false;
+        client.once("connect", () => {
+          accepted = true;
+          client.end(true, {}, resolvePromise);
+        });
+        client.once("error", rejectPromise);
+        client.once("close", () => {
+          if (!accepted) {
+            rejectPromise(new Error("inactive certificate connection closed"));
+          }
+        });
+      }),
+    "inactive certificate connection",
+  );
 }
 
 async function main() {

@@ -64,7 +64,7 @@ AWS_PROFILE=drone-fleet pnpm aws:iot:certificate revoke \
 | 確認項目           | 結果                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------- |
 | simulator          | 異なる証明書の2台が接続                                                               |
-| telemetry / status | 2台ともONLINEと最新telemetryをAPIで取得                                               |
+| telemetry / status | 2台とも詳細APIでONLINEとDB保存済みの最新telemetryを取得                               |
 | command / ACK      | 2台へ各1件送信し、両方ACKNOWLEDGED                                                    |
 | topic分離          | 他機体topicへのpublish / subscribeを拒否                                              |
 | 無効証明書         | `INACTIVE`化後の新規接続を拒否                                                        |
@@ -74,3 +74,5 @@ AWS_PROFILE=drone-fleet pnpm aws:iot:certificate revoke \
 | 後片付け           | 接続と一時DBを停止・削除。Thing 0、証明書0、Policy 0、Terraform state空を確認         |
 
 実行中の未確認事項は、請求データの遅延反映後の確定金額だけである。継続負荷、最大接続数、最大message rateは確認していない。
+
+レビュー修正後も同じ環境で再実行し、権限外操作はMQTTの`error`または`close`による明示的な拒否だけを成功とした。応答がないまま10秒を超えた場合はE2E失敗となる。再実行後もThing 0、証明書0、Policy 0、Terraform state空を確認した。
