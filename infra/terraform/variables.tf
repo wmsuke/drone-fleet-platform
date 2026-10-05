@@ -65,4 +65,12 @@ variable "telemetry_ingestor_certificate_arn" {
     )
     error_message = "telemetry_ingestor_certificate_arn must be an AWS IoT certificate ARN in aws_region"
   }
+
+  validation {
+    condition = (
+      var.telemetry_ingestor_certificate_arn == null ||
+      !contains(values(var.device_certificate_arns), var.telemetry_ingestor_certificate_arn)
+    )
+    error_message = "telemetry_ingestor_certificate_arn must differ from every device certificate ARN"
+  }
 }

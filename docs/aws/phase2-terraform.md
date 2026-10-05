@@ -13,7 +13,7 @@
 
 AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出す。通常通信はmessage brokerを使うため、IoT Rule、Lambda、SQS、Kinesis、RDS、EC2、CloudWatch Logsは作成しない。デバイス証明書はTerraformの外で発行し、Thingへ関連付ける。発行・失効手順は[デバイス証明書の発行と失効](device-certificates.md)、topic権限と検証手順は[デバイス用IoT Policy](device-policy.md)を参照する。
 
-サンプルの2台では、planに`aws_iot_thing`が2件、`aws_iot_policy`が3件、`aws_iot_policy_attachment`が2件だけ現れることを確認する。data sourceはリソース件数に含めない。
+サンプルの2台でtelemetry-ingestor専用certificate ARNを設定した場合、planに`aws_iot_thing`が2件、`aws_iot_policy`が3件、`aws_iot_policy_attachment`が3件だけ現れることを確認する。attachmentはデバイス証明書用が2件、telemetry-ingestor専用証明書用が1件となる。data sourceはリソース件数に含めない。
 
 ## 実行前の確認
 
@@ -60,7 +60,7 @@ terraform apply phase2.tfplan
 terraform output
 ```
 
-`terraform show`では、設定した台数分のThing、3件のIoT Policy、デバイス証明書ごとのPolicy attachment以外に作成対象がないことを確認してからapplyする。`terraform output`で次を確認する。
+`terraform show`では、設定した台数分のThing、3件のIoT Policy、デバイス証明書ごとのPolicy attachment、telemetry-ingestor専用証明書へのPolicy attachment以外に作成対象がないことを確認してからapplyする。`terraform output`で次を確認する。
 
 - `aws_account_id`と`aws_region`が作業対象と一致する。
 - `iot_ats_endpoint`が`-ats.iot.<region>.amazonaws.com`形式である。
