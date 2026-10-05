@@ -23,7 +23,7 @@ cp .env.example .env
 | `POSTGRES_DB` | PostgreSQLのデータベース名 |
 | `POSTGRES_USER` | PostgreSQLのユーザー名 |
 | `POSTGRES_PASSWORD` | PostgreSQLのパスワード |
-| `MQTT_TRANSPORT` | シミュレータのMQTT transport（`local`または`aws-iot`） |
+| `MQTT_TRANSPORT` | simulator、telemetry-ingestor、APIのMQTT transport（`local`または`aws-iot`） |
 | `MQTT_HOST` | MQTTブローカーのホスト名 |
 | `MQTT_PORT` | MQTTブローカーのTCPポート |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
@@ -52,8 +52,11 @@ cp .env.example .env
 | `AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID` | telemetry-ingestor用IoT Policyと一致する固定clientId |
 | `AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH` | telemetry-ingestor専用クライアント証明書のパス |
 | `AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH` | telemetry-ingestor専用秘密鍵のパス |
+| `AWS_IOT_API_CLIENT_ID` | API用IoT Policyと一致する固定clientId |
+| `AWS_IOT_API_CERTIFICATE_PATH` | API専用クライアント証明書のパス |
+| `AWS_IOT_API_PRIVATE_KEY_PATH` | API専用秘密鍵のパス |
 
-値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSから各サービスへ接続する値である。Compose内のアプリには、接続先をそれぞれ`postgres`と`mqtt`として渡す。通常の一括起動ではPostgreSQLとMosquittoをホストへ公開しない。ホスト側の開発コマンドから接続するときだけ`compose.dev.yaml`を併用する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。AWS IoT Coreへの切替手順は[シミュレータ](aws/simulator.md)と[telemetry-ingestor](aws/telemetry-ingestor.md)の文書を参照する。
+値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSから各サービスへ接続する値である。Compose内のアプリには、接続先をそれぞれ`postgres`と`mqtt`として渡す。通常の一括起動ではPostgreSQLとMosquittoをホストへ公開しない。ホスト側の開発コマンドから接続するときだけ`compose.dev.yaml`を併用する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。AWS IoT Coreへの切替手順は[シミュレータ](aws/simulator.md)、[telemetry-ingestor](aws/telemetry-ingestor.md)、[API](aws/api.md)の文書を参照する。
 
 ## 秘密情報の扱い
 

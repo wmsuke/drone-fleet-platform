@@ -40,8 +40,9 @@ output "telemetry_ingestor" {
 output "api" {
   description = "APIの接続とPolicy識別子"
   value = {
-    client_id   = local.api_client_id
-    policy_name = aws_iot_policy.api.name
-    policy_arn  = aws_iot_policy.api.arn
+    client_id            = local.api_client_id
+    policy_name          = aws_iot_policy.api.name
+    policy_arn           = aws_iot_policy.api.arn
+    certificate_attached = length(aws_iot_policy_attachment.api) == 1
   }
 }

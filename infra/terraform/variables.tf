@@ -74,3 +74,35 @@ variable "telemetry_ingestor_certificate_arn" {
     error_message = "telemetry_ingestor_certificate_arn must differ from every device certificate ARN"
   }
 }
+
+variable "api_certificate_arn" {
+  description = "API専用AWS IoT certificate ARN。未発行時はnull"
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.api_certificate_arn == null ||
+      can(regex("^arn:[a-z0-9-]+:iot:${var.aws_region}:[0-9]{12}:cert/[a-fA-F0-9]{64}$", var.api_certificate_arn))
+    )
+    error_message = "api_certificate_arn must be an AWS IoT certificate ARN in aws_region"
+  }
+
+  validation {
+    condition = (
+      var.api_certificate_arn == null ||
+      !contains(values(var.device_certificate_arns), var.api_certificate_arn)
+    )
+    error_message = "api_certificate_arn must differ from every device certificate ARN"
+  }
+
+  validation {
+    condition = (
+      var.api_certificate_arn == null ||
+      var.telemetry_ingestor_certificate_arn == null ||
+      var.api_certificate_arn != var.telemetry_ingestor_certificate_arn
+    )
+    error_message = "api_certificate_arn must differ from telemetry_ingestor_certificate_arn"
+  }
+}

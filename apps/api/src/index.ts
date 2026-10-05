@@ -1,11 +1,14 @@
 import { createDatabase } from "@drone-fleet/database";
-import { connectAsync } from "mqtt";
 
 import { buildApi } from "./app.js";
 import { createCommandPublisher } from "./command-publisher.js";
 import { createCommandRepository } from "./command-repository.js";
 import { createCommandService } from "./command-service.js";
 import { loadApiConfig } from "./config.js";
+import {
+  connectApiMqttClient,
+  createApiMqttConnectionConfig,
+} from "./mqtt-transport.js";
 import { createDeviceRepository } from "./repository.js";
 import { createShutdown } from "./shutdown.js";
 
@@ -14,10 +17,10 @@ async function main(): Promise<void> {
   const { client, db } = createDatabase();
   let mqttClient;
   try {
-    mqttClient = await connectAsync(config.mqttUrl, {
-      clean: true,
-      clientId: "fleet-api",
-    });
+    const connection = await createApiMqttConnectionConfig(
+      config.mqttTransport,
+    );
+    mqttClient = await connectApiMqttClient(connection);
   } catch (error) {
     await client.end();
     throw error;

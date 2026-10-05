@@ -281,6 +281,8 @@ flowchart LR
 
 telemetry-ingestorは`MQTT_TRANSPORT=local`で従来のMosquitto、`aws-iot`でATS endpointへ接続する。AWSモードではデバイスやAPIと共有しない証明書、固定clientId、telemetry・status・ACKだけを購読できるPolicyを使う。接続完了後の切断ではMQTT clientが再接続と再購読を行い、受信したmessageはtransportに関係なく既存のprotocol検証とDB保存へ渡す。
 
+APIも`MQTT_TRANSPORT`でMosquittoとAWS IoT Coreを切り替える。AWSモードではデバイスやtelemetry-ingestorと共有しない証明書と固定clientIdを使い、commands topicへのpublishだけを許可する。コマンドはtransportに関係なくPENDING保存、QoS 1 publish、SENTまたはFAILED更新、ACK追跡の既存処理を通す。アプリケーションで別commandIdを作る再試行は行わず、接続後の切断ではmqtt.jsが同じQoS 1 publishを再送する。
+
 Phase 2.5のBasic IngestとIoT Ruleは、短時間のテレメトリ負荷確認専用とし、通常運用の双方向経路とは分ける。接続経路、サービスの責務、認証情報の管理、採用しなかった案は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
 Phase 2のThing、バックエンド用IoT Policy、ATS endpointは`infra/terraform`で管理する。証明書と秘密鍵はTerraformで生成せず、証明書の関連付けは後続Issueで追加する。plan、apply、output確認、destroyの手順は[Phase 2 AWS基盤のTerraform手順](aws/phase2-terraform.md)に記載する。
