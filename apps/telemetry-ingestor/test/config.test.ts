@@ -5,7 +5,7 @@ import { loadTelemetryIngestorConfig } from "../src/config.js";
 describe("loadTelemetryIngestorConfig", () => {
   it("uses local MQTT defaults", () => {
     expect(loadTelemetryIngestorConfig({})).toEqual({
-      mqttUrl: "mqtt://127.0.0.1:1883",
+      mqttTransport: { type: "local", url: "mqtt://127.0.0.1:1883" },
       offlineTimeoutMs: 15_000,
       telemetryBatchSize: 100,
       telemetryFlushIntervalMs: 50,
@@ -20,7 +20,88 @@ describe("loadTelemetryIngestorConfig", () => {
         MQTT_PORT: "2883",
         OFFLINE_TIMEOUT_MS: "30000",
       }),
-    ).toMatchObject({ mqttUrl: "mqtt://mqtt:2883", offlineTimeoutMs: 30_000 });
+    ).toMatchObject({
+      mqttTransport: { type: "local", url: "mqtt://mqtt:2883" },
+      offlineTimeoutMs: 30_000,
+    });
+  });
+
+  it("reads the AWS IoT transport configuration", () => {
+    expect(
+      loadTelemetryIngestorConfig({
+        MQTT_TRANSPORT: "aws-iot",
+        AWS_IOT_ENDPOINT: "example-ats.iot.ap-northeast-1.amazonaws.com",
+        AWS_IOT_ROOT_CA_PATH: "/credentials/AmazonRootCA1.pem",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH:
+          "/credentials/telemetry-ingestor/device.pem.crt",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH:
+          "/credentials/telemetry-ingestor/private.pem.key",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID:
+          "drone-fleet-dev-telemetry-ingestor",
+      }).mqttTransport,
+    ).toEqual({
+      type: "aws-iot",
+      endpoint: "example-ats.iot.ap-northeast-1.amazonaws.com",
+      rootCaPath: "/credentials/AmazonRootCA1.pem",
+      certificatePath: "/credentials/telemetry-ingestor/device.pem.crt",
+      privateKeyPath: "/credentials/telemetry-ingestor/private.pem.key",
+      clientId: "drone-fleet-dev-telemetry-ingestor",
+    });
+  });
+
+  it.each([
+    [
+      "endpoint",
+      {
+        AWS_IOT_ROOT_CA_PATH: "/ca",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH: "/cert",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH: "/key",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID: "ingestor",
+      },
+    ],
+    [
+      "root CA",
+      {
+        AWS_IOT_ENDPOINT: "example.iot",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH: "/cert",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH: "/key",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID: "ingestor",
+      },
+    ],
+    [
+      "certificate",
+      {
+        AWS_IOT_ENDPOINT: "example.iot",
+        AWS_IOT_ROOT_CA_PATH: "/ca",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH: "/key",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID: "ingestor",
+      },
+    ],
+    [
+      "private key",
+      {
+        AWS_IOT_ENDPOINT: "example.iot",
+        AWS_IOT_ROOT_CA_PATH: "/ca",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH: "/cert",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID: "ingestor",
+      },
+    ],
+    [
+      "client ID",
+      {
+        AWS_IOT_ENDPOINT: "example.iot",
+        AWS_IOT_ROOT_CA_PATH: "/ca",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH: "/cert",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH: "/key",
+      },
+    ],
+  ])("requires the AWS IoT %s", (_name, awsEnvironment) => {
+    expect(() =>
+      loadTelemetryIngestorConfig({
+        MQTT_TRANSPORT: "aws-iot",
+        ...awsEnvironment,
+      }),
+    ).toThrow(TypeError);
   });
 
   it("reads telemetry batch settings", () => {
@@ -79,6 +160,18 @@ describe("loadTelemetryIngestorConfig", () => {
 
   it.each([
     ["empty host", { MQTT_HOST: "" }],
+    ["invalid transport", { MQTT_TRANSPORT: "cloud" }],
+    [
+      "invalid AWS endpoint",
+      {
+        MQTT_TRANSPORT: "aws-iot",
+        AWS_IOT_ENDPOINT: "mqtts://example.iot",
+        AWS_IOT_ROOT_CA_PATH: "/ca",
+        AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH: "/cert",
+        AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH: "/key",
+        AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID: "ingestor",
+      },
+    ],
     ["zero port", { MQTT_PORT: "0" }],
     ["non-integer port", { MQTT_PORT: "1883.5" }],
     ["zero timeout", { OFFLINE_TIMEOUT_MS: "0" }],

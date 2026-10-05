@@ -122,6 +122,13 @@ resource "aws_iot_policy" "telemetry_ingestor" {
   })
 }
 
+resource "aws_iot_policy_attachment" "telemetry_ingestor" {
+  count = var.telemetry_ingestor_certificate_arn == null ? 0 : 1
+
+  policy = aws_iot_policy.telemetry_ingestor.name
+  target = var.telemetry_ingestor_certificate_arn
+}
+
 resource "aws_iot_policy" "api" {
   name = "${local.name_prefix}-api"
 

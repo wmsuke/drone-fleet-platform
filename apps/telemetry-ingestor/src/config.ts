@@ -1,11 +1,29 @@
 export interface TelemetryIngestorConfig {
-  mqttUrl: string;
+  mqttTransport: TelemetryMqttTransportConfig;
   offlineTimeoutMs: number;
   telemetryBatchSize: number;
   telemetryFlushIntervalMs: number;
   telemetryMaxBufferSize: number;
   loadMetrics?: LoadMetricsConfig;
 }
+
+export interface LocalMqttTransportConfig {
+  type: "local";
+  url: string;
+}
+
+export interface AwsIotMqttTransportConfig {
+  type: "aws-iot";
+  endpoint: string;
+  rootCaPath: string;
+  certificatePath: string;
+  privateKeyPath: string;
+  clientId: string;
+}
+
+export type TelemetryMqttTransportConfig =
+  | LocalMqttTransportConfig
+  | AwsIotMqttTransportConfig;
 
 export interface LoadMetricsConfig {
   testId: string;
@@ -44,6 +62,65 @@ function parsePort(value: string): number {
   return port;
 }
 
+function requiredEnvironmentValue(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+): string {
+  const value = environment[name];
+  if (value === undefined || value.length === 0) {
+    throw new TypeError(`${name} is required when MQTT_TRANSPORT=aws-iot`);
+  }
+  return value;
+}
+
+function loadMqttTransport(
+  environment: NodeJS.ProcessEnv,
+): TelemetryMqttTransportConfig {
+  const transport = environment.MQTT_TRANSPORT ?? "local";
+  if (transport === "local") {
+    const host = environment.MQTT_HOST ?? "127.0.0.1";
+    if (host.length === 0) {
+      throw new TypeError("MQTT_HOST must not be empty");
+    }
+    const port = parsePort(environment.MQTT_PORT ?? "1883");
+    return { type: "local", url: `mqtt://${host}:${port}` };
+  }
+
+  if (transport === "aws-iot") {
+    const endpoint = requiredEnvironmentValue(environment, "AWS_IOT_ENDPOINT");
+    if (!/^[A-Za-z0-9.-]+$/.test(endpoint)) {
+      throw new TypeError(
+        "AWS_IOT_ENDPOINT must be a hostname without a protocol or path",
+      );
+    }
+    const clientId = requiredEnvironmentValue(
+      environment,
+      "AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID",
+    );
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(clientId)) {
+      throw new TypeError(
+        "AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID must be 1-128 letters, numbers, hyphens, or underscores",
+      );
+    }
+    return {
+      type: "aws-iot",
+      endpoint,
+      rootCaPath: requiredEnvironmentValue(environment, "AWS_IOT_ROOT_CA_PATH"),
+      certificatePath: requiredEnvironmentValue(
+        environment,
+        "AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH",
+      ),
+      privateKeyPath: requiredEnvironmentValue(
+        environment,
+        "AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH",
+      ),
+      clientId,
+    };
+  }
+
+  throw new TypeError("MQTT_TRANSPORT must be local or aws-iot");
+}
+
 function positiveInteger(
   environment: NodeJS.ProcessEnv,
   name: string,
@@ -59,12 +136,6 @@ function positiveInteger(
 export function loadTelemetryIngestorConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): TelemetryIngestorConfig {
-  const host = environment.MQTT_HOST ?? "127.0.0.1";
-  if (host.length === 0) {
-    throw new TypeError("MQTT_HOST must not be empty");
-  }
-
-  const port = parsePort(environment.MQTT_PORT ?? "1883");
   const offlineTimeoutMs = Number(environment.OFFLINE_TIMEOUT_MS ?? "15000");
   if (!Number.isSafeInteger(offlineTimeoutMs) || offlineTimeoutMs < 1) {
     throw new TypeError("OFFLINE_TIMEOUT_MS must be a positive integer");
@@ -108,7 +179,7 @@ export function loadTelemetryIngestorConfig(
       })()
     : undefined;
   return {
-    mqttUrl: `mqtt://${host}:${port}`,
+    mqttTransport: loadMqttTransport(environment),
     offlineTimeoutMs,
     telemetryBatchSize: positiveInteger(
       environment,

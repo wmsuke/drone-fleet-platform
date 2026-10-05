@@ -8,6 +8,7 @@
 - Thing policy variableで自機topicだけを許可するデバイス用IoT Policy
 - デバイス証明書へのPolicy attachment
 - telemetry-ingestor用IoT Policy
+- telemetry-ingestor専用証明書へのPolicy attachment（certificate ARN設定時）
 - API用IoT Policy
 
 AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出す。通常通信はmessage brokerを使うため、IoT Rule、Lambda、SQS、Kinesis、RDS、EC2、CloudWatch Logsは作成しない。デバイス証明書はTerraformの外で発行し、Thingへ関連付ける。発行・失効手順は[デバイス証明書の発行と失効](device-certificates.md)、topic権限と検証手順は[デバイス用IoT Policy](device-policy.md)を参照する。
@@ -18,7 +19,7 @@ AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出�
 
 1. Billing and Cost Managementで、現在のアカウントプラン、Free Tierまたはcreditの残量、対象期間を確認する。
 2. 作業対象のAWS account IDとregionを確認する。
-3. `terraform.tfvars.example`を`terraform.tfvars`へコピーし、環境名、region、deviceId、`#93`で発行したcertificate ARNを設定する。
+3. `terraform.tfvars.example`を`terraform.tfvars`へコピーし、環境名、region、deviceId、`#93`で発行したdevice certificate ARN、telemetry-ingestor専用certificate ARNを設定する。
 4. deviceIdはThing nameとMQTT clientIdにも使う。別環境を同じaccount・regionへ作る場合は、`dev-drone-001`のように環境を含むdeviceIdを使う。
 5. state、plan、`terraform.tfvars`がGitの追跡対象外であることを確認する。
 
@@ -66,6 +67,7 @@ terraform output
 - `device_thing_names`が指定したdeviceIdと一致する。
 - `device_policy.attachment_count`がdeviceId数と一致する。
 - telemetry-ingestorとAPIのclientId、Policy名、Policy ARNを取得できる。
+- `telemetry_ingestor.certificate_attached`が`true`である。
 
 秘密鍵と証明書本文はTerraformへ渡さず、outputにも含めない。stateにはThing、Policy、account IDなどの実環境識別子が含まれるため、Gitへ追加しない。ローカルstateは所有者だけが読める権限で保管する。
 

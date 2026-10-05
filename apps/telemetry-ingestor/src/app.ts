@@ -8,6 +8,10 @@ import { TelemetryBatchWriter } from "./batch-writer.js";
 import type { TelemetryIngestorConfig } from "./config.js";
 import { ingestTelemetry, type IngestionLogger } from "./ingestion.js";
 import { createLoadMetrics, type LoadMetrics } from "./metrics.js";
+import {
+  createTelemetryMqttConnectionConfig,
+  type TelemetryMqttConnectionConfig,
+} from "./mqtt-transport.js";
 import type { TelemetryRepository } from "./repository.js";
 import { ingestStatus, type DeviceStatusRepository } from "./status.js";
 
@@ -30,6 +34,23 @@ export type ConnectTelemetryClient = (
   options: IClientOptions,
 ) => Promise<TelemetryMqttClient>;
 
+export type ConnectAsync = (
+  url: string,
+  options: IClientOptions,
+  allowRetries: boolean,
+) => Promise<TelemetryMqttClient>;
+
+export function createConnectTelemetryClient(
+  mqttConnectAsync: ConnectAsync = connectAsync,
+): ConnectTelemetryClient {
+  return async (url, options) => mqttConnectAsync(url, options, false);
+}
+
+export const connectTelemetryClient = createConnectTelemetryClient();
+
+export type CreateTelemetryMqttConnectionConfig =
+  () => Promise<TelemetryMqttConnectionConfig>;
+
 export interface RunningTelemetryIngestor {
   shutdown(): Promise<void>;
 }
@@ -40,8 +61,10 @@ export async function startTelemetryIngestor(
   statusRepository: DeviceStatusRepository,
   acknowledgementRepository: CommandAcknowledgementRepository,
   logger: IngestionLogger = console,
-  connectClient: ConnectTelemetryClient = connectAsync,
+  connectClient: ConnectTelemetryClient = connectTelemetryClient,
   injectedMetrics?: LoadMetrics,
+  createConnectionConfig: CreateTelemetryMqttConnectionConfig = async () =>
+    createTelemetryMqttConnectionConfig(config.mqttTransport),
 ): Promise<RunningTelemetryIngestor> {
   const metrics =
     injectedMetrics ??
@@ -53,9 +76,11 @@ export async function startTelemetryIngestor(
     flushIntervalMs: config.telemetryFlushIntervalMs,
     maxBufferSize: config.telemetryMaxBufferSize,
   });
-  const client = await connectClient(config.mqttUrl, {
+  const connectionConfig = await createConnectionConfig();
+  const client = await connectClient(connectionConfig.url, {
+    ...connectionConfig.clientOptions,
     clean: true,
-    clientId: "telemetry-ingestor",
+    resubscribe: true,
   });
   const inFlight = new Set<Promise<unknown>>();
 

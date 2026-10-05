@@ -25,6 +25,7 @@ run "phase2_foundation_plan" {
       dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
       dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/1111111111111111111111111111111111111111111111111111111111111111"
     }
+    telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
   }
 
   assert {
@@ -83,6 +84,14 @@ run "phase2_foundation_plan" {
   assert {
     condition     = output.telemetry_ingestor.client_id == "drone-fleet-dev-telemetry-ingestor"
     error_message = "telemetry-ingestor clientId must include the environment"
+  }
+
+  assert {
+    condition = (
+      length(aws_iot_policy_attachment.telemetry_ingestor) == 1 &&
+      output.telemetry_ingestor.certificate_attached
+    )
+    error_message = "telemetry-ingestor policy must be attached to its dedicated certificate"
   }
 
   assert {
