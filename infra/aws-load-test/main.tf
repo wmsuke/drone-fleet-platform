@@ -47,39 +47,108 @@ resource "aws_iot_topic_rule" "load_test" {
   }
 }
 
-resource "aws_iot_policy" "load_test" {
-  name = "${var.rule_name}-client"
+resource "aws_iot_thing" "load_device" {
+  for_each = var.load_device_ids
+
+  name = each.value
+}
+
+resource "aws_iot_policy" "load_device" {
+  name = "${var.rule_name}-device"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid      = "ConnectAsAttachedThing"
         Effect   = "Allow"
         Action   = "iot:Connect"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:client/load-*"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:client/$${iot:Connection.Thing.ThingName}"
+        Condition = {
+          Bool = {
+            "iot:Connection.Thing.IsAttached" = "true"
+          }
+        }
       },
       {
+        Sid      = "PublishOwnTelemetryThroughBasicIngest"
         Effect   = "Allow"
         Action   = "iot:Publish"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/${local.topic_prefix}/fleet/v1/devices/load-*/telemetry"
-      },
-      {
-        Effect   = "Allow"
-        Action   = "iot:Subscribe"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/verified/fleet/v1/devices/load-*/telemetry"
-      },
-      {
-        Effect   = "Allow"
-        Action   = "iot:Receive"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/verified/fleet/v1/devices/load-*/telemetry"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/${local.topic_prefix}/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry"
+        Condition = {
+          Bool = {
+            "iot:Connection.Thing.IsAttached" = "true"
+          }
+        }
       }
     ]
   })
 }
 
-resource "aws_iot_policy_attachment" "load_test" {
-  policy = aws_iot_policy.load_test.name
-  target = var.certificate_arn
+resource "aws_iot_policy_attachment" "load_device" {
+  for_each = var.load_device_certificate_arns
+
+  policy = aws_iot_policy.load_device.name
+  target = each.value
+}
+
+resource "aws_iot_thing_principal_attachment" "load_device" {
+  for_each = var.load_device_certificate_arns
+
+  thing     = aws_iot_thing.load_device[each.key].name
+  principal = each.value
+}
+
+resource "aws_iot_thing" "probe" {
+  name = var.probe_device_id
+}
+
+resource "aws_iot_policy" "probe" {
+  name = "${var.rule_name}-probe"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ConnectAsProbe"
+        Effect   = "Allow"
+        Action   = "iot:Connect"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:client/${var.probe_device_id}"
+      },
+      {
+        Sid      = "PublishProbeTelemetry"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/${local.topic_prefix}/fleet/v1/devices/${var.probe_device_id}/telemetry"
+      },
+      {
+        Sid      = "SubscribeToProbeResult"
+        Effect   = "Allow"
+        Action   = "iot:Subscribe"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/verified/fleet/v1/devices/${var.probe_device_id}/telemetry"
+      },
+      {
+        Sid      = "ReceiveProbeResult"
+        Effect   = "Allow"
+        Action   = "iot:Receive"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/verified/fleet/v1/devices/${var.probe_device_id}/telemetry"
+      }
+    ]
+  })
+}
+
+resource "aws_iot_policy_attachment" "probe" {
+  count = var.probe_certificate_arn == null ? 0 : 1
+
+  policy = aws_iot_policy.probe.name
+  target = var.probe_certificate_arn
+}
+
+resource "aws_iot_thing_principal_attachment" "probe" {
+  count = var.probe_certificate_arn == null ? 0 : 1
+
+  thing     = aws_iot_thing.probe.name
+  principal = var.probe_certificate_arn
 }
 
 resource "aws_budgets_budget" "iot" {

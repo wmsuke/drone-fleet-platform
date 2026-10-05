@@ -1,5 +1,6 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { connect, type IClientOptions } from "mqtt";
 
 import type { LoadGeneratorConfig } from "./config.js";
@@ -120,16 +121,10 @@ export async function runLoadGenerator(
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
   const writeReady = dependencies.writeReady ?? writeLoadGeneratorReady;
   const readCredential = dependencies.readCredential ?? readFile;
-  const transportOptions: IClientOptions =
+  const rootCa =
     config.awsIot === undefined
-      ? {}
-      : {
-          protocol: "mqtts",
-          ca: await readCredential(config.awsIot.caPath),
-          cert: await readCredential(config.awsIot.certificatePath),
-          key: await readCredential(config.awsIot.privateKeyPath),
-          rejectUnauthorized: true,
-        };
+      ? undefined
+      : await readCredential(config.awsIot.rootCaPath);
   const processStartedAtMs = now().getTime();
   const measurementStartAtMs =
     config.measurementStartAt?.getTime() ?? processStartedAtMs;
@@ -241,7 +236,6 @@ export async function runLoadGenerator(
         break;
       }
       const opening = openConnection(config.mqttUrl, {
-        ...transportOptions,
         clean: true,
         clientId:
           config.transport === "aws-iot"
@@ -249,6 +243,27 @@ export async function runLoadGenerator(
             : `load-${config.sessionId}-${device.deviceId}`,
         connectTimeout: Math.max(1, Math.floor(remainingDurationMs)),
         reconnectPeriod: 0,
+        ...(config.awsIot === undefined
+          ? {}
+          : {
+              protocol: "mqtts" as const,
+              rejectUnauthorized: true,
+              ca: rootCa,
+              cert: await readCredential(
+                join(
+                  config.awsIot.deviceCredentialsDirectory,
+                  device.deviceId,
+                  "device.pem.crt",
+                ),
+              ),
+              key: await readCredential(
+                join(
+                  config.awsIot.deviceCredentialsDirectory,
+                  device.deviceId,
+                  "private.pem.key",
+                ),
+              ),
+            }),
       });
       const connectionResult = opening.connected.then(
         () => ({ status: "connected" as const }),

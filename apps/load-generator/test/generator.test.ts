@@ -259,9 +259,8 @@ describe("runLoadGenerator", () => {
         awsIot: {
           ruleName: "drone_fleet_load_test",
           monthToDateMessages: 10,
-          caPath: "/secure/ca.pem",
-          certificatePath: "/secure/cert.pem",
-          privateKeyPath: "/secure/key.pem",
+          rootCaPath: "/secure/ca.pem",
+          deviceCredentialsDirectory: "/secure/devices",
         },
       }),
       {
@@ -273,8 +272,8 @@ describe("runLoadGenerator", () => {
 
     expect(readCredential.mock.calls.map(([path]) => path)).toEqual([
       "/secure/ca.pem",
-      "/secure/cert.pem",
-      "/secure/key.pem",
+      "/secure/devices/load-000001/device.pem.crt",
+      "/secure/devices/load-000001/private.pem.key",
     ]);
     expect(harness.openConnection).toHaveBeenCalledWith(
       "mqtts://example-ats.iot.ap-northeast-1.amazonaws.com:8883",
@@ -282,8 +281,9 @@ describe("runLoadGenerator", () => {
         protocol: "mqtts",
         rejectUnauthorized: true,
         ca: Buffer.from("/secure/ca.pem"),
-        cert: Buffer.from("/secure/cert.pem"),
-        key: Buffer.from("/secure/key.pem"),
+        cert: Buffer.from("/secure/devices/load-000001/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000001/private.pem.key"),
+        clientId: "load-000001",
       }),
     );
     expect(harness.clients[0]?.publishAsync).toHaveBeenCalledWith(
@@ -291,5 +291,51 @@ describe("runLoadGenerator", () => {
       expect.any(String),
       { qos: 0, retain: false },
     );
+  });
+
+  it("uses a distinct certificate and matching clientId for each AWS device", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => Buffer.from(path));
+
+    const report = await runLoadGenerator(
+      createConfig({
+        deviceCount: 2,
+        maxMessages: 2,
+        mqttUrl: "mqtts://example:8883",
+        transport: "aws-iot",
+        topicPrefix: "$aws/rules/load/",
+        awsIot: {
+          ruleName: "load",
+          monthToDateMessages: 0,
+          rootCaPath: "/secure/ca.pem",
+          deviceCredentialsDirectory: "/secure/devices",
+        },
+      }),
+      {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+        readCredential,
+      },
+    );
+
+    expect(harness.openConnection).toHaveBeenNthCalledWith(
+      1,
+      "mqtts://example:8883",
+      expect.objectContaining({
+        clientId: "load-000001",
+        cert: Buffer.from("/secure/devices/load-000001/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000001/private.pem.key"),
+      }),
+    );
+    expect(harness.openConnection).toHaveBeenNthCalledWith(
+      2,
+      "mqtts://example:8883",
+      expect.objectContaining({
+        clientId: "load-000002",
+        cert: Buffer.from("/secure/devices/load-000002/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000002/private.pem.key"),
+      }),
+    );
+    expect(JSON.stringify(report)).not.toContain("/secure");
   });
 });

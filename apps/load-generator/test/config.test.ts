@@ -43,9 +43,8 @@ describe("loadLoadGeneratorConfig", () => {
         AWS_IOT_RULE_NAME: "drone_fleet_load_test",
         AWS_IOT_MONTH_TO_DATE_MESSAGES: "80000",
         AWS_IOT_FREE_TIER_CONFIRMED: "true",
-        AWS_IOT_CA_PATH: "/secure/AmazonRootCA1.pem",
-        AWS_IOT_CERTIFICATE_PATH: "/secure/device.pem.crt",
-        AWS_IOT_PRIVATE_KEY_PATH: "/secure/private.pem.key",
+        AWS_IOT_ROOT_CA_PATH: "/secure/AmazonRootCA1.pem",
+        AWS_IOT_DEVICE_CREDENTIALS_DIR: "/secure/devices",
       }),
     ).toMatchObject({
       transport: "aws-iot",
@@ -68,9 +67,8 @@ describe("loadLoadGeneratorConfig", () => {
         AWS_IOT_RULE_NAME: "drone_fleet_load_test",
         AWS_IOT_MONTH_TO_DATE_MESSAGES: "80000",
         AWS_IOT_FREE_TIER_CONFIRMED: "true",
-        AWS_IOT_CA_PATH: "/secure/AmazonRootCA1.pem",
-        AWS_IOT_CERTIFICATE_PATH: "/secure/device.pem.crt",
-        AWS_IOT_PRIVATE_KEY_PATH: "/secure/private.pem.key",
+        AWS_IOT_ROOT_CA_PATH: "/secure/AmazonRootCA1.pem",
+        AWS_IOT_DEVICE_CREDENTIALS_DIR: "/secure/devices",
       }),
     ).toThrow("project monthly limit of 200000");
   });
@@ -83,9 +81,8 @@ describe("loadLoadGeneratorConfig", () => {
         AWS_IOT_ENDPOINT: "example-ats.iot.ap-northeast-1.amazonaws.com",
         AWS_IOT_RULE_NAME: "drone_fleet_load_test",
         AWS_IOT_MONTH_TO_DATE_MESSAGES: "0",
-        AWS_IOT_CA_PATH: "/secure/AmazonRootCA1.pem",
-        AWS_IOT_CERTIFICATE_PATH: "/secure/device.pem.crt",
-        AWS_IOT_PRIVATE_KEY_PATH: "/secure/private.pem.key",
+        AWS_IOT_ROOT_CA_PATH: "/secure/AmazonRootCA1.pem",
+        AWS_IOT_DEVICE_CREDENTIALS_DIR: "/secure/devices",
       }),
     ).toThrow("AWS_IOT_FREE_TIER_CONFIRMED must be true");
   });

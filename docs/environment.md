@@ -32,9 +32,10 @@ cp .env.example .env
 | `AWS_IOT_RULE_NAME` | Basic Ingestで呼び出すIoT Rule名 |
 | `AWS_IOT_FREE_TIER_CONFIRMED` | Billingで対象期間と残量を確認したか |
 | `AWS_IOT_MONTH_TO_DATE_MESSAGES` | 当月にプロジェクトで使用済みのAWS IoTメッセージ件数 |
-| `AWS_IOT_CA_PATH` | Amazon Root CAのローカルパス |
-| `AWS_IOT_CERTIFICATE_PATH` | デバイス証明書のローカルパス |
-| `AWS_IOT_PRIVATE_KEY_PATH` | デバイス秘密鍵のローカルパス |
+| `AWS_IOT_ROOT_CA_PATH` | Amazon Root CAのローカルパス |
+| `AWS_IOT_DEVICE_CREDENTIALS_DIR` | deviceId別の証明書・秘密鍵directoryを置く親directory |
+| `AWS_IOT_PROBE_CERTIFICATE_PATH` | AWS経路確認専用probe証明書のローカルパス |
+| `AWS_IOT_PROBE_PRIVATE_KEY_PATH` | AWS経路確認専用probe秘密鍵のローカルパス |
 | `OFFLINE_TIMEOUT_MS` | 最終受信からオフラインと判定するまでの時間 |
 | `TELEMETRY_BATCH_SIZE` | telemetryをDBへ保存する1バッチの最大件数（既定値: `100`） |
 | `TELEMETRY_FLUSH_INTERVAL_MS` | 未満バッチをDBへ保存する最大待機時間（既定値: `50`） |
@@ -55,9 +56,6 @@ cp .env.example .env
 | `DEVICE_ID_PREFIX` | シミュレータが生成するdeviceIdの接頭辞 |
 | `SIMULATION_SEED` | シミュレータの状態系列を再現するシード |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
-| `AWS_IOT_ENDPOINT` | AWS IoT CoreのATS endpoint |
-| `AWS_IOT_ROOT_CA_PATH` | Amazon Root CAファイルのパス |
-| `AWS_IOT_DEVICE_CREDENTIALS_DIR` | deviceId別の証明書・秘密鍵directoryを置く親directory |
 | `AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID` | telemetry-ingestor用IoT Policyと一致する固定clientId |
 | `AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH` | telemetry-ingestor専用クライアント証明書のパス |
 | `AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH` | telemetry-ingestor専用秘密鍵のパス |

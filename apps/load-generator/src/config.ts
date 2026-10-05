@@ -9,9 +9,8 @@ export type LoadTransport = "local" | "aws-iot";
 export interface AwsIotConfig {
   ruleName: string;
   monthToDateMessages: number;
-  caPath: string;
-  certificatePath: string;
-  privateKeyPath: string;
+  rootCaPath: string;
+  deviceCredentialsDirectory: string;
 }
 
 export interface LoadGeneratorConfig {
@@ -186,9 +185,11 @@ export function loadLoadGeneratorConfig(
     return {
       ruleName,
       monthToDateMessages,
-      caPath: required(environment, "AWS_IOT_CA_PATH"),
-      certificatePath: required(environment, "AWS_IOT_CERTIFICATE_PATH"),
-      privateKeyPath: required(environment, "AWS_IOT_PRIVATE_KEY_PATH"),
+      rootCaPath: required(environment, "AWS_IOT_ROOT_CA_PATH"),
+      deviceCredentialsDirectory: required(
+        environment,
+        "AWS_IOT_DEVICE_CREDENTIALS_DIR",
+      ),
     };
   })();
 

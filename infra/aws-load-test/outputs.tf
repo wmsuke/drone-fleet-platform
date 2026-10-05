@@ -6,6 +6,10 @@ output "basic_ingest_topic_prefix" {
   value = local.topic_prefix
 }
 
-output "iot_policy_name" {
-  value = aws_iot_policy.load_test.name
+output "load_device_policy_name" {
+  value = aws_iot_policy.load_device.name
+}
+
+output "probe_policy_name" {
+  value = aws_iot_policy.probe.name
 }

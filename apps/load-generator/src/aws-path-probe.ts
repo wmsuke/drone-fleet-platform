@@ -37,9 +37,9 @@ async function main(): Promise<void> {
     connectTimeout: timeoutMs,
     protocol: "mqtts",
     rejectUnauthorized: true,
-    ca: await readFile(required("AWS_IOT_CA_PATH")),
-    cert: await readFile(required("AWS_IOT_CERTIFICATE_PATH")),
-    key: await readFile(required("AWS_IOT_PRIVATE_KEY_PATH")),
+    ca: await readFile(required("AWS_IOT_ROOT_CA_PATH")),
+    cert: await readFile(required("AWS_IOT_PROBE_CERTIFICATE_PATH")),
+    key: await readFile(required("AWS_IOT_PROBE_PRIVATE_KEY_PATH")),
   });
 
   const sourceTopic = createTelemetryTopic(deviceId);
