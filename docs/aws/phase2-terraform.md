@@ -18,9 +18,9 @@ AWS IoT CoreのATS endpointはdata sourceで取得し、apply後のoutputへ出�
 
 ## 実行前の確認
 
-1. Billing and Cost Managementで、現在のアカウントプラン、Free Tierまたはcreditの残量、対象期間を確認する。
-2. 作業対象のAWS account IDとregionを確認する。
-3. `terraform.tfvars.example`を`terraform.tfvars`へコピーし、環境名、region、deviceId、`#93`で発行したdevice certificate ARN、telemetry-ingestorとAPIの専用certificate ARNを設定する。
+1. AWS SettingsのBillingで、現在のproject plan、Free Tierまたはcreditの残量、対象期間を確認する。
+2. 作業対象のAWS project IDとselected Regionを確認する。
+3. `terraform.tfvars.example`を`terraform.tfvars`へコピーし、環境名、region、deviceIdを設定する。初回は`device_certificate_arns = {}`、両バックエンドのcertificate ARNは`null`とする。
 4. deviceIdはThing nameとMQTT clientIdにも使う。別環境を同じaccount・regionへ作る場合は、`dev-drone-001`のように環境を含むdeviceIdを使う。
 5. state、plan、`terraform.tfvars`がGitの追跡対象外であることを確認する。
 
@@ -55,6 +55,14 @@ terraform test
 cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars
 terraform init
+terraform plan -out=phase2-bootstrap.tfplan
+terraform show phase2-bootstrap.tfplan
+terraform apply phase2-bootstrap.tfplan
+```
+
+最初のapplyではThing 2件とIoT Policy 3件を作成し、証明書attachmentは作成しない。Thing作成後に#93の手順でデバイス証明書を発行し、バックエンド専用証明書も発行する。各manifestのcertificate ARNを`terraform.tfvars`へ設定してから、最終planを作成する。
+
+```bash
 terraform plan -out=phase2.tfplan
 terraform show phase2.tfplan
 terraform apply phase2.tfplan

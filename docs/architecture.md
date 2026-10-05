@@ -2,11 +2,11 @@
 
 ## 開発範囲
 
-最初はAWSを使わず、仮想ドローン10台をローカルで動かす。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
+仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-AWS接続や通信断対応は後続のPhaseで追加する。AWS対応後も、ローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。通信断中の永続バッファと再送は後続Phaseで扱う。AWS対応後も、ローカルだけで動作する構成を維持する。
 
-Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。
+Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
 ## Phase 1のローカル構成
 
@@ -76,25 +76,32 @@ packages/
 └── config/
 
 infra/
-└── local/
+├── local/
+└── terraform/
 
 docs/
 ├── adr/
 │   ├── 0001-monorepo.md
 │   ├── 0002-mqtt-protocol.md
-│   └── 0003-database.md
+│   ├── 0003-database.md
+│   └── 0004-aws-iot-connection-and-credentials.md
+├── aws/
+├── load-testing/
+├── releases/
 ├── architecture.md
 ├── environment.md
 ├── protocol.md
 └── roadmap.md
 
 scripts/
+├── manage-aws-iot-certificate.mjs
 ├── scan-secrets.sh
+├── test-aws-iot-e2e.sh
 ├── test-telemetry-path.sh
 └── verify-mqtt.sh
 ```
 
-Phase 0の開発基盤に加え、Phase 1の通信仕様、仮想ドローン、DBスキーマ、テレメトリ保存、HTTP API、ダッシュボード、全サービスのDocker Compose構成を実装済みである。`infra/terraform`はPhase 2で追加する。
+Phase 0の開発基盤、Phase 1のローカル構成に加え、Phase 2のTerraform、証明書管理、AWS IoT transport、E2Eを実装済みである。
 
 ### apps/api
 
@@ -178,7 +185,7 @@ Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-flee
 
 ### infra
 
-`local`にはMosquittoのローカル設定を置く。ルートの`compose.yaml`はPostgreSQLとMosquittoのhealthcheck、DBマイグレーション、MQTT受信処理、API、仮想ドローン、ダッシュボードの起動順を管理する。通常はAPIとダッシュボードだけをlocalhostへ公開する。ホスト側の開発コマンドでPostgreSQLとMosquittoへ接続するときは`compose.dev.yaml`を併用する。停止時は依存関係と逆の順序でサービスを終了し、シミュレータと各サービスが接続を閉じてから基盤サービスを停止する。Phase 2以降のAWS環境に使用する`terraform`は未作成である。
+`local`にはMosquittoのローカル設定を置く。ルートの`compose.yaml`はPostgreSQLとMosquittoのhealthcheck、DBマイグレーション、MQTT受信処理、API、仮想ドローン、ダッシュボードの起動順を管理する。通常はAPIとダッシュボードだけをlocalhostへ公開する。ホスト側の開発コマンドでPostgreSQLとMosquittoへ接続するときは`compose.dev.yaml`を併用する。停止時は依存関係と逆の順序でサービスを終了し、シミュレータと各サービスが接続を閉じてから基盤サービスを停止する。`terraform`にはPhase 2のThing、IoT Policy、証明書attachment、ATS endpoint outputを置く。作成から削除までの順序は[AWS IoT Core接続手順](aws/README.md)に記載する。
 
 `scripts/test-telemetry-path.sh`は専用のComposeプロジェクトでPostgreSQL、Mosquitto、DBマイグレーション、MQTT受信処理、シミュレータ1台、APIを起動する。シミュレータが生成したテレメトリがAPIへ到達することに加え、固定テレメトリをMQTTへ送信してAPIのテレメトリ履歴で全項目が一致することを、それぞれ上限時間付きで待つ。失敗時は経路上のサービス状態とログを出力し、終了時はテスト用データとプロセスを削除する。
 
@@ -252,7 +259,7 @@ HTTPの入出力と、DB操作やMQTT送信を分けて実装する。初期段�
 
 ## AWSへの拡張
 
-Phase 2ではAWS IoT Coreへの接続を追加する。
+Phase 2でAWS IoT Coreへの接続を追加した。
 
 - デバイスごとのIDと証明書
 - mTLS接続
@@ -287,7 +294,7 @@ APIも`MQTT_TRANSPORT`でMosquittoとAWS IoT Coreを切り替える。AWSモー�
 
 Phase 2.5のBasic IngestとIoT Ruleは、短時間のテレメトリ負荷確認専用とし、通常運用の双方向経路とは分ける。接続経路、サービスの責務、認証情報の管理、採用しなかった案は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
-Phase 2のThing、バックエンド用IoT Policy、ATS endpointは`infra/terraform`で管理する。証明書と秘密鍵はTerraformで生成せず、証明書の関連付けは後続Issueで追加する。plan、apply、output確認、destroyの手順は[Phase 2 AWS基盤のTerraform手順](aws/phase2-terraform.md)に記載する。
+Phase 2のThing、デバイス・バックエンド用IoT Policy、証明書attachment、ATS endpointは`infra/terraform`で管理する。証明書と秘密鍵はTerraformで生成しない。plan、apply、output確認、destroyの手順は[Phase 2 AWS基盤のTerraform手順](aws/phase2-terraform.md)、一連の実行順序は[AWS IoT Core接続手順](aws/README.md)に記載する。
 
 ## 負荷検証
 

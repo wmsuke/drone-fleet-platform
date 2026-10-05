@@ -34,13 +34,13 @@ variable "device_ids" {
 }
 
 variable "device_certificate_arns" {
-  description = "deviceIdごとに#93で発行したAWS IoT certificate ARN"
+  description = "発行済みdeviceIdごとのAWS IoT certificate ARN。初回のThing作成時は空mapを許可する"
   type        = map(string)
   default     = {}
 
   validation {
-    condition     = toset(keys(var.device_certificate_arns)) == var.device_ids
-    error_message = "device_certificate_arns must contain exactly one certificate ARN for each device_id"
+    condition     = length(setsubtract(toset(keys(var.device_certificate_arns)), var.device_ids)) == 0
+    error_message = "device_certificate_arns keys must be included in device_ids"
   }
 
   validation {

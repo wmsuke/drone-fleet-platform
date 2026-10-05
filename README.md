@@ -2,11 +2,11 @@
 
 ドローンの状態監視と遠隔コマンドを扱うデバイス管理基盤。
 
-TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認する。帰還・再起動コマンドの送信とACKの追跡まで、AWSアカウントや実機なしで試せる。
+TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認する。帰還・再起動コマンドの送信とACKの追跡まで、AWS projectや実機なしのローカル構成で試せる。必要に応じて同じ通信仕様のままAWS IoT Coreへ切り替えられる。
 
 ## 開発状況
 
-Phase 1のローカル最小構成まで実装済みで、`v0.1.0`として次の範囲を利用できる。
+Phase 2のAWS IoT接続まで実装済みで、`v0.2.0`として次の範囲を利用できる。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -20,6 +20,11 @@ Phase 1のローカル最小構成まで実装済みで、`v0.1.0`として次�
 - RETURN_HOME・REBOOTコマンドの送信APIとコマンド履歴API
 - React・Vite・TanStack Queryによるダッシュボード基盤、機体一覧・詳細画面、コマンド操作・履歴表示
 - MQTTからAPIまでの結合テストと、シードによるシミュレーションの再現
+- TerraformによるThing、IoT Policy、証明書attachment、ATS endpointの管理
+- デバイス、telemetry-ingestor、APIを分離したX.509証明書とmTLS接続
+- 機体単位のIoT Policyによるtopic制限
+- simulator、telemetry-ingestor、APIのローカル/AWS IoT transport切替
+- AWS経由のtelemetry・status・command・ACKと権限制御のE2E
 
 ## Performance / Load testing
 
@@ -84,14 +89,26 @@ flowchart LR
 
 詳しいサービス構成は[システム構成](docs/architecture.md)、MQTTトピックとメッセージ形式は[通信仕様](docs/protocol.md)、Phaseごとの対象範囲は[ロードマップ](docs/roadmap.md)を参照する。
 
-### v0.1.0の制約
+## AWS IoT Coreで試す
 
-- ローカルのDocker Compose環境を対象とし、AWS IoT Coreや実機には接続しない。
+AWS接続はローカルデモとは別の手順で行う。selected Region、必要な権限、費用、秘密鍵の保管場所を確認してから、Terraformと機体・バックエンド別の証明書を準備する。
+
+1. AWS projectのplan、creditまたはFree Tier、selected Regionを確認する。
+2. TerraformでThingとIoT Policyを作成する。
+3. 秘密鍵を端末内で生成し、CSRから機体別・サービス別の証明書を発行する。
+4. `MQTT_TRANSPORT=aws-iot`で2台の短時間E2Eを実行する。
+5. 証明書を失効・削除してからTerraformリソースを削除する。
+
+必要な権限と作成から削除までのコマンドは[AWS IoT Core接続手順](docs/aws/README.md)、設計判断は[ADR 0004](docs/adr/0004-aws-iot-connection-and-credentials.md)、v0.2.0の変更点は[リリースノート](docs/releases/v0.2.0.md)を参照する。AWSの料金とFree Tier制度は変更されるため、固定の無料件数を前提にしない。
+
+### 現在の制約
+
 - MosquittoはComposeネットワーク内で匿名接続を許可する開発用設定であり、外部公開を想定しない。
+- AWS IoT Coreは仮想ドローン2台の短時間E2Eまで確認済みで、継続負荷や実機は未確認である。
 - 操作できるコマンドは`RETURN_HOME`と`REBOOT`のみである。
 - ACKは仮想ドローンがコマンドを受領したことを示し、実行完了を示すものではない。
 - モデル名とソフトウェアバージョンはPhase 1のメッセージに含まれないため、画面では未登録と表示する。
-- 認証・認可、通信断からの再送・復旧、OTA、ROS 2連携は後続Phaseで扱う。
+- 通信断中の永続バッファと再送、証明書の自動ローテーション、OTA、ROS 2連携は後続Phaseで扱う。
 
 ## 開発環境
 
@@ -143,6 +160,7 @@ cp .env.example .env
 | `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
+| `pnpm test:aws-iot-e2e`    | AWS IoT Coreの短時間E2E（認証情報が必要）  |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、負荷試験レポートの小規模E2Eを実行する。
 

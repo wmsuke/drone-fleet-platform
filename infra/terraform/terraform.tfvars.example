@@ -6,7 +6,8 @@ device_ids = [
   "dev-drone-002",
 ]
 
-# #93で発行した証明書のmanifest.jsonからARNを設定する。以下はダミー値。
+# 初回は空mapでThingを作成し、#93で発行した証明書のmanifest.jsonからARNを設定して再applyする。
+# 以下は最終構成を示すダミー値。
 device_certificate_arns = {
   dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
   dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/1111111111111111111111111111111111111111111111111111111111111111"

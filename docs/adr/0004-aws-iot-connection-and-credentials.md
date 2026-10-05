@@ -71,10 +71,10 @@ MQTTへのpublish成功を確認してからcommandを`SENT`へ進める。DB保
 
 バックエンドはThingとして登録せず、サービスごとに証明書と固定clientIdを分ける。
 
-| サービス           | clientId                         | 権限                                        |
-| ------------------ | -------------------------------- | ------------------------------------------- |
-| telemetry-ingestor | `drone-fleet-telemetry-ingestor` | telemetry・status・ACKのsubscribe / receive |
-| API                | `drone-fleet-api`                | commandのpublish                            |
+| サービス           | clientId                                       | 権限                                        |
+| ------------------ | ---------------------------------------------- | ------------------------------------------- |
+| telemetry-ingestor | `drone-fleet-<environment>-telemetry-ingestor` | telemetry・status・ACKのsubscribe / receive |
+| API                | `drone-fleet-<environment>-api`                | commandのpublish                            |
 
 バックエンド証明書をデバイスと共有せず、telemetry-ingestorとAPIの間でも共有しない。侵害時は対象サービスまたは対象機体の証明書だけを無効化・交換できるようにする。
 
@@ -104,7 +104,7 @@ Phase 2.5では、テレメトリの短時間負荷確認だけにBasic Ingest�
 - IoT Rule、Lambda、SQSなどを通常経路へ追加せず、Phase 2の変更範囲とAWS利用料を抑えられる。
 - Cloud Adapterとの内部通信方式や追加の障害点を設計せずに済む。
 - サービスごとの証明書と最小権限Policyにより、侵害範囲とローテーション対象を限定できる。
-- MosquittoとAWS IoT Coreで`packages/protocol`を共有し、AWSアカウントなしでローカル開発とCIを継続できる。
+- MosquittoとAWS IoT Coreで`packages/protocol`を共有し、AWS projectなしでローカル開発とCIを継続できる。
 
 ## 採用しなかった案
 
@@ -141,16 +141,18 @@ Phase 2.5のBasic IngestではIoT Ruleの起動とaction、action先サービス
 - 初期の秘密鍵管理は単一開発環境のGit管理外ファイルであり、本番の集中管理やhardware-backed key storageではない。
 - AWS IoT CoreとMosquittoのMQTT実装差は、結合テストで継続的に確認する必要がある。
 
-## 影響
+## 実装結果と影響
 
-Phase 2の後続Issueでは、このADRを前提に次を実装する。
+Phase 2では、このADRを前提に次を実装した。
 
 1. #92: Thing、バックエンド用IoT Policy、endpoint出力のTerraform。
 2. #93: Git管理外で鍵を生成し、CSRから証明書を登録・無効化・削除する手順。
 3. #94: Thingと証明書の対応に基づくデバイス単位のIoT Policyとcertificate attachment。
 4. #95、#96、#97: simulator、telemetry-ingestor、APIのtransport設定とmTLS接続。
 5. #98: 他機体topicの拒否、telemetry / status / command / ACKのAWS結合テスト。
-6. #99: 作成・削除手順、利用料確認、証明書ローテーション手順。
+6. #99: 作成・削除手順、利用料確認、v0.2.0の検証済み範囲。
+
+環境作成、証明書発行、E2E、証明書失効、環境削除は[AWS IoT Core接続手順](../aws/README.md)を入口とする。Phase 2で確認したのは手動の発行・失効であり、証明書の自動ローテーションとFleet Provisioningは未実装である。
 
 ## 参照
 
