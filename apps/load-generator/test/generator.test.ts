@@ -74,6 +74,35 @@ describe("createLoadDeviceIds", () => {
 });
 
 describe("runLoadGenerator", () => {
+  it("rejects AWS warmup even when called with a constructed config", async () => {
+    const harness = createHarness();
+
+    await expect(
+      runLoadGenerator(
+        createConfig({
+          transport: "aws-iot",
+          measurementStartAt: new Date(Date.now() + 60_000),
+          measurementDurationMs: 60_000,
+          topicPrefix: "$aws/rules/load/",
+          awsIot: {
+            ruleName: "load",
+            monthToDateMessages: 0,
+            rootCaPath: "/secure/ca.pem",
+            deviceCredentialsDirectory: "/secure/devices",
+          },
+        }),
+        {
+          openConnection: harness.openConnection,
+          writeReport: harness.writeReport,
+        },
+      ),
+    ).rejects.toThrow(
+      "measurementStartAt is not supported for AWS IoT load generation",
+    );
+
+    expect(harness.openConnection).not.toHaveBeenCalled();
+  });
+
   it("sends during warmup but reports only the shared measurement window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -337,5 +366,42 @@ describe("runLoadGenerator", () => {
       }),
     );
     expect(JSON.stringify(report)).not.toContain("/secure");
+  });
+
+  it("does not open any AWS connection when a later device credential is missing", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => {
+      if (path.endsWith("load-000002/private.pem.key")) {
+        throw new Error(`ENOENT: ${path}`);
+      }
+      return Buffer.from(path);
+    });
+
+    await expect(
+      runLoadGenerator(
+        createConfig({
+          deviceCount: 2,
+          maxMessages: 2,
+          mqttUrl: "mqtts://example:8883",
+          transport: "aws-iot",
+          topicPrefix: "$aws/rules/load/",
+          awsIot: {
+            ruleName: "load",
+            monthToDateMessages: 0,
+            rootCaPath: "/secure/ca.pem",
+            deviceCredentialsDirectory: "/secure/devices",
+          },
+        }),
+        {
+          openConnection: harness.openConnection,
+          writeReport: harness.writeReport,
+          readCredential,
+        },
+      ),
+    ).rejects.toThrow("AWS IoT credential preflight failed for load-000002");
+
+    expect(harness.openConnection).not.toHaveBeenCalled();
+    expect(harness.clients).toHaveLength(0);
+    expect(harness.getWrittenReport()).toBeUndefined();
   });
 });

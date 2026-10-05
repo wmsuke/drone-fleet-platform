@@ -92,13 +92,6 @@ resource "aws_iot_policy_attachment" "load_device" {
   target = each.value
 }
 
-resource "aws_iot_thing_principal_attachment" "load_device" {
-  for_each = var.load_device_certificate_arns
-
-  thing     = aws_iot_thing.load_device[each.key].name
-  principal = each.value
-}
-
 resource "aws_iot_thing" "probe" {
   name = var.probe_device_id
 }
@@ -142,13 +135,6 @@ resource "aws_iot_policy_attachment" "probe" {
 
   policy = aws_iot_policy.probe.name
   target = var.probe_certificate_arn
-}
-
-resource "aws_iot_thing_principal_attachment" "probe" {
-  count = var.probe_certificate_arn == null ? 0 : 1
-
-  thing     = aws_iot_thing.probe.name
-  principal = var.probe_certificate_arn
 }
 
 resource "aws_budgets_budget" "iot" {

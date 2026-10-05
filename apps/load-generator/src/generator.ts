@@ -47,6 +47,11 @@ interface DeviceRuntime extends DeviceSendResult {
   timer?: NodeJS.Timeout;
 }
 
+interface DeviceCredentials {
+  certificate: Buffer;
+  privateKey: Buffer;
+}
+
 export function createLoadDeviceIds(
   deviceStart: number,
   deviceCount: number,
@@ -116,15 +121,16 @@ export async function runLoadGenerator(
   config: LoadGeneratorConfig,
   dependencies: LoadGeneratorDependencies = {},
 ): Promise<LoadGeneratorReport> {
+  if (config.awsIot !== undefined && config.measurementStartAt !== undefined) {
+    throw new TypeError(
+      "measurementStartAt is not supported for AWS IoT load generation",
+    );
+  }
   const openConnection = dependencies.openConnection ?? openMqttConnection;
   const now = dependencies.now ?? (() => new Date());
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
   const writeReady = dependencies.writeReady ?? writeLoadGeneratorReady;
   const readCredential = dependencies.readCredential ?? readFile;
-  const rootCa =
-    config.awsIot === undefined
-      ? undefined
-      : await readCredential(config.awsIot.rootCaPath);
   const processStartedAtMs = now().getTime();
   const measurementStartAtMs =
     config.measurementStartAt?.getTime() ?? processStartedAtMs;
@@ -144,6 +150,32 @@ export async function runLoadGenerator(
     lastSequence: null,
     nextSequence: 0,
   }));
+  let rootCa: Buffer | undefined;
+  const deviceCredentials = new Map<string, DeviceCredentials>();
+  if (config.awsIot !== undefined) {
+    try {
+      rootCa = await readCredential(config.awsIot.rootCaPath);
+    } catch {
+      throw new Error("AWS IoT credential preflight failed for root CA");
+    }
+    for (const device of devices) {
+      try {
+        const deviceDirectory = join(
+          config.awsIot.deviceCredentialsDirectory,
+          device.deviceId,
+        );
+        const [certificate, privateKey] = await Promise.all([
+          readCredential(join(deviceDirectory, "device.pem.crt")),
+          readCredential(join(deviceDirectory, "private.pem.key")),
+        ]);
+        deviceCredentials.set(device.deviceId, { certificate, privateKey });
+      } catch {
+        throw new Error(
+          `AWS IoT credential preflight failed for ${device.deviceId}`,
+        );
+      }
+    }
+  }
   const counters = { attempted: 0, succeeded: 0, failed: 0 };
   const inFlight = new Set<Promise<void>>();
   let stopReason: StopReason | undefined;
@@ -235,6 +267,7 @@ export async function runLoadGenerator(
         requestStop("MAX_DURATION");
         break;
       }
+      const credentials = deviceCredentials.get(device.deviceId);
       const opening = openConnection(config.mqttUrl, {
         clean: true,
         clientId:
@@ -249,20 +282,8 @@ export async function runLoadGenerator(
               protocol: "mqtts" as const,
               rejectUnauthorized: true,
               ca: rootCa,
-              cert: await readCredential(
-                join(
-                  config.awsIot.deviceCredentialsDirectory,
-                  device.deviceId,
-                  "device.pem.crt",
-                ),
-              ),
-              key: await readCredential(
-                join(
-                  config.awsIot.deviceCredentialsDirectory,
-                  device.deviceId,
-                  "private.pem.key",
-                ),
-              ),
+              cert: credentials?.certificate,
+              key: credentials?.privateKey,
             }),
       });
       const connectionResult = opening.connected.then(

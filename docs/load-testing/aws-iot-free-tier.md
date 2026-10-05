@@ -9,7 +9,7 @@ Issue #64では、AWS IoT Coreで継続性能の限界を測らない。証明�
 - Billing and Cost Managementで、現在のアカウントプラン、Free Tierまたはcreditの残量、対象期間を確認できない。
 - 当月のプロジェクト使用済み件数と今回の`LOAD_MAX_MESSAGES`の合計が200,000件を超える。
 - CloudWatch、Lambda、SQS、Kinesis、RDS、EC2、データ転送など、今回使わないサービスが構成に含まれる。
-- 試験後すぐに`terraform destroy`と残存リソース確認を実行できない。
+- 試験後すぐにPolicy attachment解除、証明書失効、`terraform destroy`、残存リソース確認を実行できない。
 
 AWSのFree Tier制度はアカウント作成日とプランで異なる。2025年7月15日以降に作成したアカウントはcreditとFree/Paid planを基準にし、それ以前のアカウントはBillingに表示される有効なオファーを基準にする。固定の無料件数を前提にせず、毎回Billingの表示を確認する。
 
@@ -23,7 +23,7 @@ AWSのFree Tier制度はアカウント作成日とプランで異なる。2025�
 - `verified` topicのsubscribe/receiveを専用に担う`load-probe` ThingとIoT Policy
 - 通知先を指定した場合だけ、AWS IoTの実課金を通知する月次Budget
 
-証明書と秘密鍵はTerraformで作成しない。Phase 2と同じく1 device = 1 certificateとし、`deviceId = Thing name = MQTT clientId`を維持する。秘密鍵は`secrets/aws-iot/<deviceId>/`へ置き、Terraform stateには証明書ARNだけを保存する。probe証明書をload deviceと共有しない。
+証明書と秘密鍵はTerraformで作成しない。Phase 2と同じく1 device = 1 certificateとし、`deviceId = Thing name = MQTT clientId`を維持する。秘密鍵は`secrets/aws-iot/<deviceId>/`へ置き、Terraform stateには証明書ARNだけを保存する。probe証明書をload deviceと共有しない。Thingと証明書の`EXCLUSIVE_THING` attachmentは証明書管理スクリプト、IoT Policy attachmentはTerraformだけが管理する。
 
 最初は証明書mapを空にしてThingとPolicyを作る。
 
@@ -88,18 +88,21 @@ AWSモードでは、負荷生成器が次を起動前に検証する。
 
 - Free Tier確認フラグが明示的に`true`である。
 - `AWS_IOT_MONTH_TO_DATE_MESSAGES + LOAD_MAX_MESSAGES <= 200000`である。
-- Root CAと各deviceIdの`device.pem.crt`、`private.pem.key`を個別に読み、deviceIdをそのままMQTT clientIdにしてmTLS接続する。
+- AWSモードでは`LOAD_MEASUREMENT_START_AT`を受け付けず、上限外のwarmup publishを行わない。
+- ネットワーク接続を始める前に、Root CAと対象deviceId全件の`device.pem.crt`、`private.pem.key`を読み込めることを確認する。1件でも失敗した場合は0接続・0publishで終了する。
+- deviceIdをそのままMQTT clientIdにしてmTLS接続する。
 
 送信先は`$aws/rules/<ruleName>/fleet/v1/devices/<deviceId>/telemetry`で、通常のproduction telemetry schemaは変更しない。再接続は行わず、最大件数または最大時間に達した時点で全接続を閉じる。
 
 ## 終了と記録
 
 1. 負荷生成器が全接続を閉じたことをレポートで確認する。
-2. 各load deviceとprobeについて`pnpm aws:iot:certificate revoke --device-id <deviceId> ...`を実行する。AWS側の削除が成功するまでローカルdirectoryは残るため、失敗時は同じコマンドを再試行する。
-3. `terraform destroy`を実行する。
-4. IoT Rule、Thing、IoT Policy attachment、certificate、IAM role、Budgetが残っていないことをAWS ConsoleまたはCLIで確認する。
-5. Billingの使用量と料金を再確認する。反映に時間差がある場合は、確認日時と未反映である旨を記録し、反映後に追記する。
-6. 実行条件と結果を次の表で記録する。
+2. `load_device_certificate_arns = {}`と`probe_certificate_arn = null`へ戻して`terraform apply`し、Terraformが所有するIoT Policy attachmentを解除する。
+3. 各load deviceとprobeについて`pnpm aws:iot:certificate revoke --device-id <deviceId> ...`を実行する。証明書管理スクリプトがThing attachmentを解除し、AWS側の削除が成功するまでローカルdirectoryを残すため、失敗時は同じコマンドを再試行する。
+4. `terraform destroy`を実行する。
+5. IoT Rule、Thing、IoT Policy attachment、Thing attachment、certificate、IAM role、Budgetが残っていないことをAWS ConsoleまたはCLIで確認する。
+6. Billingの使用量と料金を再確認する。反映に時間差がある場合は、確認日時と未反映である旨を記録し、反映後に追記する。
+7. 実行条件と結果を次の表で記録する。
 
 | 項目                       | 実行前 | 実行後 |
 | -------------------------- | ------ | ------ |

@@ -87,6 +87,25 @@ describe("loadLoadGeneratorConfig", () => {
     ).toThrow("AWS_IOT_FREE_TIER_CONFIRMED must be true");
   });
 
+  it("rejects a measurement warmup in AWS mode", () => {
+    expect(() =>
+      loadLoadGeneratorConfig({
+        ...validEnvironment,
+        LOAD_TRANSPORT: "aws-iot",
+        LOAD_MEASUREMENT_START_AT: "2026-10-05T08:00:00.000Z",
+        LOAD_MEASUREMENT_DURATION_MS: "60000",
+        AWS_IOT_ENDPOINT: "example-ats.iot.ap-northeast-1.amazonaws.com",
+        AWS_IOT_RULE_NAME: "drone_fleet_load_test",
+        AWS_IOT_MONTH_TO_DATE_MESSAGES: "0",
+        AWS_IOT_FREE_TIER_CONFIRMED: "true",
+        AWS_IOT_ROOT_CA_PATH: "/secure/AmazonRootCA1.pem",
+        AWS_IOT_DEVICE_CREDENTIALS_DIR: "/secure/devices",
+      }),
+    ).toThrow(
+      "LOAD_MEASUREMENT_START_AT is not supported with LOAD_TRANSPORT=aws-iot",
+    );
+  });
+
   it("allows MQTT and report destinations to be overridden", () => {
     expect(
       loadLoadGeneratorConfig({

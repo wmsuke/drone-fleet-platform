@@ -157,6 +157,11 @@ export function loadLoadGeneratorConfig(
 
   const awsIot = (() => {
     if (transport !== "aws-iot") return undefined;
+    if (measurementStartAt !== undefined) {
+      throw new TypeError(
+        "LOAD_MEASUREMENT_START_AT is not supported with LOAD_TRANSPORT=aws-iot",
+      );
+    }
     const ruleName = required(environment, "AWS_IOT_RULE_NAME");
     if (!/^[A-Za-z0-9_]+$/.test(ruleName)) {
       throw new TypeError(

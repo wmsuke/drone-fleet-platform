@@ -40,16 +40,19 @@ run "per_device_policy_and_probe" {
   }
 
   assert {
-    condition     = length(aws_iot_thing_principal_attachment.load_device) == 2
-    error_message = "every load certificate must be attached to its matching Thing"
-  }
-
-  assert {
     condition = (
       jsondecode(aws_iot_policy.load_device.policy).Statement[0].Resource == "arn:aws:iot:ap-northeast-1:123456789012:client/$${iot:Connection.Thing.ThingName}" &&
       jsondecode(aws_iot_policy.load_device.policy).Statement[1].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/$aws/rules/drone_fleet_load_test/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry"
     )
     error_message = "load policy must bind clientId and publish topic to the attached Thing"
+  }
+
+  assert {
+    condition = (
+      length(aws_iot_policy_attachment.load_device) == 2 &&
+      length(aws_iot_policy_attachment.probe) == 1
+    )
+    error_message = "Terraform must attach only IoT Policies to the dedicated certificates"
   }
 
   assert {
