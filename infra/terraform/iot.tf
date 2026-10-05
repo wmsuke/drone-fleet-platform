@@ -150,3 +150,10 @@ resource "aws_iot_policy" "api" {
     ]
   })
 }
+
+resource "aws_iot_policy_attachment" "api" {
+  count = var.api_certificate_arn == null ? 0 : 1
+
+  policy = aws_iot_policy.api.name
+  target = var.api_certificate_arn
+}

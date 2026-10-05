@@ -26,6 +26,7 @@ run "phase2_foundation_plan" {
       dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/1111111111111111111111111111111111111111111111111111111111111111"
     }
     telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
+    api_certificate_arn                = "arn:aws:iot:ap-northeast-1:123456789012:cert/3333333333333333333333333333333333333333333333333333333333333333"
   }
 
   assert {
@@ -100,6 +101,14 @@ run "phase2_foundation_plan" {
   }
 
   assert {
+    condition = (
+      length(aws_iot_policy_attachment.api) == 1 &&
+      output.api.certificate_attached
+    )
+    error_message = "API policy must be attached to its dedicated certificate"
+  }
+
+  assert {
     condition     = jsondecode(aws_iot_policy.api.policy).Statement[1].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/commands"
     error_message = "API policy must only publish command topics"
   }
@@ -127,4 +136,33 @@ run "reject_shared_device_and_telemetry_ingestor_certificate" {
   }
 
   expect_failures = [var.telemetry_ingestor_certificate_arn]
+}
+
+run "reject_shared_device_and_api_certificate" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+    api_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+  }
+
+  expect_failures = [var.api_certificate_arn]
+}
+
+run "reject_shared_backend_certificate" {
+  command = plan
+
+  variables {
+    environment                        = "dev"
+    aws_region                         = "ap-northeast-1"
+    telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
+    api_certificate_arn                = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
+  }
+
+  expect_failures = [var.api_certificate_arn]
 }
