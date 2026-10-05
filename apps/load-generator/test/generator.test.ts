@@ -22,6 +22,8 @@ function createConfig(
     maxMessages: 5,
     maxDurationMs: 1000,
     mqttUrl: "mqtt://localhost:1883",
+    transport: "local",
+    topicPrefix: "",
     reportPath: "/tmp/load-result.json",
     ...overrides,
   };
@@ -72,6 +74,35 @@ describe("createLoadDeviceIds", () => {
 });
 
 describe("runLoadGenerator", () => {
+  it("rejects AWS warmup even when called with a constructed config", async () => {
+    const harness = createHarness();
+
+    await expect(
+      runLoadGenerator(
+        createConfig({
+          transport: "aws-iot",
+          measurementStartAt: new Date(Date.now() + 60_000),
+          measurementDurationMs: 60_000,
+          topicPrefix: "$aws/rules/load/",
+          awsIot: {
+            ruleName: "load",
+            monthToDateMessages: 0,
+            rootCaPath: "/secure/ca.pem",
+            deviceCredentialsDirectory: "/secure/devices",
+          },
+        }),
+        {
+          openConnection: harness.openConnection,
+          writeReport: harness.writeReport,
+        },
+      ),
+    ).rejects.toThrow(
+      "measurementStartAt is not supported for AWS IoT load generation",
+    );
+
+    expect(harness.openConnection).not.toHaveBeenCalled();
+  });
+
   it("sends during warmup but reports only the shared measurement window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -241,5 +272,136 @@ describe("runLoadGenerator", () => {
       lastSequence: 0,
     });
     expect(harness.getWrittenReport()).toEqual(report);
+  });
+
+  it("uses mTLS and the Basic Ingest topic for AWS IoT", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => Buffer.from(path));
+
+    await runLoadGenerator(
+      createConfig({
+        deviceCount: 1,
+        maxMessages: 1,
+        mqttUrl: "mqtts://example-ats.iot.ap-northeast-1.amazonaws.com:8883",
+        transport: "aws-iot",
+        topicPrefix: "$aws/rules/drone_fleet_load_test/",
+        awsIot: {
+          ruleName: "drone_fleet_load_test",
+          monthToDateMessages: 10,
+          rootCaPath: "/secure/ca.pem",
+          deviceCredentialsDirectory: "/secure/devices",
+        },
+      }),
+      {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+        readCredential,
+      },
+    );
+
+    expect(readCredential.mock.calls.map(([path]) => path)).toEqual([
+      "/secure/ca.pem",
+      "/secure/devices/load-000001/device.pem.crt",
+      "/secure/devices/load-000001/private.pem.key",
+    ]);
+    expect(harness.openConnection).toHaveBeenCalledWith(
+      "mqtts://example-ats.iot.ap-northeast-1.amazonaws.com:8883",
+      expect.objectContaining({
+        protocol: "mqtts",
+        rejectUnauthorized: true,
+        ca: Buffer.from("/secure/ca.pem"),
+        cert: Buffer.from("/secure/devices/load-000001/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000001/private.pem.key"),
+        clientId: "load-000001",
+      }),
+    );
+    expect(harness.clients[0]?.publishAsync).toHaveBeenCalledWith(
+      "$aws/rules/drone_fleet_load_test/fleet/v1/devices/load-000001/telemetry",
+      expect.any(String),
+      { qos: 0, retain: false },
+    );
+  });
+
+  it("uses a distinct certificate and matching clientId for each AWS device", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => Buffer.from(path));
+
+    const report = await runLoadGenerator(
+      createConfig({
+        deviceCount: 2,
+        maxMessages: 2,
+        mqttUrl: "mqtts://example:8883",
+        transport: "aws-iot",
+        topicPrefix: "$aws/rules/load/",
+        awsIot: {
+          ruleName: "load",
+          monthToDateMessages: 0,
+          rootCaPath: "/secure/ca.pem",
+          deviceCredentialsDirectory: "/secure/devices",
+        },
+      }),
+      {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+        readCredential,
+      },
+    );
+
+    expect(harness.openConnection).toHaveBeenNthCalledWith(
+      1,
+      "mqtts://example:8883",
+      expect.objectContaining({
+        clientId: "load-000001",
+        cert: Buffer.from("/secure/devices/load-000001/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000001/private.pem.key"),
+      }),
+    );
+    expect(harness.openConnection).toHaveBeenNthCalledWith(
+      2,
+      "mqtts://example:8883",
+      expect.objectContaining({
+        clientId: "load-000002",
+        cert: Buffer.from("/secure/devices/load-000002/device.pem.crt"),
+        key: Buffer.from("/secure/devices/load-000002/private.pem.key"),
+      }),
+    );
+    expect(JSON.stringify(report)).not.toContain("/secure");
+  });
+
+  it("does not open any AWS connection when a later device credential is missing", async () => {
+    const harness = createHarness();
+    const readCredential = vi.fn(async (path: string) => {
+      if (path.endsWith("load-000002/private.pem.key")) {
+        throw new Error(`ENOENT: ${path}`);
+      }
+      return Buffer.from(path);
+    });
+
+    await expect(
+      runLoadGenerator(
+        createConfig({
+          deviceCount: 2,
+          maxMessages: 2,
+          mqttUrl: "mqtts://example:8883",
+          transport: "aws-iot",
+          topicPrefix: "$aws/rules/load/",
+          awsIot: {
+            ruleName: "load",
+            monthToDateMessages: 0,
+            rootCaPath: "/secure/ca.pem",
+            deviceCredentialsDirectory: "/secure/devices",
+          },
+        }),
+        {
+          openConnection: harness.openConnection,
+          writeReport: harness.writeReport,
+          readCredential,
+        },
+      ),
+    ).rejects.toThrow("AWS IoT credential preflight failed for load-000002");
+
+    expect(harness.openConnection).not.toHaveBeenCalled();
+    expect(harness.clients).toHaveLength(0);
+    expect(harness.getWrittenReport()).toBeUndefined();
   });
 });

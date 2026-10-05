@@ -2,6 +2,16 @@ import { isValidDeviceId } from "@drone-fleet/protocol";
 
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
 export const MAX_SIMULATION_SEED_LENGTH = 128;
+export const AWS_IOT_PROJECT_MONTHLY_MESSAGE_LIMIT = 200_000;
+
+export type LoadTransport = "local" | "aws-iot";
+
+export interface AwsIotConfig {
+  ruleName: string;
+  monthToDateMessages: number;
+  rootCaPath: string;
+  deviceCredentialsDirectory: string;
+}
 
 export interface LoadGeneratorConfig {
   testId: string;
@@ -16,6 +26,9 @@ export interface LoadGeneratorConfig {
   measurementStartAt?: Date;
   measurementDurationMs?: number;
   mqttUrl: string;
+  transport: LoadTransport;
+  topicPrefix: string;
+  awsIot?: AwsIotConfig;
   reportPath: string;
   readyPath?: string;
 }
@@ -101,6 +114,10 @@ export function loadLoadGeneratorConfig(
     1,
     MAX_TIMER_DELAY_MS,
   );
+  const transport = environment.LOAD_TRANSPORT ?? "local";
+  if (transport !== "local" && transport !== "aws-iot") {
+    throw new TypeError("LOAD_TRANSPORT must be local or aws-iot");
+  }
   const measurementStartAt = (() => {
     const raw = environment.LOAD_MEASUREMENT_START_AT;
     if (raw === undefined || raw.length === 0) return undefined;
@@ -119,16 +136,67 @@ export function loadLoadGeneratorConfig(
           1,
           MAX_TIMER_DELAY_MS,
         );
-  const mqttHost = environment.MQTT_HOST ?? "localhost";
+  const mqttHost =
+    transport === "aws-iot"
+      ? required(environment, "AWS_IOT_ENDPOINT")
+      : (environment.MQTT_HOST ?? "localhost");
   if (mqttHost.length === 0) {
     throw new TypeError("MQTT_HOST must not be empty");
   }
+  const mqttPortName = transport === "aws-iot" ? "AWS_IOT_PORT" : "MQTT_PORT";
   const mqttPort = integer(
-    { MQTT_PORT: environment.MQTT_PORT ?? "1883" },
-    "MQTT_PORT",
+    {
+      [mqttPortName]:
+        environment[mqttPortName] ??
+        (transport === "aws-iot" ? "8883" : "1883"),
+    },
+    mqttPortName,
     1,
     65_535,
   );
+
+  const awsIot = (() => {
+    if (transport !== "aws-iot") return undefined;
+    if (measurementStartAt !== undefined) {
+      throw new TypeError(
+        "LOAD_MEASUREMENT_START_AT is not supported with LOAD_TRANSPORT=aws-iot",
+      );
+    }
+    const ruleName = required(environment, "AWS_IOT_RULE_NAME");
+    if (!/^[A-Za-z0-9_]+$/.test(ruleName)) {
+      throw new TypeError(
+        "AWS_IOT_RULE_NAME must use only letters, numbers, and underscores",
+      );
+    }
+    const monthToDateMessages = integer(
+      environment,
+      "AWS_IOT_MONTH_TO_DATE_MESSAGES",
+      0,
+      AWS_IOT_PROJECT_MONTHLY_MESSAGE_LIMIT,
+    );
+    if (
+      monthToDateMessages + maxMessages >
+      AWS_IOT_PROJECT_MONTHLY_MESSAGE_LIMIT
+    ) {
+      throw new RangeError(
+        `AWS IoT message budget exceeds the project monthly limit of ${AWS_IOT_PROJECT_MONTHLY_MESSAGE_LIMIT}`,
+      );
+    }
+    if (environment.AWS_IOT_FREE_TIER_CONFIRMED !== "true") {
+      throw new TypeError(
+        "AWS_IOT_FREE_TIER_CONFIRMED must be true after checking Billing Free Tier eligibility and remaining usage",
+      );
+    }
+    return {
+      ruleName,
+      monthToDateMessages,
+      rootCaPath: required(environment, "AWS_IOT_ROOT_CA_PATH"),
+      deviceCredentialsDirectory: required(
+        environment,
+        "AWS_IOT_DEVICE_CREDENTIALS_DIR",
+      ),
+    };
+  })();
 
   return {
     testId,
@@ -143,7 +211,10 @@ export function loadLoadGeneratorConfig(
     ...(measurementStartAt === undefined
       ? {}
       : { measurementStartAt, measurementDurationMs }),
-    mqttUrl: `mqtt://${mqttHost}:${mqttPort}`,
+    mqttUrl: `${transport === "aws-iot" ? "mqtts" : "mqtt"}://${mqttHost}:${mqttPort}`,
+    transport,
+    topicPrefix: awsIot === undefined ? "" : `$aws/rules/${awsIot.ruleName}/`,
+    ...(awsIot === undefined ? {} : { awsIot }),
     reportPath:
       environment.LOAD_REPORT_PATH ??
       `load-results/${testId}-${sessionId}.json`,

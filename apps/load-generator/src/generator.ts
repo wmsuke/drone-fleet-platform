@@ -1,4 +1,6 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { connect, type IClientOptions } from "mqtt";
 
 import type { LoadGeneratorConfig } from "./config.js";
@@ -36,12 +38,18 @@ export interface LoadGeneratorDependencies {
   writeReport?: (path: string, report: LoadGeneratorReport) => Promise<void>;
   writeReady?: (path: string) => Promise<void>;
   signal?: AbortSignal;
+  readCredential?: (path: string) => Promise<Buffer>;
 }
 
 interface DeviceRuntime extends DeviceSendResult {
   nextSequence: number;
   client?: LoadGeneratorMqttClient;
   timer?: NodeJS.Timeout;
+}
+
+interface DeviceCredentials {
+  certificate: Buffer;
+  privateKey: Buffer;
 }
 
 export function createLoadDeviceIds(
@@ -113,10 +121,16 @@ export async function runLoadGenerator(
   config: LoadGeneratorConfig,
   dependencies: LoadGeneratorDependencies = {},
 ): Promise<LoadGeneratorReport> {
+  if (config.awsIot !== undefined && config.measurementStartAt !== undefined) {
+    throw new TypeError(
+      "measurementStartAt is not supported for AWS IoT load generation",
+    );
+  }
   const openConnection = dependencies.openConnection ?? openMqttConnection;
   const now = dependencies.now ?? (() => new Date());
   const writeReport = dependencies.writeReport ?? writeLoadGeneratorReport;
   const writeReady = dependencies.writeReady ?? writeLoadGeneratorReady;
+  const readCredential = dependencies.readCredential ?? readFile;
   const processStartedAtMs = now().getTime();
   const measurementStartAtMs =
     config.measurementStartAt?.getTime() ?? processStartedAtMs;
@@ -136,6 +150,32 @@ export async function runLoadGenerator(
     lastSequence: null,
     nextSequence: 0,
   }));
+  let rootCa: Buffer | undefined;
+  const deviceCredentials = new Map<string, DeviceCredentials>();
+  if (config.awsIot !== undefined) {
+    try {
+      rootCa = await readCredential(config.awsIot.rootCaPath);
+    } catch {
+      throw new Error("AWS IoT credential preflight failed for root CA");
+    }
+    for (const device of devices) {
+      try {
+        const deviceDirectory = join(
+          config.awsIot.deviceCredentialsDirectory,
+          device.deviceId,
+        );
+        const [certificate, privateKey] = await Promise.all([
+          readCredential(join(deviceDirectory, "device.pem.crt")),
+          readCredential(join(deviceDirectory, "private.pem.key")),
+        ]);
+        deviceCredentials.set(device.deviceId, { certificate, privateKey });
+      } catch {
+        throw new Error(
+          `AWS IoT credential preflight failed for ${device.deviceId}`,
+        );
+      }
+    }
+  }
   const counters = { attempted: 0, succeeded: 0, failed: 0 };
   const inFlight = new Set<Promise<void>>();
   let stopReason: StopReason | undefined;
@@ -188,7 +228,7 @@ export async function runLoadGenerator(
     );
     const publishing = device.client
       .publishAsync(
-        createTelemetryTopic(device.deviceId),
+        `${config.topicPrefix}${createTelemetryTopic(device.deviceId)}`,
         JSON.stringify(telemetry),
         { qos: 0, retain: false },
       )
@@ -227,11 +267,24 @@ export async function runLoadGenerator(
         requestStop("MAX_DURATION");
         break;
       }
+      const credentials = deviceCredentials.get(device.deviceId);
       const opening = openConnection(config.mqttUrl, {
         clean: true,
-        clientId: `load-${config.sessionId}-${device.deviceId}`,
+        clientId:
+          config.transport === "aws-iot"
+            ? device.deviceId
+            : `load-${config.sessionId}-${device.deviceId}`,
         connectTimeout: Math.max(1, Math.floor(remainingDurationMs)),
         reconnectPeriod: 0,
+        ...(config.awsIot === undefined
+          ? {}
+          : {
+              protocol: "mqtts" as const,
+              rejectUnauthorized: true,
+              ca: rootCa,
+              cert: credentials?.certificate,
+              key: credentials?.privateKey,
+            }),
       });
       const connectionResult = opening.connected.then(
         () => ({ status: "connected" as const }),
@@ -316,6 +369,17 @@ export async function runLoadGenerator(
             measurementDurationMs: config.measurementDurationMs,
           }),
       mqttUrl: config.mqttUrl,
+      transport: config.transport,
+      topicPrefix: config.topicPrefix,
+      ...(config.awsIot === undefined
+        ? {}
+        : {
+            awsIot: {
+              ruleName: config.awsIot.ruleName,
+              monthToDateMessages: config.awsIot.monthToDateMessages,
+              projectMonthlyMessageLimit: 200_000,
+            },
+          }),
       ...(config.readyPath === undefined
         ? {}
         : { readyPath: config.readyPath }),
