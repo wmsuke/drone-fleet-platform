@@ -34,13 +34,16 @@ variable "device_ids" {
 }
 
 variable "device_certificate_arns" {
-  description = "deviceIdごとに#93で発行したAWS IoT certificate ARN"
+  description = "発行済みdeviceIdごとのAWS IoT certificate ARN。初回のThing作成時は空mapを許可する"
   type        = map(string)
   default     = {}
 
   validation {
-    condition     = toset(keys(var.device_certificate_arns)) == var.device_ids
-    error_message = "device_certificate_arns must contain exactly one certificate ARN for each device_id"
+    condition = (
+      length(var.device_certificate_arns) == 0 ||
+      toset(keys(var.device_certificate_arns)) == var.device_ids
+    )
+    error_message = "device_certificate_arns must be empty for bootstrap or contain exactly one ARN for every device_id"
   }
 
   validation {
@@ -49,6 +52,11 @@ variable "device_certificate_arns" {
       can(regex("^arn:[a-z0-9-]+:iot:${var.aws_region}:[0-9]{12}:cert/[a-fA-F0-9]{64}$", certificate_arn))
     ])
     error_message = "device_certificate_arns must contain AWS IoT certificate ARNs in aws_region"
+  }
+
+  validation {
+    condition     = length(distinct(values(var.device_certificate_arns))) == length(var.device_certificate_arns)
+    error_message = "device_certificate_arns must use a different certificate ARN for every device_id"
   }
 }
 

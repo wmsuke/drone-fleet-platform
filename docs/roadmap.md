@@ -6,7 +6,7 @@ Backend、AWS、IoTの実装から始め、Edge、ROS 2、ドローンシミュ�
 
 ## 現在の状況
 
-Phase 1まで完了した。Docker Composeで仮想ドローン10台、Mosquitto、PostgreSQL、MQTT受信処理、API、ダッシュボードを起動し、テレメトリの表示とコマンドACKの追跡をローカルで確認できる。次はPhase 2のAWS IoT接続に進む。
+Phase 2まで完了した。Docker Composeによるローカル構成に加え、AWS IoT CoreへmTLS接続し、機体単位のIoT Policyで制限したtelemetry・status・command・ACKの経路を利用できる。ローカル構成はAWS projectや証明書なしで引き続き利用できる。次はPhase 2.5の負荷検証を進める。
 
 日付による期限は設けず、各Phaseの完了条件を満たした時点で次へ進む。個別の作業と進捗はGitHub Issueで管理する。
 
@@ -54,7 +54,7 @@ TypeScriptのモノレポと、開発・検証に必要な環境を整える。
 ### 完了条件
 
 - clone後、`docker compose up`で全サービスが起動する。
-- AWSアカウントや実機を用意せずに試せる。
+- AWS projectや実機を用意せずに試せる。
 - 仮想ドローン10台が約5秒ごとにテレメトリを送信する。
 - 一覧と詳細画面で接続状態や計測値を確認できる。
 - 切断した機体がオフラインとして表示される。
@@ -85,6 +85,8 @@ TypeScriptのモノレポと、開発・検証に必要な環境を整える。
 - 証明書をリポジトリへ保存せずに環境を再現できる。
 - AWS環境を削除する手順がある。
 - ローカル構成も引き続き動作する。
+
+作業範囲と完了条件は実施済みである。AWS環境の再現・削除手順は[AWS IoT Core接続手順](aws/README.md)、2台での検証結果は[AWS IoT Core E2E](aws/e2e.md)に記録している。
 
 ## Phase 2.5：負荷検証
 

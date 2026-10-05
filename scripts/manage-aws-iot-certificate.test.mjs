@@ -13,8 +13,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   issueDeviceCertificate,
+  issueServiceCertificate,
   revokeDeviceCertificate,
+  revokeServiceCertificate,
   verifyDeviceCredentialFiles,
+  verifyServiceCredentialFiles,
 } from "./manage-aws-iot-certificate.mjs";
 
 const temporaryDirectories = [];
@@ -330,5 +333,99 @@ describe("AWS IoT device certificate management", () => {
         ({ arguments_ }) => arguments_[1] === "list-attached-policies",
       ),
     ).toBe(false);
+  });
+});
+
+describe("AWS IoT backend service certificate management", () => {
+  it("issues and revokes a protected service certificate without a Thing", async () => {
+    const fixture = await createFixture();
+    const fake = createFakeExecute();
+    const options = {
+      service: "telemetry-ingestor",
+      outputDirectory: fixture.outputDirectory,
+      rootCaPath: fixture.rootCaPath,
+      region: "ap-northeast-1",
+    };
+
+    const issued = await issueServiceCertificate(options, {
+      execute: fake.execute,
+      now: () => new Date("2026-10-05T00:00:00Z"),
+    });
+    await verifyServiceCredentialFiles(options, { execute: fake.execute });
+    const manifest = JSON.parse(
+      await readFile(join(issued.serviceDirectory, "manifest.json"), "utf8"),
+    );
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      service: "telemetry-ingestor",
+      region: "ap-northeast-1",
+    });
+    expect(
+      fake.calls.some(
+        ({ arguments_ }) => arguments_[1] === "attach-thing-principal",
+      ),
+    ).toBe(false);
+    fake.policies.set(manifest.certificateArn, [
+      { policyName: "drone-fleet-dev-telemetry-ingestor" },
+    ]);
+
+    await revokeServiceCertificate(options, { execute: fake.execute });
+
+    expect(fake.statuses.size).toBe(0);
+    await expect(stat(issued.serviceDirectory)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("cleans up AWS and local files when persistence fails after issuance", async () => {
+    const fixture = await createFixture();
+    const fake = createFakeExecute();
+    const options = {
+      service: "api",
+      outputDirectory: fixture.outputDirectory,
+      rootCaPath: fixture.rootCaPath,
+      region: "ap-northeast-1",
+    };
+
+    await expect(
+      issueServiceCertificate(options, {
+        execute: fake.execute,
+        afterIssue: () => {
+          throw new Error("local persistence failed");
+        },
+      }),
+    ).rejects.toThrow("local persistence failed");
+
+    expect(fake.statuses.size).toBe(0);
+    await expect(
+      stat(join(fixture.outputDirectory, options.service)),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const operations = fake.calls
+      .filter(({ command }) => command === "aws")
+      .map(({ arguments_ }) => arguments_[1]);
+    expect(operations).toEqual(
+      expect.arrayContaining([
+        "create-certificate-from-csr",
+        "update-certificate",
+        "delete-certificate",
+      ]),
+    );
+  });
+
+  it("rejects unsupported service names before creating credentials", async () => {
+    const fixture = await createFixture();
+    const fake = createFakeExecute();
+    await expect(
+      issueServiceCertificate(
+        {
+          service: "simulator",
+          outputDirectory: fixture.outputDirectory,
+          rootCaPath: fixture.rootCaPath,
+          region: "ap-northeast-1",
+        },
+        { execute: fake.execute },
+      ),
+    ).rejects.toThrow("service must be api or telemetry-ingestor");
+    expect(fake.calls).toHaveLength(0);
   });
 });

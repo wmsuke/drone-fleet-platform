@@ -14,6 +14,36 @@ mock_provider "aws" {
   }
 }
 
+run "phase2_bootstrap_without_certificates" {
+  command = plan
+
+  variables {
+    environment             = "dev"
+    aws_region              = "ap-northeast-1"
+    device_ids              = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {}
+  }
+
+  assert {
+    condition     = length(aws_iot_thing.device) == 2
+    error_message = "bootstrap plan must create Things before certificates are issued"
+  }
+
+  assert {
+    condition     = length(aws_iot_policy_attachment.device) == 0
+    error_message = "bootstrap plan must not create device attachments without certificate ARNs"
+  }
+
+  assert {
+    condition = (
+      aws_iot_policy.device.name == "drone-fleet-dev-device" &&
+      aws_iot_policy.telemetry_ingestor.name == "drone-fleet-dev-telemetry-ingestor" &&
+      aws_iot_policy.api.name == "drone-fleet-dev-api"
+    )
+    error_message = "bootstrap plan must create all Phase 2 policies"
+  }
+}
+
 run "phase2_foundation_plan" {
   command = plan
 
@@ -120,6 +150,37 @@ run "phase2_foundation_plan" {
     )
     error_message = "telemetry-ingestor policy must subscribe to ACK topics"
   }
+}
+
+run "reject_partial_device_certificate_map" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.device_certificate_arns]
+}
+
+run "reject_shared_device_certificate" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+      dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.device_certificate_arns]
 }
 
 run "reject_shared_device_and_telemetry_ingestor_certificate" {
