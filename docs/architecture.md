@@ -279,6 +279,8 @@ flowchart LR
 
 通常運用ではtelemetry-ingestorとAPIが別々のバックエンド証明書でAWS IoT Coreへ直接MQTT接続する。新しいCloud AdapterやIoT Ruleは通常経路へ追加しない。topic、payload、QoS、retain、検証、DB処理はローカルのMosquittoと共通にし、接続先、mTLS、clientId、再接続だけをtransport固有にする。デバイスはThing name、clientId、deviceIdを一致させ、機体ごとに異なる証明書と最小権限のIoT Policyを使う。
 
+`test:aws-iot-e2e`は2台のtelemetry・status・command・ACK、他機体topicの拒否、無効証明書の接続拒否、ローカル経路の回帰を短時間で確認する。接続数、command数、待機時間を固定し、継続負荷は行わない。実行結果とAWSリソースの削除順序は`docs/aws/e2e.md`へ記録する。
+
 telemetry-ingestorは`MQTT_TRANSPORT=local`で従来のMosquitto、`aws-iot`でATS endpointへ接続する。AWSモードではデバイスやAPIと共有しない証明書、固定clientId、telemetry・status・ACKだけを購読できるPolicyを使う。接続完了後の切断ではMQTT clientが再接続と再購読を行い、受信したmessageはtransportに関係なく既存のprotocol検証とDB保存へ渡す。
 
 APIも`MQTT_TRANSPORT`でMosquittoとAWS IoT Coreを切り替える。AWSモードではデバイスやtelemetry-ingestorと共有しない証明書と固定clientIdを使い、commands topicへのpublishだけを許可する。コマンドはtransportに関係なくPENDING保存、QoS 1 publish、SENTまたはFAILED更新、ACK追跡の既存処理を通す。アプリケーションで別commandIdを作る再試行は行わず、接続後の切断ではmqtt.jsが同じQoS 1 publishを再送する。

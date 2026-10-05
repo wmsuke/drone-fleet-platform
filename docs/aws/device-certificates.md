@@ -59,13 +59,13 @@ secrets/aws-iot/
 スクリプトは秘密鍵とCSRをローカルで生成し、AWS IoT CoreへCSRだけを送る。Terraformは証明書を管理しないため、秘密鍵と証明書本文はTerraform stateへ入らない。
 
 ```bash
-pnpm aws:iot:certificate -- issue \
+pnpm aws:iot:certificate issue \
   --device-id dev-drone-001 \
   --region ap-northeast-1 \
   --output-dir secrets/aws-iot \
   --root-ca secrets/aws-iot/AmazonRootCA1.pem
 
-pnpm aws:iot:certificate -- issue \
+pnpm aws:iot:certificate issue \
   --device-id dev-drone-002 \
   --region ap-northeast-1 \
   --output-dir secrets/aws-iot \
@@ -101,7 +101,7 @@ endpointは`terraform -chdir=infra/terraform output -raw iot_ats_endpoint`で取
 配置とpermissionだけを再確認する場合は次を実行する。
 
 ```bash
-pnpm aws:iot:certificate -- verify \
+pnpm aws:iot:certificate verify \
   --device-id dev-drone-001 \
   --region ap-northeast-1 \
   --output-dir secrets/aws-iot \
@@ -119,7 +119,7 @@ pnpm aws:iot:certificate -- verify \
 5. 全AWS操作の成功後にだけ、対象デバイスのローカルdirectoryを削除する。
 
 ```bash
-pnpm aws:iot:certificate -- revoke \
+pnpm aws:iot:certificate revoke \
   --device-id dev-drone-001 \
   --region ap-northeast-1 \
   --output-dir secrets/aws-iot
