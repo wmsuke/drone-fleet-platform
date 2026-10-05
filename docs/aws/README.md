@@ -99,57 +99,23 @@ AWS_PROFILE=drone-fleet pnpm aws:iot:certificate issue \
   --root-ca secrets/aws-iot/AmazonRootCA1.pem
 ```
 
-telemetry-ingestorとAPIにも、それぞれ別の秘密鍵と証明書を用意する。バックエンドをThingとして登録したり、デバイス証明書を流用したりしない。次の関数は秘密鍵とCSRを端末内で生成し、AWSへCSRだけを送る。AWS CLIのresponseは一時ファイルで処理し、標準出力へ出さない。
+telemetry-ingestorとAPIにも、それぞれ別の秘密鍵と証明書を用意する。バックエンドをThingとして登録したり、デバイス証明書を流用したりしない。同じ管理スクリプトのservice用commandは、秘密鍵とCSRを一時directoryで生成し、AWSへCSRだけを送る。
 
 ```bash
-issue_backend_certificate() {
-  service="$1"
-  directory="secrets/aws-iot/${service}"
-  if [[ -e "${directory}" ]]; then
-    echo "既存の認証情報を上書きしません: ${directory}" >&2
-    return 1
-  fi
-  response="$(mktemp)"
+AWS_PROFILE=drone-fleet pnpm aws:iot:certificate issue-service \
+  --service telemetry-ingestor \
+  --region ap-southeast-2 \
+  --output-dir secrets/aws-iot \
+  --root-ca secrets/aws-iot/AmazonRootCA1.pem
 
-  install -d -m 700 "${directory}"
-  openssl req -new -newkey rsa:2048 -nodes \
-    -keyout "${directory}/private.pem.key" \
-    -out "${directory}/device.csr" \
-    -subj "/CN=drone-fleet-dev-${service}"
-  chmod 600 "${directory}/private.pem.key" "${directory}/device.csr"
-
-  AWS_PROFILE=drone-fleet aws iot create-certificate-from-csr \
-    --region ap-southeast-2 \
-    --certificate-signing-request "file://${directory}/device.csr" \
-    --set-as-active \
-    --output json >"${response}"
-
-  node --input-type=module - "${response}" "${directory}" "${service}" <<'NODE'
-import { readFileSync, writeFileSync } from "node:fs";
-const [, , responsePath, directory, service] = process.argv;
-const value = JSON.parse(readFileSync(responsePath, "utf8"));
-writeFileSync(`${directory}/device.pem.crt`, value.certificatePem, { mode: 0o600 });
-writeFileSync(
-  `${directory}/manifest.json`,
-  `${JSON.stringify({
-    schemaVersion: 1,
-    service,
-    region: "ap-southeast-2",
-    certificateArn: value.certificateArn,
-    certificateId: value.certificateId,
-  }, null, 2)}\n`,
-  { mode: 0o600 },
-);
-NODE
-
-  rm -f "${directory}/device.csr" "${response}"
-}
-
-issue_backend_certificate telemetry-ingestor
-issue_backend_certificate api
+AWS_PROFILE=drone-fleet pnpm aws:iot:certificate issue-service \
+  --service api \
+  --region ap-southeast-2 \
+  --output-dir secrets/aws-iot \
+  --root-ca secrets/aws-iot/AmazonRootCA1.pem
 ```
 
-発行後は4つの証明書がすべて異なるARNで、各ファイルとmanifestがmode `600`であることを確認する。詳細な配置と接続設定は[telemetry-ingestor](telemetry-ingestor.md#認証情報)と[API](api.md#認証情報)を参照する。
+スクリプトは既存directoryを上書きしない。AWS発行後の保存や最終検査に失敗した場合は、発行した証明書を`INACTIVE`にして削除し、一時directoryも削除する。AWS側のcleanupにも失敗した場合は両方のエラーを返し、対象certificate IDを標準出力へ露出しない。発行後は4つの証明書がすべて異なるARNで、各ファイルとmanifestがmode `600`であることを確認する。詳細な配置と接続設定は[telemetry-ingestor](telemetry-ingestor.md#認証情報)と[API](api.md#認証情報)を参照する。
 
 証明書ARNを`terraform.tfvars`へ設定し、最終planを確認してapplyする。
 
@@ -204,7 +170,7 @@ AWS_PROFILE=drone-fleet pnpm aws:iot:certificate revoke \
   --output-dir secrets/aws-iot
 ```
 
-telemetry-ingestorとAPIの証明書も、manifestのRegion・certificate ARN・IDを確認してから、次の順で削除する。`policyName`は`terraform output -json telemetry_ingestor`または`api`で確認し、manifestから読み取った対象ARNとIDだけを指定する。
+telemetry-ingestorとAPIの証明書も管理スクリプトで削除する。スクリプトはmanifestのservice、Region、certificate ARNとIDの対応を検証してから、次の順で処理する。
 
 1. `list-attached-policies`で対象を確認し、`detach-policy`する。
 2. 証明書を`INACTIVE`へ変更する。
@@ -212,22 +178,18 @@ telemetry-ingestorとAPIの証明書も、manifestのRegion・certificate ARN・
 4. AWS操作がすべて成功してからローカルの証明書directoryを削除する。
 
 ```bash
-AWS_PROFILE=drone-fleet aws iot detach-policy \
+AWS_PROFILE=drone-fleet pnpm aws:iot:certificate revoke-service \
+  --service telemetry-ingestor \
   --region ap-southeast-2 \
-  --policy-name '<terraform outputで確認したPolicy名>' \
-  --target '<manifestで確認したcertificate ARN>'
+  --output-dir secrets/aws-iot
 
-AWS_PROFILE=drone-fleet aws iot update-certificate \
+AWS_PROFILE=drone-fleet pnpm aws:iot:certificate revoke-service \
+  --service api \
   --region ap-southeast-2 \
-  --certificate-id '<manifestで確認したcertificate ID>' \
-  --new-status INACTIVE
-
-AWS_PROFILE=drone-fleet aws iot delete-certificate \
-  --region ap-southeast-2 \
-  --certificate-id '<manifestで確認したcertificate ID>'
+  --output-dir secrets/aws-iot
 ```
 
-山括弧の値は例示であり、そのまま実行しない。対象serviceとRegionが一致すること、`list-attached-policies`の結果に想定外のPolicyがないことを先に確認する。
+AWS操作が途中で失敗した場合はローカルdirectoryを残すため、同じcommandを再実行できる。AWS側の証明書削除が成功した後にだけローカルdirectoryを削除する。
 
 最後にTerraformのdestroy planがThing 2件とPolicy 3件だけであることを確認して適用する。
 

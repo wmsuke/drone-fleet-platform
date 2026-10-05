@@ -8,6 +8,8 @@ telemetry-ingestorにはデバイスやAPIと共有しないX.509証明書を使
 
 発行したcertificate ARNはGit管理外の`infra/terraform/terraform.tfvars`へ設定する。
 
+発行と失効には`pnpm aws:iot:certificate issue-service --service telemetry-ingestor`と`revoke-service`を使う。一連の順序は[AWS IoT Core接続手順](README.md#4-証明書を発行する)を参照する。
+
 ```hcl
 telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
 ```

@@ -152,6 +152,37 @@ run "phase2_foundation_plan" {
   }
 }
 
+run "reject_partial_device_certificate_map" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.device_certificate_arns]
+}
+
+run "reject_shared_device_certificate" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001", "dev-drone-002"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+      dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.device_certificate_arns]
+}
+
 run "reject_shared_device_and_telemetry_ingestor_certificate" {
   command = plan
 

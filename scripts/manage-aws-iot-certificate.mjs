@@ -21,6 +21,7 @@ import { parseArgs } from "node:util";
 const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-[0-9]+$/;
 const CERTIFICATE_ID_PATTERN = /^[a-fA-F0-9]{64}$/;
+const BACKEND_SERVICES = new Set(["api", "telemetry-ingestor"]);
 const MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024;
 
 function defaultExecute(command, arguments_, options = {}) {
@@ -79,6 +80,13 @@ function validateOptions({ deviceId, outputDirectory, region }) {
     throw new TypeError("outputDirectory must be a dedicated subdirectory");
   }
   return resolvedOutput;
+}
+
+function validateServiceOptions({ service, outputDirectory, region }) {
+  if (!BACKEND_SERVICES.has(service)) {
+    throw new TypeError("service must be api or telemetry-ingestor");
+  }
+  return validateOptions({ deviceId: service, outputDirectory, region });
 }
 
 async function pathExists(path) {
@@ -385,6 +393,146 @@ export async function issueDeviceCertificate(options, dependencies = {}) {
   }
 }
 
+export async function verifyServiceCredentialFiles(options, dependencies = {}) {
+  const execute = dependencies.execute ?? defaultExecute;
+  const outputRoot = validateServiceOptions(options);
+  const serviceDirectory = join(outputRoot, options.service);
+  await assertIgnoredByGit(outputRoot, execute);
+  await assertDirectoryMode(outputRoot, 0o700);
+  await assertDirectoryMode(serviceDirectory, 0o700);
+  await assertFileMode(options.rootCaPath, "root CA", 0o600);
+
+  for (const [name, label] of [
+    ["private.pem.key", "private key"],
+    ["device.pem.crt", "service certificate"],
+    ["manifest.json", "certificate manifest"],
+  ]) {
+    await assertFileMode(join(serviceDirectory, name), label, 0o600);
+  }
+
+  return { service: options.service, serviceDirectory };
+}
+
+export async function issueServiceCertificate(options, dependencies = {}) {
+  const execute = dependencies.execute ?? defaultExecute;
+  const now = dependencies.now ?? (() => new Date());
+  const outputRoot = validateServiceOptions(options);
+  const serviceDirectory = join(outputRoot, options.service);
+  await assertFileMode(options.rootCaPath, "root CA", 0o600);
+  await assertIgnoredByGit(outputRoot, execute);
+
+  if (!(await pathExists(outputRoot))) {
+    await mkdir(outputRoot, { recursive: true, mode: 0o700 });
+  }
+  await assertDirectoryMode(outputRoot, 0o700);
+  if (await pathExists(serviceDirectory)) {
+    throw new Error(`credentials already exist for ${options.service}`);
+  }
+
+  const temporaryDirectory = await mkdtemp(
+    join(outputRoot, `.issue-${options.service}-`),
+  );
+  await chmod(temporaryDirectory, 0o700);
+  const privateKeyPath = join(temporaryDirectory, "private.pem.key");
+  const csrPath = join(temporaryDirectory, "device.csr");
+  const certificatePath = join(temporaryDirectory, "device.pem.crt");
+  const manifestPath = join(temporaryDirectory, "manifest.json");
+  const issued = { region: options.region, attached: false };
+  let credentialDirectory = temporaryDirectory;
+
+  try {
+    await execute(
+      "openssl",
+      [
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        privateKeyPath,
+        "-out",
+        csrPath,
+        "-subj",
+        `/CN=drone-fleet-${options.service}`,
+      ],
+      {},
+    );
+    await chmod(privateKeyPath, 0o600);
+    await chmod(csrPath, 0o600);
+
+    const certificateResult = await runAws(execute, options.region, [
+      "create-certificate-from-csr",
+      "--certificate-signing-request",
+      `file://${csrPath}`,
+      "--set-as-active",
+    ]);
+    const certificate = parseJson(
+      certificateResult.stdout,
+      "create-certificate-from-csr",
+    );
+    if (
+      typeof certificate.certificateArn !== "string" ||
+      typeof certificate.certificateId !== "string" ||
+      typeof certificate.certificatePem !== "string" ||
+      !certificateIdentityMatches(
+        certificate.certificateArn,
+        certificate.certificateId,
+        options.region,
+      )
+    ) {
+      throw new Error(
+        "create-certificate-from-csr returned an invalid response",
+      );
+    }
+    issued.certificateArn = certificate.certificateArn;
+    issued.certificateId = certificate.certificateId;
+    await dependencies.afterIssue?.();
+
+    await writeFile(certificatePath, certificate.certificatePem, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          service: options.service,
+          region: options.region,
+          certificateArn: certificate.certificateArn,
+          certificateId: certificate.certificateId,
+          createdAt: now().toISOString(),
+        },
+        null,
+        2,
+      )}\n`,
+      { encoding: "utf8", mode: 0o600 },
+    );
+    await rm(csrPath);
+    await rename(temporaryDirectory, serviceDirectory);
+    credentialDirectory = serviceDirectory;
+    await verifyServiceCredentialFiles(options, { execute });
+    return {
+      service: options.service,
+      certificateId: certificate.certificateId,
+      serviceDirectory,
+    };
+  } catch (error) {
+    try {
+      await cleanupIssuedCertificate(issued, execute);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "service certificate issuance and cleanup failed",
+        { cause: cleanupError },
+      );
+    }
+    await rm(credentialDirectory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 function certificateIdentityMatches(certificateArn, certificateId, region) {
   if (!CERTIFICATE_ID_PATTERN.test(certificateId)) return false;
   const arnMatch = certificateArn.match(
@@ -410,6 +558,26 @@ function validateManifest(value, deviceId, region) {
     )
   ) {
     throw new Error("certificate manifest does not match the requested device");
+  }
+  return value;
+}
+
+function validateServiceManifest(value, service, region) {
+  if (
+    value?.schemaVersion !== 1 ||
+    value.service !== service ||
+    value.region !== region ||
+    typeof value.certificateArn !== "string" ||
+    typeof value.certificateId !== "string" ||
+    !certificateIdentityMatches(
+      value.certificateArn,
+      value.certificateId,
+      region,
+    )
+  ) {
+    throw new Error(
+      "certificate manifest does not match the requested service",
+    );
   }
   return value;
 }
@@ -506,11 +674,84 @@ export async function revokeDeviceCertificate(options, dependencies = {}) {
   return { deviceId: options.deviceId, certificateId: manifest.certificateId };
 }
 
+export async function revokeServiceCertificate(options, dependencies = {}) {
+  const execute = dependencies.execute ?? defaultExecute;
+  const outputRoot = validateServiceOptions(options);
+  const serviceDirectory = join(outputRoot, options.service);
+  await assertIgnoredByGit(outputRoot, execute);
+  await assertDirectoryMode(outputRoot, 0o700);
+  await assertDirectoryMode(serviceDirectory, 0o700);
+  const manifestPath = join(serviceDirectory, "manifest.json");
+  await assertFileMode(manifestPath, "certificate manifest", 0o600);
+  const manifest = validateServiceManifest(
+    parseJson(await readFile(manifestPath, "utf8"), "certificate manifest"),
+    options.service,
+    options.region,
+  );
+
+  const policiesResult = await runAws(execute, options.region, [
+    "list-attached-policies",
+    "--target",
+    manifest.certificateArn,
+  ]);
+  const policies = parseJson(
+    policiesResult.stdout,
+    "list-attached-policies",
+  ).policies;
+  if (!Array.isArray(policies)) {
+    throw new Error("list-attached-policies returned an invalid response");
+  }
+  for (const policy of policies) {
+    if (typeof policy.policyName !== "string") {
+      throw new Error("list-attached-policies returned an invalid policy");
+    }
+    await runAws(execute, options.region, [
+      "detach-policy",
+      "--policy-name",
+      policy.policyName,
+      "--target",
+      manifest.certificateArn,
+    ]);
+  }
+
+  const descriptionResult = await runAws(execute, options.region, [
+    "describe-certificate",
+    "--certificate-id",
+    manifest.certificateId,
+  ]);
+  const status = parseJson(descriptionResult.stdout, "describe-certificate")
+    .certificateDescription?.status;
+  if (status === "ACTIVE") {
+    await runAws(execute, options.region, [
+      "update-certificate",
+      "--certificate-id",
+      manifest.certificateId,
+      "--new-status",
+      "INACTIVE",
+    ]);
+  } else if (status !== "INACTIVE" && status !== "REVOKED") {
+    throw new Error(
+      `certificate cannot be deleted from status ${String(status)}`,
+    );
+  }
+
+  await runAws(execute, options.region, [
+    "delete-certificate",
+    "--certificate-id",
+    manifest.certificateId,
+  ]);
+  await rm(serviceDirectory, { recursive: true });
+  return { service: options.service, certificateId: manifest.certificateId };
+}
+
 function printUsage() {
   console.log(`Usage:
   node scripts/manage-aws-iot-certificate.mjs issue --device-id <id> --output-dir <dir> --root-ca <path> [--region <region>]
   node scripts/manage-aws-iot-certificate.mjs verify --device-id <id> --output-dir <dir> --root-ca <path> [--region <region>]
-  node scripts/manage-aws-iot-certificate.mjs revoke --device-id <id> --output-dir <dir> [--region <region>]`);
+  node scripts/manage-aws-iot-certificate.mjs revoke --device-id <id> --output-dir <dir> [--region <region>]
+  node scripts/manage-aws-iot-certificate.mjs issue-service --service <api|telemetry-ingestor> --output-dir <dir> --root-ca <path> [--region <region>]
+  node scripts/manage-aws-iot-certificate.mjs verify-service --service <api|telemetry-ingestor> --output-dir <dir> --root-ca <path> [--region <region>]
+  node scripts/manage-aws-iot-certificate.mjs revoke-service --service <api|telemetry-ingestor> --output-dir <dir> [--region <region>]`);
 }
 
 async function main() {
@@ -519,6 +760,7 @@ async function main() {
     strict: true,
     options: {
       "device-id": { type: "string" },
+      service: { type: "string" },
       "output-dir": { type: "string", default: "secrets/aws-iot" },
       "root-ca": { type: "string" },
       region: {
@@ -536,22 +778,30 @@ async function main() {
     return;
   }
   const command = positionals[0];
+  const deviceCommand = ["issue", "verify", "revoke"].includes(command);
+  const serviceCommand = [
+    "issue-service",
+    "verify-service",
+    "revoke-service",
+  ].includes(command);
   if (
-    !["issue", "verify", "revoke"].includes(command) ||
-    values["device-id"] === undefined
+    (!deviceCommand && !serviceCommand) ||
+    (deviceCommand && values["device-id"] === undefined) ||
+    (serviceCommand && values.service === undefined)
   ) {
     printUsage();
-    throw new TypeError("command and --device-id are required");
+    throw new TypeError("command and its target option are required");
   }
   const options = {
     deviceId: values["device-id"],
+    service: values.service,
     outputDirectory: values["output-dir"],
     region: values.region,
     rootCaPath: values["root-ca"],
   };
 
-  if (command !== "revoke" && options.rootCaPath === undefined) {
-    throw new TypeError("--root-ca is required for issue and verify");
+  if (!command.startsWith("revoke") && options.rootCaPath === undefined) {
+    throw new TypeError("--root-ca is required for issue and verify commands");
   }
   if (command === "issue") {
     await issueDeviceCertificate(options);
@@ -559,9 +809,18 @@ async function main() {
   } else if (command === "verify") {
     await verifyDeviceCredentialFiles(options);
     console.log(`認証情報の配置と権限を確認しました: ${options.deviceId}`);
-  } else {
+  } else if (command === "revoke") {
     await revokeDeviceCertificate(options);
     console.log(`証明書を失効・削除しました: ${options.deviceId}`);
+  } else if (command === "issue-service") {
+    await issueServiceCertificate(options);
+    console.log(`サービス証明書を発行しました: ${options.service}`);
+  } else if (command === "verify-service") {
+    await verifyServiceCredentialFiles(options);
+    console.log(`サービス認証情報を確認しました: ${options.service}`);
+  } else {
+    await revokeServiceCertificate(options);
+    console.log(`サービス証明書を失効・削除しました: ${options.service}`);
   }
 }
 
