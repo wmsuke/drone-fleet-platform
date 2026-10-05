@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CommandAcknowledgementRepository } from "../src/acknowledgement.js";
 import {
   COMMAND_ACK_TOPIC_FILTER,
+  createConnectTelemetryClient,
   startTelemetryIngestor,
   STATUS_TOPIC_FILTER,
   TELEMETRY_TOPIC_FILTER,
@@ -73,7 +74,7 @@ function acknowledgementRepository(): CommandAcknowledgementRepository {
 }
 
 const ingestorConfig = {
-  mqttUrl: "mqtt://127.0.0.1:1883",
+  mqttTransport: { type: "local" as const, url: "mqtt://127.0.0.1:1883" },
   offlineTimeoutMs: 15_000,
   telemetryBatchSize: 1,
   telemetryFlushIntervalMs: 50,
@@ -84,6 +85,23 @@ describe("startTelemetryIngestor", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("fails the initial connection without retrying indefinitely", async () => {
+    const connectionError = new Error("connection rejected");
+    const mqttConnectAsync = vi.fn(async () => {
+      throw connectionError;
+    });
+    const connectClient = createConnectTelemetryClient(mqttConnectAsync);
+
+    await expect(
+      connectClient("mqtts://example.iot:8883", { clientId: "ingestor" }),
+    ).rejects.toBe(connectionError);
+    expect(mqttConnectAsync).toHaveBeenCalledWith(
+      "mqtts://example.iot:8883",
+      { clientId: "ingestor" },
+      false,
+    );
   });
 
   it("subscribes to all telemetry topics and handles consecutive messages", async () => {
@@ -115,7 +133,11 @@ describe("startTelemetryIngestor", () => {
 
     expect(connection).toEqual({
       url: "mqtt://127.0.0.1:1883",
-      options: { clean: true, clientId: "telemetry-ingestor" },
+      options: {
+        clean: true,
+        clientId: "telemetry-ingestor",
+        resubscribe: true,
+      },
     });
     expect(client.subscriptions).toEqual([
       { topic: TELEMETRY_TOPIC_FILTER, options: { qos: 0 } },

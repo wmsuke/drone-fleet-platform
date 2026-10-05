@@ -30,9 +30,10 @@ output "device_policy" {
 output "telemetry_ingestor" {
   description = "telemetry-ingestorの接続とPolicy識別子"
   value = {
-    client_id   = local.telemetry_ingestor_client_id
-    policy_name = aws_iot_policy.telemetry_ingestor.name
-    policy_arn  = aws_iot_policy.telemetry_ingestor.arn
+    client_id            = local.telemetry_ingestor_client_id
+    policy_name          = aws_iot_policy.telemetry_ingestor.name
+    policy_arn           = aws_iot_policy.telemetry_ingestor.arn
+    certificate_attached = length(aws_iot_policy_attachment.telemetry_ingestor) == 1
   }
 }
 

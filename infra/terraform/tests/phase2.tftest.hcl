@@ -25,6 +25,7 @@ run "phase2_foundation_plan" {
       dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
       dev-drone-002 = "arn:aws:iot:ap-northeast-1:123456789012:cert/1111111111111111111111111111111111111111111111111111111111111111"
     }
+    telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/2222222222222222222222222222222222222222222222222222222222222222"
   }
 
   assert {
@@ -86,6 +87,14 @@ run "phase2_foundation_plan" {
   }
 
   assert {
+    condition = (
+      length(aws_iot_policy_attachment.telemetry_ingestor) == 1 &&
+      output.telemetry_ingestor.certificate_attached
+    )
+    error_message = "telemetry-ingestor policy must be attached to its dedicated certificate"
+  }
+
+  assert {
     condition     = output.api.client_id == "drone-fleet-dev-api"
     error_message = "API clientId must include the environment"
   }
@@ -102,4 +111,20 @@ run "phase2_foundation_plan" {
     )
     error_message = "telemetry-ingestor policy must subscribe to ACK topics"
   }
+}
+
+run "reject_shared_device_and_telemetry_ingestor_certificate" {
+  command = plan
+
+  variables {
+    environment = "dev"
+    aws_region  = "ap-northeast-1"
+    device_ids  = ["dev-drone-001"]
+    device_certificate_arns = {
+      dev-drone-001 = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+    }
+    telemetry_ingestor_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/0000000000000000000000000000000000000000000000000000000000000000"
+  }
+
+  expect_failures = [var.telemetry_ingestor_certificate_arn]
 }
