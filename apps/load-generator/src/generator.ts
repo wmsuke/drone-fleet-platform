@@ -43,8 +43,52 @@ export interface LoadGeneratorDependencies {
 
 interface DeviceRuntime extends DeviceSendResult {
   nextSequence: number;
+  connectionFailed: boolean;
   client?: LoadGeneratorMqttClient;
   timer?: NodeJS.Timeout;
+}
+
+function connectionMetrics(
+  devices: DeviceRuntime[],
+): LoadGeneratorReport["connections"] {
+  const attempted = devices.filter(
+    ({ connectionStartedAt }) => connectionStartedAt !== null,
+  );
+  const connected = devices.filter(({ connectedAt }) => connectedAt !== null);
+  const failed = attempted.filter(({ connectionFailed }) => connectionFailed);
+  const firstStartedMs = attempted
+    .map(({ connectionStartedAt }) => Date.parse(connectionStartedAt!))
+    .reduce<
+      number | undefined
+    >((minimum, value) => (minimum === undefined ? value : Math.min(minimum, value)), undefined);
+  const lastConnectedMs = connected
+    .map(({ connectedAt }) => Date.parse(connectedAt!))
+    .reduce<
+      number | undefined
+    >((maximum, value) => (maximum === undefined ? value : Math.max(maximum, value)), undefined);
+  const establishmentWindowMs =
+    firstStartedMs === undefined || lastConnectedMs === undefined
+      ? null
+      : lastConnectedMs - firstStartedMs;
+
+  return {
+    attempted: attempted.length,
+    succeeded: connected.length,
+    failed: failed.length,
+    firstStartedAt:
+      firstStartedMs === undefined
+        ? null
+        : new Date(firstStartedMs).toISOString(),
+    lastConnectedAt:
+      lastConnectedMs === undefined
+        ? null
+        : new Date(lastConnectedMs).toISOString(),
+    establishmentWindowMs,
+    effectiveRatePerSecond:
+      establishmentWindowMs === null || establishmentWindowMs <= 0
+        ? null
+        : connected.length / (establishmentWindowMs / 1_000),
+  };
 }
 
 interface DeviceCredentials {
@@ -144,6 +188,10 @@ export async function runLoadGenerator(
     config.deviceCount,
   ).map((deviceId) => ({
     deviceId,
+    connectionStartedAt: null,
+    connectedAt: null,
+    connectionDurationMs: null,
+    connectionFailed: false,
     attempted: 0,
     succeeded: 0,
     failed: 0,
@@ -268,6 +316,8 @@ export async function runLoadGenerator(
         break;
       }
       const credentials = deviceCredentials.get(device.deviceId);
+      const connectionStartedAt = now();
+      device.connectionStartedAt = connectionStartedAt.toISOString();
       const opening = openConnection(config.mqttUrl, {
         clean: true,
         clientId:
@@ -299,6 +349,7 @@ export async function runLoadGenerator(
         break;
       }
       if (result.status === "failed") {
+        device.connectionFailed = true;
         await opening.client.endAsync(true);
         throw result.error;
       }
@@ -306,6 +357,10 @@ export async function runLoadGenerator(
         await opening.client.endAsync(true);
         break;
       }
+      const connectedAt = now();
+      device.connectedAt = connectedAt.toISOString();
+      device.connectionDurationMs =
+        connectedAt.getTime() - connectionStartedAt.getTime();
       device.client = opening.client;
       publish(device);
       if (stopReason === undefined) {
@@ -390,9 +445,13 @@ export async function runLoadGenerator(
         ? new Date(deadlineMs).toISOString()
         : now().toISOString(),
     stopReason: stopReason ?? "ERROR",
+    connections: connectionMetrics(devices),
     counters,
     devices: devices.map((device) => ({
       deviceId: device.deviceId,
+      connectionStartedAt: device.connectionStartedAt,
+      connectedAt: device.connectedAt,
+      connectionDurationMs: device.connectionDurationMs,
       attempted: device.attempted,
       succeeded: device.succeeded,
       failed: device.failed,

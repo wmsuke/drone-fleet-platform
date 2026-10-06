@@ -92,6 +92,8 @@ AWSモードでは、負荷生成器が次を起動前に検証する。
 - ネットワーク接続を始める前に、Root CAと対象deviceId全件の`device.pem.crt`、`private.pem.key`を読み込めることを確認する。1件でも失敗した場合は0接続・0publishで終了する。
 - deviceIdをそのままMQTT clientIdにしてmTLS接続する。
 
+実行レポートには各deviceの`connectionStartedAt`、`connectedAt`、`connectionDurationMs`と、全体の`connections`集計を記録する。`connections.effectiveRatePerSecond`は、最初の接続開始から最後の接続成立までに成立した接続数を秒単位の経過時間で割った実測値である。`LOAD_CONNECTION_RATE_PER_SECOND`はpacing上限であり、この実測値とは区別する。
+
 送信先は`$aws/rules/<ruleName>/fleet/v1/devices/<deviceId>/telemetry`で、通常のproduction telemetry schemaは変更しない。再接続は行わず、最大件数または最大時間に達した時点で全接続を閉じる。
 
 ## 終了と記録
