@@ -113,7 +113,7 @@ selected Region `ap-southeast-2`で、load device 2台と専用probeを使って
 | 確認日時                   | 2026-10-06 08:59 JST                          | 2026-10-06 09:14 JST                          |
 | アカウントプラン・対象期間 | FREE / ACTIVE、2027-04-03まで                 | FREE / ACTIVE、2027-04-03まで                 |
 | Free Tier / credit残量     | `$100`、`get-free-tier-usage`は0件            | `$100`、`get-free-tier-usage`は0件            |
-| AWS IoT当月使用量          | `UsageQuantity: 571`                          | `UsageQuantity: 571`                          |
+| AWS IoT当月使用量          | service集計`571`（Unit `N/A`）                | service集計`571`（Unit `N/A`）                |
 | AWS IoT料金                | `$0`（Cost Explorerの`Estimated: true`）      | `$0`（Cost Explorerの`Estimated: true`）      |
 | cross-device publish拒否   | 未実行                                        | 接続切断による拒否を確認                      |
 | 作成リソース               | Thing、Rule、Policy、certificateはいずれも0件 | Thing、Rule、Policy、certificateはいずれも0件 |
@@ -137,7 +137,7 @@ Cost Explorerの料金はまだ推定値であり、使用量の反映にも時�
 | 確認日時                   | 2026-10-06 09:30 JST                          | 2026-10-06 10:14 JST                          |
 | アカウントプラン・対象期間 | FREE / ACTIVE、2027-04-03まで                 | FREE / ACTIVE、2027-04-03まで                 |
 | Free Tier / credit残量     | `$100`、`get-free-tier-usage`は0件            | `$100`、`get-free-tier-usage`は0件            |
-| AWS IoT当月使用量          | `UsageQuantity: 571`                          | `UsageQuantity: 571`                          |
+| AWS IoT当月使用量          | service集計`571`（Unit `N/A`）                | service集計`571`（Unit `N/A`）                |
 | AWS IoT料金                | `$0`（Cost Explorerの`Estimated: true`）      | `$0`（Cost Explorerの`Estimated: true`）      |
 | cross-device publish拒否   | 未実行                                        | 接続切断による拒否を確認                      |
 | 作成リソース               | Thing、Rule、Policy、certificateはいずれも0件 | Thing、Rule、Policy、certificateはいずれも0件 |
@@ -145,10 +145,12 @@ Cost Explorerの料金はまだ推定値であり、使用量の反映にも時�
 実行条件と結果は次のとおり。
 
 - 実行前に、100台・10分の接続1,000分、最大12,000件、RuleとAction各12,000件がAWS IoT Coreの月間Free Tier内であることを確認した。
-- 当月使用量571件、probe 1件、最大12,000件を合計しても、月間200,000件の自主上限まで187,428件の余裕があった。
-- 100台へ別々の証明書を発行し、MQTT clientIdをThing nameと一致させた。接続レートは25接続/秒とした。
+- Cost Explorerのservice単位の`UsageQuantity: 571`は、UsageTypeとUnitが異なる利用量を合算した値である。message件数として扱わず、自主上限の計算には使用していない。
+- project側で追跡できるpublishは、load generator最大12,000件、probe 1件、cross-device否定系1 attemptの最大12,002件である。月間200,000件の自主上限まで187,998件の余裕があった。実測は合計11,159件だった。
+- 100台へ別々の証明書を発行し、MQTT clientIdをThing nameと一致させた。`LOAD_CONNECTION_RATE_PER_SECOND=25`をpacing上限として設定したが、接続開始・成立時刻を記録していないため実効接続レートは計測できていない。
+- reportには100台すべてのdevice entryがあり、各deviceで1件以上のpublish成功を確認した。100台の接続成立とpublishは確認済みだが、実効接続レートの確認結果とは扱わない。
 - probe 1件が`Basic Ingest -> IoT Rule -> verified topic`へ到達した。経路内遅延は715msだった。
-- 100台を5秒間隔で10分実行し、11,157件成功、0件失敗だった。25接続/秒の段階投入により最大12,000件より先に10分へ達し、`MAX_DURATION`で停止した。
+- 100台を5秒間隔で10分実行し、11,157件成功、0件失敗だった。接続を直列に開始した影響で最大12,000件より先に10分へ達し、`MAX_DURATION`で停止した。
 - `load-000001`の証明書で`load-000002`のBasic Ingest telemetry topicへpublishすると、AWS IoT Coreが接続を切断した。
 - Policy attachment 101件を解除し、101枚の証明書を失効・削除してからTerraformで106リソースをdestroyした。
 - 削除後、Thing、certificate、Rule、Policyはすべて0件で、検証用IAM roleも存在しないことを確認した。ローカルの秘密鍵、証明書、Terraform state、実行レポートも削除した。
@@ -157,7 +159,7 @@ Cost Explorerの料金はまだ推定値であり、使用量の反映にも時�
 
 100 / 1,000 / 10,000台では同数のThingと証明書が必要になる。接続・messageだけでなく、証明書発行数、API呼び出し数、削除時間も実行前に見積もる。いきなり大規模シナリオを実行せず、1台のprobeと最小台数で発行・拒否・削除を確認してから段階を上げる。
 
-認証、接続、データ到達、cross-device拒否、リソース削除までは確認済みである。Cost Explorerの料金が確定し、追加料金なしを確認するまでIssue #64はcloseしない。
+認証、100台すべての接続成立とpublish、データ到達、cross-device拒否、リソース削除までは確認済みである。実効接続レートは未計測であり、Cost Explorerの料金も未確定であるため、Issue #64はcloseしない。
 
 ## 公式資料
 
