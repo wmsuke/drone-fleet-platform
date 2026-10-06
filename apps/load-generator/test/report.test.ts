@@ -41,10 +41,22 @@ describe("writeLoadGeneratorReport", () => {
       startedAt: "2026-10-01T00:00:00.000Z",
       endedAt: "2026-10-01T00:00:01.000Z",
       stopReason: "MAX_MESSAGES",
+      connections: {
+        attempted: 1,
+        succeeded: 1,
+        failed: 0,
+        firstStartedAt: "2026-10-01T00:00:00.000Z",
+        lastConnectedAt: "2026-10-01T00:00:00.010Z",
+        establishmentWindowMs: 10,
+        effectiveRatePerSecond: 100,
+      },
       counters: { attempted: 1, succeeded: 1, failed: 0 },
       devices: [
         {
           deviceId: "load-000001",
+          connectionStartedAt: "2026-10-01T00:00:00.000Z",
+          connectedAt: "2026-10-01T00:00:00.010Z",
+          connectionDurationMs: 10,
           attempted: 1,
           succeeded: 1,
           failed: 0,

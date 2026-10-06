@@ -249,6 +249,40 @@ describe("runLoadGenerator", () => {
 
     expect(connectionTimes).toEqual([0, 500, 1_000]);
     expect(report.stopReason).toBe("MAX_MESSAGES");
+    expect(report.connections).toEqual({
+      attempted: 3,
+      succeeded: 3,
+      failed: 0,
+      firstStartedAt: "1970-01-01T00:00:00.000Z",
+      lastConnectedAt: "1970-01-01T00:00:01.000Z",
+      establishmentWindowMs: 1_000,
+      effectiveRatePerSecond: 3,
+    });
+    expect(
+      report.devices.map(
+        ({ connectionStartedAt, connectedAt, connectionDurationMs }) => ({
+          connectionStartedAt,
+          connectedAt,
+          connectionDurationMs,
+        }),
+      ),
+    ).toEqual([
+      {
+        connectionStartedAt: "1970-01-01T00:00:00.000Z",
+        connectedAt: "1970-01-01T00:00:00.000Z",
+        connectionDurationMs: 0,
+      },
+      {
+        connectionStartedAt: "1970-01-01T00:00:00.500Z",
+        connectedAt: "1970-01-01T00:00:00.500Z",
+        connectionDurationMs: 0,
+      },
+      {
+        connectionStartedAt: "1970-01-01T00:00:01.000Z",
+        connectedAt: "1970-01-01T00:00:01.000Z",
+        connectionDurationMs: 0,
+      },
+    ]);
     expect(openConnection).toHaveBeenCalledTimes(3);
     expect(vi.getTimerCount()).toBe(0);
   });

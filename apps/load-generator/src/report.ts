@@ -5,6 +5,9 @@ export type StopReason = "MAX_MESSAGES" | "MAX_DURATION" | "SIGNAL" | "ERROR";
 
 export interface DeviceSendResult {
   deviceId: string;
+  connectionStartedAt: string | null;
+  connectedAt: string | null;
+  connectionDurationMs: number | null;
   attempted: number;
   succeeded: number;
   failed: number;
@@ -38,6 +41,15 @@ export interface LoadGeneratorReport {
   startedAt: string;
   endedAt: string;
   stopReason: StopReason;
+  connections: {
+    attempted: number;
+    succeeded: number;
+    failed: number;
+    firstStartedAt: string | null;
+    lastConnectedAt: string | null;
+    establishmentWindowMs: number | null;
+    effectiveRatePerSecond: number | null;
+  };
   counters: {
     attempted: number;
     succeeded: number;
