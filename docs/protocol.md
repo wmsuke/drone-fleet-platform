@@ -257,9 +257,9 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 
 [ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。ここに挙げる形式と動作は未実装であり、上記のPhase 1 / Phase 2のQoS、schemaVersion、状態定義は現在の実装を示す。
 
-- telemetryにUUID v4の`sessionId`を加え、telemetryメッセージだけを`schemaVersion=2`へ進める。topicは変えず、`deviceId + sessionId + sequence`で一意にする。
+- telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進める。topicは変えず、`deviceId + sessionId + sequence`で一意にする。
 - telemetryのpublishとingestorのsubscribeをQoS 1にする。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
-- commandに`expiresAt`を追加し、期限切れや操作結果不明の否定ACKを定義する。受領ACKは引き続き操作完了を意味しない。
+- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進める。`expiresAt`は新規受領の締切であり、期限内に永続受領したcommandは期限後や再起動後でも操作できる。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と期限切れを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
 
-旧`schemaVersion=1`のtelemetryは移行中も受け付けるが、永続的な重複排除と保存確認の対象にはしない。詳細な保存期間、容量上限、欠損条件はADRに記載する。
+旧`schemaVersion=1`のtelemetryは移行中も受け付けるが、永続的な重複排除と保存確認の対象にはしない。command/ACKは受信側を先にv1/v2対応にしてからAPIをv2送信へ切り替える。互換期間中のv1 command/ACKは従来の扱いとし、受領期限の保証対象外とする。切替後はv1 commandの新規受領を拒否する。切替前のv1 commandについては終端状態またはACK待ち時間までv1 ACKを受け付けるが、v2 commandの状態をv1 ACKで更新しない。詳細な保存期間、容量上限、欠損条件はADRに記載する。
