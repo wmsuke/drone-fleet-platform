@@ -4,7 +4,7 @@
 
 仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-Phase 2でAWS接続を追加した。通信断中の永続バッファと再送は後続Phaseで扱う。AWS対応後も、ローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。通信断中の永続バッファと再送はPhase 3で扱う。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。これらの復旧機能は未実装である。AWS対応後も、ローカルだけで動作する構成を維持する。
 
 Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
@@ -84,7 +84,8 @@ docs/
 │   ├── 0001-monorepo.md
 │   ├── 0002-mqtt-protocol.md
 │   ├── 0003-database.md
-│   └── 0004-aws-iot-connection-and-credentials.md
+│   ├── 0004-aws-iot-connection-and-credentials.md
+│   └── 0005-delivery-and-recovery.md
 ├── aws/
 ├── load-testing/
 ├── releases/

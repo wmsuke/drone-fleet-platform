@@ -64,7 +64,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 デバイスの時刻とサーバーの受信時刻は別に保存する。オンライン判定にはサーバーの受信時刻を使う。
 
-互換性のない形式へ変更する場合は、トピックとschemaVersionのバージョンを更新する。
+payloadの必須項目や意味を変える場合は、対象メッセージのschemaVersionを更新する。topicはルーティングを変える場合だけ更新する。
 
 ## テレメトリ
 
@@ -253,4 +253,13 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 - ローカルMosquitto構成は開発用の匿名接続であり、外部公開しない。
 - AWS IoT Core構成ではX.509証明書で個体認証し、IoT Policyでtopicを制限する。アプリケーション側でもtopicと本文のdeviceId照合を継続する。
 
-通信断対応を追加するときは、セッション識別、永続バッファ、再送、重複排除、コマンドの有効期限を見直す。
+## Phase 3で追加する通信
+
+[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。ここに挙げる形式と動作は未実装であり、上記のPhase 1 / Phase 2のQoS、schemaVersion、状態定義は現在の実装を示す。
+
+- telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進める。topicは変えず、`deviceId + sessionId + sequence`で一意にする。
+- telemetryのpublishとingestorのsubscribeをQoS 1にする。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
+- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進める。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
+- APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
+
+旧`schemaVersion=1`のtelemetryは移行中も受け付けるが、永続的な重複排除と保存確認の対象にはしない。command/ACKは受信側を先にv1/v2対応にしてからAPIをv2送信へ切り替える。互換期間中のv1 command/ACKは従来の扱いとし、実行可能期限の保証対象外とする。切替後はv1 commandの新規受領を拒否する。切替前のv1 commandについては終端状態またはACK待ち時間までv1 ACKを受け付けるが、v2 commandの状態をv1 ACKで更新しない。詳細な保存期間、容量上限、欠損条件はADRに記載する。
