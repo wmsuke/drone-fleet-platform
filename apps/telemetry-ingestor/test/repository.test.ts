@@ -23,6 +23,7 @@ describe("toNewTelemetry", () => {
 
     expect(toNewTelemetry(message, receivedAt)).toEqual({
       deviceId: "drone-001",
+      sessionId: null,
       sequence: 12,
       deviceTimestamp: new Date("2026-09-29T02:00:00.000Z"),
       receivedAt,
@@ -33,5 +34,28 @@ describe("toNewTelemetry", () => {
       temperature: 25,
       flightStatus: "FLYING",
     });
+  });
+
+  it("passes a v2 session ID to database persistence", () => {
+    const receivedAt = new Date("2026-09-29T02:00:01.000Z");
+    const message: TelemetryMessage = {
+      schemaVersion: 2,
+      deviceId: "drone-001",
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      sequence: 0,
+      timestamp: "2026-09-29T02:00:00.000Z",
+      payload: {
+        battery: 80,
+        latitude: 35.681236,
+        longitude: 139.767125,
+        altitude: 20,
+        temperature: 25,
+        status: "FLYING",
+      },
+    };
+
+    expect(toNewTelemetry(message, receivedAt).sessionId).toBe(
+      message.sessionId,
+    );
   });
 });

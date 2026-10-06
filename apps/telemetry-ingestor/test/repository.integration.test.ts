@@ -120,6 +120,37 @@ integration("telemetry repository", () => {
     ]);
   });
 
+  it("stores a v2 session ID while keeping v1 rows nullable", async () => {
+    if (database === undefined) {
+      throw new Error("database integration test is not configured");
+    }
+    const repository = createTelemetryRepository(database.db);
+    const deviceId = deviceIds[0] ?? "";
+    const sessionId = "a065e32b-c00b-452e-9cb1-3b52c43962fb";
+    await repository.saveBatch([
+      {
+        message: message(deviceId, 0),
+        receivedAt: new Date("2026-10-02T00:00:01.000Z"),
+        isRetained: false,
+      },
+      {
+        message: { ...message(deviceId, 0), schemaVersion: 2, sessionId },
+        receivedAt: new Date("2026-10-02T00:00:02.000Z"),
+        isRetained: false,
+      },
+    ]);
+
+    const rows = await database.db
+      .select({ sessionId: telemetry.sessionId, sequence: telemetry.sequence })
+      .from(telemetry)
+      .where(eq(telemetry.deviceId, deviceId))
+      .orderBy(asc(telemetry.id));
+    expect(rows).toEqual([
+      { sessionId: null, sequence: 0 },
+      { sessionId, sequence: 0 },
+    ]);
+  });
+
   it("does not move a device receipt timestamp backwards within a batch", async () => {
     if (database === undefined) {
       throw new Error("database integration test is not configured");

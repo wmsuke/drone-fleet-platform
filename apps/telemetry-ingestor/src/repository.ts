@@ -23,6 +23,7 @@ export function toNewTelemetry(
 ): NewTelemetry {
   return {
     deviceId: message.deviceId,
+    sessionId: message.schemaVersion === 2 ? message.sessionId : null,
     sequence: message.sequence,
     deviceTimestamp: new Date(message.timestamp),
     receivedAt,

@@ -24,6 +24,11 @@ const message = {
     status: "FLYING",
   },
 } satisfies TelemetryMessage;
+const v2Message = {
+  ...message,
+  schemaVersion: 2,
+  sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+} satisfies TelemetryMessage;
 
 function payload(input: unknown = message): Buffer {
   return Buffer.from(JSON.stringify(input));
@@ -51,6 +56,21 @@ describe("parseTelemetry", () => {
     });
   });
 
+  it("accepts v2 telemetry on the unchanged topic", () => {
+    expect(parseTelemetry(topic, payload(v2Message))).toEqual({
+      success: true,
+      message: v2Message,
+    });
+  });
+
+  it.each([
+    ["missing", { ...v2Message, sessionId: undefined }],
+    ["malformed", { ...v2Message, sessionId: "not-a-uuid" }],
+    ["overlong", { ...v2Message, sessionId: `${v2Message.sessionId}0` }],
+  ])("rejects v2 telemetry with %s sessionId", (_case, input) => {
+    expect(parseTelemetry(topic, payload(input)).success).toBe(false);
+  });
+
   it.each([
     ["invalid topic", "fleet/v1/devices/drone-001/status", payload()],
     ["invalid JSON", topic, Buffer.from("{")],
@@ -75,6 +95,22 @@ describe("ingestTelemetry", () => {
     ).resolves.toBe(true);
     expect(saved).toEqual([{ message, receivedAt }]);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("passes the validated v2 session ID into persistence", async () => {
+    const { logger, repository, saved } = createDependencies();
+    const receivedAt = new Date("2026-09-29T02:00:01.000Z");
+
+    await expect(
+      ingestTelemetry(
+        topic,
+        payload(v2Message),
+        receivedAt,
+        repository,
+        logger,
+      ),
+    ).resolves.toBe(true);
+    expect(saved).toEqual([{ message: v2Message, receivedAt }]);
   });
 
   it("continues with the next message after invalid input", async () => {

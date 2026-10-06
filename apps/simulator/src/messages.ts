@@ -1,8 +1,8 @@
 import {
   connectionStatusMessageSchema,
-  telemetryMessageSchema,
+  telemetryV2MessageSchema,
   type ConnectionStatusMessage,
-  type TelemetryMessage,
+  type TelemetryV2Message,
 } from "@drone-fleet/protocol";
 
 import { calculateDroneState } from "./state.js";
@@ -45,16 +45,18 @@ export function createShutdownMessage(
 
 export function createTelemetryMessage(
   deviceId: string,
+  sessionId: string,
   sequence: number,
   timestamp: string,
-  status?: TelemetryMessage["payload"]["status"],
+  status?: TelemetryV2Message["payload"]["status"],
   simulationSeed?: string,
-): TelemetryMessage {
+): TelemetryV2Message {
   const state = calculateDroneState(sequence, simulationSeed, deviceId);
 
-  return telemetryMessageSchema.parse({
-    schemaVersion: 1,
+  return telemetryV2MessageSchema.parse({
+    schemaVersion: 2,
     deviceId,
+    sessionId,
     sequence,
     timestamp,
     payload: status === undefined ? state : { ...state, status },

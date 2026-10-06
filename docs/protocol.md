@@ -56,7 +56,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 | 項目 | 内容 |
 |---|---|
-| `schemaVersion` | この仕様では整数の `1` |
+| `schemaVersion` | telemetryの新規送信は整数の`2`。移行中の旧telemetryと他のメッセージは`1` |
 | `deviceId` | 対象デバイスのID |
 | `timestamp` | メッセージ作成時刻。UTCのISO 8601形式 |
 
@@ -72,8 +72,9 @@ payloadの必須項目や意味を変える場合は、対象メッセージのs
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "deviceId": "drone-001",
+  "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
   "sequence": 1234,
   "timestamp": "2026-09-25T08:00:00.000Z",
   "payload": {
@@ -87,13 +88,18 @@ payloadの必須項目や意味を変える場合は、対象メッセージのs
 }
 ```
 
-`packages/protocol`はZodの`telemetryMessageSchema`と、スキーマから推論した`TelemetryMessage`型を公開する。`parse`または`safeParse`で検証した値では、入力に含まれる未知の追加フィールドを無視して取り除く。
+`packages/protocol`はZodの`telemetryMessageSchema`と、スキーマから推論した`TelemetryMessage`型を公開する。`schemaVersion=1`と`2`を受け付け、v2では`sessionId`を必須とする。`parse`または`safeParse`で検証した値では、入力に含まれる未知の追加フィールドを無視して取り除く。
+
+`sessionId`は小文字・ハイフン付き36文字のUUID v4とする。simulatorは機体ごと・プロセス起動ごとに生成し、MQTT再接続では変えない。load-generatorも実行ごと・機体ごとに生成する。レポート用の`LOAD_SESSION_ID`とは別の値である。再起動後は新しい`sessionId`で`sequence=0`から始める。同一セッション内の連番は単調増加し、送信失敗による欠番は許容する。1件の識別子は`(deviceId, sessionId, sequence)`とし、異なるセッションの同じ連番は別データである。
+
+旧v1 telemetryは移行中も受信・保存するが、`sessionId`がないためこの識別子による重複排除の対象にしない。v2の`sessionId`はDBへ保存するが、一意制約と永続的な重複排除、保存確認は#112で追加する。topicと現在のQoS 0は変更しない。
 
 ### 項目
 
 | 項目 | 型・範囲 | 単位・意味 |
 |---|---|---|
 | `sequence` | 0以上の安全な整数 | デバイスごとの送信連番 |
+| `sessionId` | UUID v4、小文字・36文字（v2のみ必須） | 機体の起動セッション |
 | `battery` | 0〜100の数値 | % |
 | `latitude` | -90〜90の数値 | 緯度、度 |
 | `longitude` | -180〜180の数値 | 経度、度 |
@@ -115,7 +121,7 @@ Phase 1の飛行状態は次の3つとする。
 
 sequenceは起動時に0から始め、送信ごとに1増やす。MQTTの再接続ではリセットしない。
 
-プロセスの再起動では0に戻るため、Phase 1ではdeviceIdとsequenceを一意キーにしない。再送時の重複排除に必要なセッション識別はPhase 3で追加する。
+プロセスの再起動では0に戻るため、deviceIdとsequenceだけを一意キーにしない。v2ではsessionIdを追加したが、DBの一意制約と重複排除は#112で実装する。
 
 ## 接続状態
 
@@ -255,9 +261,9 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 
 ## Phase 3で追加する通信
 
-[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。ここに挙げる形式と動作は未実装であり、上記のPhase 1 / Phase 2のQoS、schemaVersion、状態定義は現在の実装を示す。
+[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryの`sessionId`と`schemaVersion=2`は#109で実装済みである。以下の保存確認、QoS変更、command/ACKのv2化は未実装であり、上記の配信設定とcommand状態定義は現在の実装を示す。
 
-- telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進める。topicは変えず、`deviceId + sessionId + sequence`で一意にする。
+- telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進めた。topicは変えず、`deviceId + sessionId + sequence`を1件の識別子とする。DBでの一意制約は#112で実装する。
 - telemetryのpublishとingestorのsubscribeをQoS 1にする。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
 - commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進める。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。

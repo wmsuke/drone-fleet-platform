@@ -4,7 +4,7 @@
 
 仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-Phase 2でAWS接続を追加した。通信断中の永続バッファと再送はPhase 3で扱う。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。これらの復旧機能は未実装である。AWS対応後も、ローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionIdを追加した。通信断中の永続バッファと再送は後続Issueで扱う。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後も、ローカルだけで動作する構成を維持する。
 
 Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
@@ -117,7 +117,7 @@ Phase 0の開発基盤、Phase 1のローカル構成に加え、Phase 2のTerra
 
 ### apps/telemetry-ingestor
 
-テレメトリ、接続状態、ACKトピックの購読、通信仕様による検証、初回受信時のデバイス登録、テレメトリ保存、LWTと最終受信時刻によるオンライン・オフライン判定、ACKによるコマンド状態更新を実装済みである。負荷試験時だけ有効にできる計測モードを持ち、testIdとsessionIdはプロセス設定およびJSONレポートで管理し、productionのテレメトリには追加しない。
+テレメトリ、接続状態、ACKトピックの購読、通信仕様による検証、初回受信時のデバイス登録、テレメトリ保存、LWTと最終受信時刻によるオンライン・オフライン判定、ACKによるコマンド状態更新を実装済みである。telemetry v1/v2を受け付け、v2のsessionIdを検証・保存する。負荷試験のtestIdとレポート用sessionIdはプロセス設定およびJSONレポートで管理し、productionのテレメトリには追加しない。telemetry v2のsessionIdとは別の値である。
 
 - 初回受信時のデバイス登録（実装済み）
 - テレメトリの保存（実装済み）
@@ -219,10 +219,10 @@ Phase 1では、次の3テーブルを使用する。
 | テーブル | 内容 |
 |---|---|
 | devices | デバイスID、モデル、ソフトウェアバージョン、接続状態、最終受信時刻、登録・更新時刻 |
-| telemetry | デバイスID、連番、デバイス計測時刻、サーバー受信時刻、バッテリー残量、位置、高度、温度、飛行状態 |
+| telemetry | デバイスID、v2のセッションID（v1はnull）、連番、デバイス計測時刻、サーバー受信時刻、バッテリー残量、位置、高度、温度、飛行状態 |
 | commands | コマンドID、対象デバイス、種類、処理状態、作成・送信・ACK受信・タイムアウト時刻 |
 
-接続状態は`devices.connection_status`、飛行状態は`telemetry.flight_status`として別に管理する。テレメトリのsequenceはプロセス再起動で0へ戻るため一意制約には使わず、機体とsequence、および機体と受信時刻の複合インデックスを持つ。コマンドは機体と作成時刻、状態と作成時刻のインデックスを持つ。
+接続状態は`devices.connection_status`、飛行状態は`telemetry.flight_status`として別に管理する。テレメトリのsequenceはプロセス再起動で0へ戻るため単独では一意制約に使わず、機体とsequence、および機体と受信時刻の複合インデックスを持つ。v2のsessionIdは保存するが、一意制約と重複排除は#112で追加する。コマンドは機体と作成時刻、状態と作成時刻のインデックスを持つ。
 
 初めて受信したdeviceIdは`devices`の主キーとupsertを使って登録する。同じdeviceIdの同時受信でも1行だけを保持する。`last_received_at`と`updated_at`は既存値と受信時刻の大きい方を保存し、並行処理の完了順によって時刻が戻らないようにする。Phase 1のメッセージには機体情報がないため、`model`と`software_version`は初期値を`null`とする。
 

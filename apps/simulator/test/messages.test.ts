@@ -12,6 +12,7 @@ import {
 } from "../src/messages.js";
 
 const timestamp = "2026-09-25T08:00:00.000Z";
+const sessionId = "a065e32b-c00b-452e-9cb1-3b52c43962fb";
 
 describe("simulator messages", () => {
   it.each([
@@ -26,16 +27,23 @@ describe("simulator messages", () => {
   });
 
   it("creates protocol-compliant telemetry", () => {
-    const message = createTelemetryMessage("drone-001", 0, timestamp);
+    const message = createTelemetryMessage(
+      "drone-001",
+      sessionId,
+      0,
+      timestamp,
+    );
 
     expect(telemetryMessageSchema.parse(message)).toEqual(message);
     expect(message.sequence).toBe(0);
+    expect(message.sessionId).toBe(sessionId);
+    expect(message.schemaVersion).toBe(2);
     expect(message.payload.status).toBe("IDLE");
   });
 
   it("changes state according to sequence without leaving protocol ranges", () => {
-    const first = createTelemetryMessage("drone-001", 1, timestamp);
-    const second = createTelemetryMessage("drone-001", 2, timestamp);
+    const first = createTelemetryMessage("drone-001", sessionId, 1, timestamp);
+    const second = createTelemetryMessage("drone-001", sessionId, 2, timestamp);
 
     expect(
       telemetryMessageSchema.safeParse(first).success &&

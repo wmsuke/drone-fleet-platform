@@ -213,13 +213,22 @@ describe("startSimulator", () => {
       JSON.parse(client.published[1]?.message ?? ""),
     );
     expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
+    expect(firstTelemetry.schemaVersion).toBe(2);
     expect(firstTelemetry.sequence).toBe(0);
+    if (firstTelemetry.schemaVersion !== 2)
+      throw new Error("expected v2 telemetry");
+    expect(firstTelemetry.sessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
 
     await vi.advanceTimersByTimeAsync(5000);
     const secondTelemetry = telemetryMessageSchema.parse(
       JSON.parse(client.published[2]?.message ?? ""),
     );
     expect(secondTelemetry.sequence).toBe(1);
+    if (secondTelemetry.schemaVersion !== 2)
+      throw new Error("expected v2 telemetry");
+    expect(secondTelemetry.sessionId).toBe(firstTelemetry.sessionId);
 
     await simulator.shutdown();
 
@@ -229,6 +238,68 @@ describe("startSimulator", () => {
     expect(offline.payload).toEqual({ status: "OFFLINE", reason: "SHUTDOWN" });
     expect(client.published[3]?.options).toEqual({ qos: 1, retain: true });
     expect(client.endForces).toEqual([false]);
+  });
+
+  it("starts a new telemetry session when the simulator process restarts", async () => {
+    vi.useFakeTimers();
+    const firstClient = new FakeMqttClient();
+    const config = {
+      deviceId: "drone-001",
+      mqttUrl: "mqtt://127.0.0.1:1883",
+      simulationSeed: "simulator-test",
+      telemetryIntervalMs: 5000,
+    };
+    const first = await startSimulator(config, async () => firstClient);
+    const firstTelemetry = telemetryMessageSchema.parse(
+      JSON.parse(firstClient.published[1]?.message ?? ""),
+    );
+    await first.shutdown();
+
+    const secondClient = new FakeMqttClient();
+    const second = await startSimulator(config, async () => secondClient);
+    const secondTelemetry = telemetryMessageSchema.parse(
+      JSON.parse(secondClient.published[1]?.message ?? ""),
+    );
+    expect(firstTelemetry.schemaVersion).toBe(2);
+    expect(secondTelemetry.schemaVersion).toBe(2);
+    if (
+      firstTelemetry.schemaVersion !== 2 ||
+      secondTelemetry.schemaVersion !== 2
+    ) {
+      throw new Error("expected v2 telemetry");
+    }
+    expect(secondTelemetry.sequence).toBe(0);
+    expect(secondTelemetry.sessionId).not.toBe(firstTelemetry.sessionId);
+    await second.shutdown();
+  });
+
+  it("does not reuse a sequence after an uncertain publish failure", async () => {
+    vi.useFakeTimers();
+    const logError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+      },
+      async () => client,
+    );
+
+    client.failNextPublish(new Error("publish result unknown"));
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(5000);
+    const messages = client.published
+      .filter(({ topic }) => topic.endsWith("/telemetry"))
+      .map(({ message }) => telemetryMessageSchema.parse(JSON.parse(message)));
+    expect(messages.map(({ sequence }) => sequence)).toEqual([0, 1, 2]);
+    expect(messages.every((message) => message.schemaVersion === 2)).toBe(true);
+    expect(logError).toHaveBeenCalledOnce();
+    logError.mockRestore();
+    await simulator.shutdown();
   });
 
   it("acknowledges RETURN_HOME and changes subsequent telemetry", async () => {
@@ -314,6 +385,20 @@ describe("startSimulator", () => {
     );
     expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
     expect(client.subscriptions).toHaveLength(2);
+    const initialTelemetry = telemetryMessageSchema.parse(
+      JSON.parse(client.published[1]?.message ?? ""),
+    );
+    const reconnectTelemetry = telemetryMessageSchema.parse(
+      JSON.parse(client.published[4]?.message ?? ""),
+    );
+    if (
+      initialTelemetry.schemaVersion !== 2 ||
+      reconnectTelemetry.schemaVersion !== 2
+    ) {
+      throw new Error("expected v2 telemetry");
+    }
+    expect(reconnectTelemetry.sessionId).toBe(initialTelemetry.sessionId);
+    expect(reconnectTelemetry.sequence).toBe(1);
 
     await simulator.shutdown();
   });

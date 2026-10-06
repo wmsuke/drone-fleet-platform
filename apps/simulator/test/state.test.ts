@@ -5,6 +5,7 @@ import { createTelemetryMessage } from "../src/messages.js";
 import { calculateDroneState } from "../src/state.js";
 
 const timestamp = "2026-09-25T08:00:00.000Z";
+const sessionId = "a065e32b-c00b-452e-9cb1-3b52c43962fb";
 
 describe("calculateDroneState", () => {
   it("changes every telemetry value over consecutive steps", () => {
@@ -66,6 +67,7 @@ describe("calculateDroneState", () => {
       Array.from({ length: 10 }, (_, sequence) => {
         const message = createTelemetryMessage(
           "drone-003",
+          sessionId,
           sequence,
           timestamp,
           undefined,
@@ -95,6 +97,7 @@ describe("calculateDroneState", () => {
     for (let sequence = 0; sequence <= 240; sequence += 1) {
       const message = createTelemetryMessage(
         "drone-001",
+        sessionId,
         sequence,
         timestamp,
         undefined,

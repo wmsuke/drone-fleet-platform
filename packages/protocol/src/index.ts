@@ -13,7 +13,12 @@ export {
   type ConnectionStatusMessage,
 } from "./connection-status.js";
 
-export { telemetryMessageSchema, type TelemetryMessage } from "./telemetry.js";
+export {
+  telemetryMessageSchema,
+  telemetryV2MessageSchema,
+  type TelemetryMessage,
+  type TelemetryV2Message,
+} from "./telemetry.js";
 
 export {
   createCommandAcksTopic,

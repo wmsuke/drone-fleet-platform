@@ -1,5 +1,6 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { connect, type IClientOptions } from "mqtt";
 
@@ -42,6 +43,7 @@ export interface LoadGeneratorDependencies {
 }
 
 interface DeviceRuntime extends DeviceSendResult {
+  telemetrySessionId: string;
   nextSequence: number;
   connectionFailed: boolean;
   client?: LoadGeneratorMqttClient;
@@ -188,6 +190,7 @@ export async function runLoadGenerator(
     config.deviceCount,
   ).map((deviceId) => ({
     deviceId,
+    telemetrySessionId: randomUUID(),
     connectionStartedAt: null,
     connectedAt: null,
     connectionDurationMs: null,
@@ -270,6 +273,7 @@ export async function runLoadGenerator(
     }
     const telemetry = createLoadTelemetry(
       device.deviceId,
+      device.telemetrySessionId,
       sequence,
       sentAt.toISOString(),
       config.simulationSeed,
