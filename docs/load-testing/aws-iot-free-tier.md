@@ -104,19 +104,33 @@ AWSモードでは、負荷生成器が次を起動前に検証する。
 6. Billingの使用量と料金を再確認する。反映に時間差がある場合は、確認日時と未反映である旨を記録し、反映後に追記する。
 7. 実行条件と結果を次の表で記録する。
 
-| 項目                       | 実行前 | 実行後 |
-| -------------------------- | ------ | ------ |
-| 確認日時                   | 未実行 | 未実行 |
-| アカウントプラン・対象期間 | 未実行 | 未実行 |
-| Free Tier / credit残量     | 未実行 | 未実行 |
-| AWS IoT当月使用量          | 未実行 | 未実行 |
-| AWS IoT料金                | 未実行 | 未実行 |
-| cross-device publish拒否   | 未実行 | 未実行 |
-| 作成リソース               | なし   | 未実行 |
+### 2026-10-06 最小構成の実行結果
+
+selected Region `ap-southeast-2`で、load device 2台と専用probeを使って確認した。継続負荷や100台以上のシナリオは実行していない。
+
+| 項目                       | 実行前                                        | 実行後                                        |
+| -------------------------- | --------------------------------------------- | --------------------------------------------- |
+| 確認日時                   | 2026-10-06 08:59 JST                          | 2026-10-06 09:14 JST                          |
+| アカウントプラン・対象期間 | FREE / ACTIVE、2027-04-03まで                 | FREE / ACTIVE、2027-04-03まで                 |
+| Free Tier / credit残量     | `$100`、`get-free-tier-usage`は0件            | `$100`、`get-free-tier-usage`は0件            |
+| AWS IoT当月使用量          | `UsageQuantity: 571`                          | `UsageQuantity: 571`                          |
+| AWS IoT料金                | `$0`（Cost Explorerの`Estimated: true`）      | `$0`（Cost Explorerの`Estimated: true`）      |
+| cross-device publish拒否   | 未実行                                        | 接続切断による拒否を確認                      |
+| 作成リソース               | Thing、Rule、Policy、certificateはいずれも0件 | Thing、Rule、Policy、certificateはいずれも0件 |
+
+実行結果は次のとおり。
+
+- probe 1件が`Basic Ingest -> IoT Rule -> verified topic`へ到達した。経路内遅延は666msだった。
+- load device 2台を2接続/秒で接続し、最大4件で停止した。送信は4件成功、0件失敗だった。
+- `load-000001`の証明書で`load-000002`のBasic Ingest telemetry topicへpublishすると、AWS IoT Coreが接続を切断した。
+- Policy attachmentを解除し、3枚の証明書を失効・削除してからTerraformで8リソースをdestroyした。
+- 削除後、Thing、certificate、Rule、Policyはすべて0件で、検証用IAM roleも存在しないことを確認した。
+
+Cost Explorerの料金はまだ推定値であり、使用量の反映にも時間差がある。料金が確定するまでは追加料金なしの最終確認を完了扱いにしない。
 
 100 / 1,000 / 10,000台では同数のThingと証明書が必要になる。接続・messageだけでなく、証明書発行数、API呼び出し数、削除時間も実行前に見積もる。いきなり大規模シナリオを実行せず、1台のprobeと最小台数で発行・拒否・削除を確認してから段階を上げる。
 
-この表を実測値へ更新するまでは、認証、接続、データ到達、cross-device拒否、リソース削除、追加料金なしを確認済みとは扱わない。実装PRをmergeしても、実AWS確認が終わるまでIssue #64はcloseしない。
+認証、接続、データ到達、cross-device拒否、リソース削除までは確認済みである。Cost Explorerの料金が確定し、追加料金なしを確認するまでIssue #64はcloseしない。
 
 ## 公式資料
 
