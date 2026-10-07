@@ -12,7 +12,7 @@ v0.2.0では、ローカルのMosquitto構成を残したまま、AWS IoT Core�
 
 ## 前提
 
-- Node.js 22以上、pnpm 10以上、Docker Engine、Docker Compose v2
+- Node.js 22.13.0以上、pnpm 10以上、Docker Engine、Docker Compose v2
 - OpenSSL
 - AWS CLI v2とTerraform 1.13以上2.0未満
 - AWS CLI profile。以下では`drone-fleet`を使う

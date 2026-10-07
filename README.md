@@ -114,7 +114,7 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 
 次のツールを使用する。
 
-- Node.js 22以上
+- Node.js 22.13.0以上（simulatorの`node:sqlite`に必要）
 - Corepackから有効化するpnpm 10以上
 - Docker Engine
 - Docker Compose v2
