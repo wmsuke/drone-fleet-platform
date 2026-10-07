@@ -1,6 +1,9 @@
 import { telemetryMessageSchema } from "@drone-fleet/protocol";
 import type { IClientOptions } from "mqtt";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDeviceId, startSimulatorFleet } from "../src/fleet.js";
 import type {
@@ -12,6 +15,18 @@ interface PublishedMessage {
   topic: string;
   message: string;
 }
+
+const bufferRoot = mkdtempSync(join(tmpdir(), "drone-fleet-fleet-test-"));
+let bufferNumber = 0;
+function bufferSettings() {
+  return {
+    telemetryBufferDirectory: join(bufferRoot, String(++bufferNumber)),
+    telemetryBufferMaxRows: 10_000,
+    telemetryBufferMaxBytes: 32 * 1024 * 1024,
+  };
+}
+
+afterAll(() => rmSync(bufferRoot, { recursive: true, force: true }));
 
 class FakeMqttClient implements SimulatorMqttClient {
   connected = true;
@@ -84,6 +99,7 @@ describe("startSimulatorFleet", () => {
         mqttTransport: { type: "local", url: "mqtt://127.0.0.1:1883" },
         simulationSeed: "fleet-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       connectClient,
     );
@@ -141,6 +157,7 @@ describe("startSimulatorFleet", () => {
           mqttTransport: { type: "local", url: "mqtt://127.0.0.1:1883" },
           simulationSeed: "fleet-test",
           telemetryIntervalMs: 5000,
+          ...bufferSettings(),
         },
         connectClient,
       ),
@@ -173,6 +190,7 @@ describe("startSimulatorFleet", () => {
         },
         simulationSeed: "fleet-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       connectClient,
       async (deviceId) => ({

@@ -127,7 +127,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 通信が途切れてもデータを保持し、再接続後に送信を再開できるようにする。
 
-配送保証、SQLiteからの削除条件、重複排除、commandの期限とoutboxの設計は[ADR 0005](adr/0005-delivery-and-recovery.md)に記録した。#109でtelemetryのsessionIdを追加した。永続バッファ、再送、重複排除などは#110〜#116で実装する。
+配送保証、SQLiteからの削除条件、重複排除、commandの期限とoutboxの設計は[ADR 0005](adr/0005-delivery-and-recovery.md)に記録した。#109でtelemetryのsessionIdを追加し、#110でsimulatorのSQLite永続バッファを追加した。保存確認に基づく削除、再送、重複排除などは#111以降で実装する。
 
 ### 作業範囲
 

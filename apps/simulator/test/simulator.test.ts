@@ -4,20 +4,37 @@ import {
   telemetryMessageSchema,
 } from "@drone-fleet/protocol";
 import type { IClientOptions } from "mqtt";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createConnectSimulatorClient,
   startSimulator,
   type ConnectSimulatorClient,
+  type OpenTelemetryBuffer,
   type SimulatorMqttClient,
 } from "../src/simulator.js";
+import { TelemetryBuffer } from "../src/telemetry-buffer.js";
 
 interface PublishedMessage {
   topic: string;
   message: string;
   options: { qos: 0 | 1; retain: boolean };
 }
+
+const bufferRoot = mkdtempSync(join(tmpdir(), "drone-fleet-simulator-test-"));
+let bufferNumber = 0;
+function bufferSettings() {
+  return {
+    telemetryBufferPath: join(bufferRoot, `${++bufferNumber}.sqlite`),
+    telemetryBufferMaxRows: 10_000,
+    telemetryBufferMaxBytes: 32 * 1024 * 1024,
+  };
+}
+
+afterAll(() => rmSync(bufferRoot, { recursive: true, force: true }));
 
 class FakeMqttClient implements SimulatorMqttClient {
   connected = true;
@@ -107,6 +124,93 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("keeps generating into SQLite while MQTT is disconnected", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const settings = bufferSettings();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        ...settings,
+      },
+      async () => client,
+    );
+
+    client.connected = false;
+    client.emit("offline");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      rows: 3,
+      healthy: true,
+    });
+    expect(
+      client.published.filter(({ topic }) => topic.endsWith("/telemetry")),
+    ).toHaveLength(1);
+    await simulator.shutdown();
+
+    const reopened = new TelemetryBuffer(
+      settings.telemetryBufferPath,
+      "drone-001",
+      {
+        maxRows: settings.telemetryBufferMaxRows,
+        maxBytes: settings.telemetryBufferMaxBytes,
+      },
+    );
+    expect(reopened.listUnconfirmed().map(({ sequence }) => sequence)).toEqual([
+      0, 1, 2,
+    ]);
+    reopened.close();
+  });
+
+  it("stops generation and reports a buffer write failure", async () => {
+    vi.useFakeTimers();
+    const logError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const client = new FakeMqttClient();
+    const settings = bufferSettings();
+    const openBuffer: OpenTelemetryBuffer = (path, deviceId, limits) => {
+      const buffer = new TelemetryBuffer(path, deviceId, limits);
+      const append = buffer.append.bind(buffer);
+      let calls = 0;
+      buffer.append = (message) => {
+        calls += 1;
+        if (calls === 2) throw new Error("disk unavailable");
+        return append(message);
+      };
+      return buffer;
+    };
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        ...settings,
+      },
+      async () => client,
+      openBuffer,
+    );
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      healthy: false,
+      rows: 1,
+      error: "disk unavailable",
+    });
+    expect(logError).toHaveBeenCalledWith(
+      "テレメトリバッファの保存に失敗しました",
+      expect.objectContaining({ deviceId: "drone-001" }),
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(simulator.getBufferStatus().rows).toBe(1);
+    await simulator.shutdown();
+    logError.mockRestore();
+  });
+
   it("fails the initial connection without retrying indefinitely", async () => {
     const connectionError = new Error("connection rejected");
     const mqttConnectAsync = vi.fn(async () => {
@@ -143,6 +247,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtts://example.iot:8883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async (_url, options) => {
         connectionOptions = options;
@@ -182,6 +287,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       connectClient,
     );
@@ -248,6 +354,7 @@ describe("startSimulator", () => {
       mqttUrl: "mqtt://127.0.0.1:1883",
       simulationSeed: "simulator-test",
       telemetryIntervalMs: 5000,
+      ...bufferSettings(),
     };
     const first = await startSimulator(config, async () => firstClient);
     const firstTelemetry = telemetryMessageSchema.parse(
@@ -285,6 +392,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async () => client,
     );
@@ -312,6 +420,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async () => client,
     );
@@ -357,6 +466,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async () => client,
     );
@@ -412,6 +522,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async () => client,
     );
@@ -454,6 +565,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async () => client,
     );
@@ -475,6 +587,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async (_url, options) => {
         client.options = options;
@@ -507,6 +620,7 @@ describe("startSimulator", () => {
         mqttUrl: "mqtt://127.0.0.1:1883",
         simulationSeed: "simulator-test",
         telemetryIntervalMs: 5000,
+        ...bufferSettings(),
       },
       async (_url, options) => {
         client.options = options;

@@ -104,6 +104,8 @@ scripts/
 
 Phase 0の開発基盤、Phase 1のローカル構成に加え、Phase 2のTerraform、証明書管理、AWS IoT transport、E2Eを実装済みである。
 
+Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定してからMQTTへ送る。切断中も生成と保存を続け、再起動後も未確認行を保持する。MQTT送信成功だけでは削除しない。再送、ingestorによる保存確認、確認後の削除は#111以降の対象である。保存先と容量上限は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`、`TELEMETRY_BUFFER_MAX_BYTES`で設定する。上限は機体ごとに行数とJSONの論理バイト数で判定し、最古の行の破棄履歴を同じSQLiteに残す。保存エラー時はその機体の生成を止め、ログとbuffer状態で確認できる。
+
 ### apps/api
 
 デバイス一覧・詳細・テレメトリ履歴・コマンド送信・コマンド履歴APIを実装済みである。一覧は各deviceをdeviceId順で返し、接続状態と最新テレメトリの概要を取得できる。詳細はdeviceの基本情報と最新テレメトリの全項目を返す。テレメトリ履歴は受信時刻、コマンド履歴は作成時刻の新しい順に返し、どちらも既定100件、`limit`で最大1000件まで指定できる。コマンド送信はPENDINGでDBへ保存してからQoS 1、retainなしでMQTTへ送信し、結果をSENTまたはFAILEDへ更新する。状態更新はPENDINGの行だけを対象とし、先に届いたACKによるACKNOWLEDGEDを上書きしない。
