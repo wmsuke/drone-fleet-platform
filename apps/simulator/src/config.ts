@@ -20,6 +20,9 @@ export interface SimulatorConfig {
   mqttTransport: SimulatorMqttTransportConfig;
   simulationSeed: string;
   telemetryIntervalMs: number;
+  telemetryBufferDirectory: string;
+  telemetryBufferMaxRows: number;
+  telemetryBufferMaxBytes: number;
 }
 
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -28,6 +31,9 @@ export const DEFAULT_SIMULATION_SEED = "default";
 export const MAX_SIMULATION_SEED_LENGTH = 128;
 export const DEFAULT_DEVICE_ID_PREFIX = "drone";
 export const MAX_DEVICE_ID_PREFIX_LENGTH = 59;
+export const DEFAULT_TELEMETRY_BUFFER_DIRECTORY = "simulator-data";
+export const DEFAULT_TELEMETRY_BUFFER_MAX_ROWS = 10_000;
+export const DEFAULT_TELEMETRY_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
 
 function parseInteger(
   value: string,
@@ -115,6 +121,26 @@ export function loadSimulatorConfig(
   const simulationSeed = environment.SIMULATION_SEED ?? DEFAULT_SIMULATION_SEED;
   const deviceIdPrefix =
     environment.DEVICE_ID_PREFIX ?? DEFAULT_DEVICE_ID_PREFIX;
+  const telemetryBufferDirectory =
+    environment.TELEMETRY_BUFFER_DIR ?? DEFAULT_TELEMETRY_BUFFER_DIRECTORY;
+  const telemetryBufferMaxRows = parseInteger(
+    environment.TELEMETRY_BUFFER_MAX_ROWS ??
+      String(DEFAULT_TELEMETRY_BUFFER_MAX_ROWS),
+    "TELEMETRY_BUFFER_MAX_ROWS",
+    1,
+    Number.MAX_SAFE_INTEGER,
+  );
+  const telemetryBufferMaxBytes = parseInteger(
+    environment.TELEMETRY_BUFFER_MAX_BYTES ??
+      String(DEFAULT_TELEMETRY_BUFFER_MAX_BYTES),
+    "TELEMETRY_BUFFER_MAX_BYTES",
+    1,
+    Number.MAX_SAFE_INTEGER,
+  );
+
+  if (telemetryBufferDirectory.length === 0) {
+    throw new TypeError("TELEMETRY_BUFFER_DIR must not be empty");
+  }
 
   if (
     deviceIdPrefix.length > MAX_DEVICE_ID_PREFIX_LENGTH ||
@@ -139,5 +165,8 @@ export function loadSimulatorConfig(
     mqttTransport: loadMqttTransport(environment),
     simulationSeed,
     telemetryIntervalMs,
+    telemetryBufferDirectory,
+    telemetryBufferMaxRows,
+    telemetryBufferMaxBytes,
   };
 }

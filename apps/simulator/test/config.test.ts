@@ -17,6 +17,9 @@ describe("loadSimulatorConfig", () => {
       },
       simulationSeed: "default",
       telemetryIntervalMs: 5000,
+      telemetryBufferDirectory: "simulator-data",
+      telemetryBufferMaxRows: 10_000,
+      telemetryBufferMaxBytes: 32 * 1024 * 1024,
     });
   });
 
@@ -39,6 +42,9 @@ describe("loadSimulatorConfig", () => {
       },
       simulationSeed: "demo-2026",
       telemetryIntervalMs: 1000,
+      telemetryBufferDirectory: "simulator-data",
+      telemetryBufferMaxRows: 10_000,
+      telemetryBufferMaxBytes: 32 * 1024 * 1024,
     });
   });
 
@@ -61,6 +67,20 @@ describe("loadSimulatorConfig", () => {
         rootCaPath: "/credentials/AmazonRootCA1.pem",
         deviceCredentialsDirectory: "/credentials/devices",
       },
+    });
+  });
+
+  it("reads telemetry buffer limits and directory", () => {
+    expect(
+      loadSimulatorConfig({
+        TELEMETRY_BUFFER_DIR: "/data/telemetry",
+        TELEMETRY_BUFFER_MAX_ROWS: "12",
+        TELEMETRY_BUFFER_MAX_BYTES: "4096",
+      }),
+    ).toMatchObject({
+      telemetryBufferDirectory: "/data/telemetry",
+      telemetryBufferMaxRows: 12,
+      telemetryBufferMaxBytes: 4096,
     });
   });
 
@@ -135,6 +155,9 @@ describe("loadSimulatorConfig", () => {
     ["non-numeric interval", { TELEMETRY_INTERVAL_MS: "fast" }],
     ["empty simulation seed", { SIMULATION_SEED: "" }],
     ["too long simulation seed", { SIMULATION_SEED: "x".repeat(129) }],
+    ["empty buffer directory", { TELEMETRY_BUFFER_DIR: "" }],
+    ["zero buffer rows", { TELEMETRY_BUFFER_MAX_ROWS: "0" }],
+    ["zero buffer bytes", { TELEMETRY_BUFFER_MAX_BYTES: "0" }],
   ])("rejects %s", (_name, environment) => {
     expect(() => loadSimulatorConfig(environment)).toThrow(TypeError);
   });

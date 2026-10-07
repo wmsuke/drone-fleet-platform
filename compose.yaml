@@ -120,6 +120,11 @@ services:
       DRONE_COUNT: ${DRONE_COUNT:-10}
       SIMULATION_SEED: ${SIMULATION_SEED:-default}
       TELEMETRY_INTERVAL_MS: ${TELEMETRY_INTERVAL_MS:-5000}
+      TELEMETRY_BUFFER_DIR: /workspace/simulator-data
+      TELEMETRY_BUFFER_MAX_ROWS: ${TELEMETRY_BUFFER_MAX_ROWS:-10000}
+      TELEMETRY_BUFFER_MAX_BYTES: ${TELEMETRY_BUFFER_MAX_BYTES:-33554432}
+    volumes:
+      - simulator-data:/workspace/simulator-data
     depends_on:
       mqtt:
         condition: service_healthy
@@ -167,3 +172,4 @@ services:
 volumes:
   mosquitto-data:
   postgres-data:
+  simulator-data:

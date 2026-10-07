@@ -10,6 +10,10 @@ import { randomUUID } from "node:crypto";
 
 import { createCommandProcessor } from "./commands.js";
 import {
+  TelemetryBuffer,
+  type TelemetryBufferStats,
+} from "./telemetry-buffer.js";
+import {
   createConnectionLostMessage,
   createOnlineMessage,
   createShutdownMessage,
@@ -18,6 +22,10 @@ import {
 
 export interface RunningSimulator {
   shutdown(): Promise<void>;
+  getBufferStatus(): TelemetryBufferStats & {
+    healthy: boolean;
+    error?: string;
+  };
 }
 
 export interface SimulatorDeviceConfig {
@@ -26,6 +34,9 @@ export interface SimulatorDeviceConfig {
   mqttUrl: string;
   simulationSeed: string;
   telemetryIntervalMs: number;
+  telemetryBufferPath: string;
+  telemetryBufferMaxRows: number;
+  telemetryBufferMaxBytes: number;
 }
 
 export interface SimulatorMqttClient {
@@ -58,6 +69,16 @@ export type ConnectAsync = (
   allowRetries: boolean,
 ) => Promise<SimulatorMqttClient>;
 
+export type TelemetryBufferStore = Pick<
+  TelemetryBuffer,
+  "append" | "markAttempted" | "markPublished" | "stats" | "close"
+>;
+export type OpenTelemetryBuffer = (
+  path: string,
+  deviceId: string,
+  limits: { maxRows: number; maxBytes: number },
+) => TelemetryBufferStore;
+
 export function createConnectSimulatorClient(
   mqttConnectAsync: ConnectAsync = connectAsync,
 ): ConnectSimulatorClient {
@@ -69,6 +90,8 @@ export const connectSimulatorClient = createConnectSimulatorClient();
 export async function startSimulator(
   config: SimulatorDeviceConfig,
   connectClient: ConnectSimulatorClient = connectSimulatorClient,
+  openBuffer: OpenTelemetryBuffer = (path, deviceId, limits) =>
+    new TelemetryBuffer(path, deviceId, limits),
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
   const telemetryTopic = createTelemetryTopic(config.deviceId);
@@ -76,6 +99,17 @@ export async function startSimulator(
   const commandAcksTopic = createCommandAcksTopic(config.deviceId);
   const commandProcessor = createCommandProcessor(config.deviceId);
   const sessionId = randomUUID();
+  const buffer = openBuffer(config.telemetryBufferPath, config.deviceId, {
+    maxRows: config.telemetryBufferMaxRows,
+    maxBytes: config.telemetryBufferMaxBytes,
+  });
+  let bufferStats: TelemetryBufferStats;
+  try {
+    bufferStats = buffer.stats();
+  } catch (error) {
+    buffer.close();
+    throw error;
+  }
   const createWill = (): NonNullable<IClientOptions["will"]> => ({
     topic: statusTopic,
     payload: Buffer.from(
@@ -86,46 +120,29 @@ export async function startSimulator(
     qos: 1,
     retain: true,
   });
-  const client = await connectClient(config.mqttUrl, {
-    ...config.mqttClientOptions,
-    clean: true,
-    clientId:
-      config.mqttClientOptions?.clientId ?? `simulator-${config.deviceId}`,
-    will: createWill(),
-  });
+  let client: SimulatorMqttClient;
+  try {
+    client = await connectClient(config.mqttUrl, {
+      ...config.mqttClientOptions,
+      clean: true,
+      clientId:
+        config.mqttClientOptions?.clientId ?? `simulator-${config.deviceId}`,
+      will: createWill(),
+    });
+  } catch (error) {
+    buffer.close();
+    throw error;
+  }
 
   let sequence = 0;
   let telemetryTimer: NodeJS.Timeout | undefined;
   let publishInProgress = false;
+  const inFlightTelemetry = new Set<Promise<void>>();
   let shuttingDown = false;
+  let bufferError: Error | undefined;
   let initialConnectionHandled = false;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
   let commandQueue = Promise.resolve();
-
-  const publishTelemetry = async (): Promise<void> => {
-    if (publishInProgress || shuttingDown || !client.connected) {
-      return;
-    }
-
-    publishInProgress = true;
-    try {
-      const telemetry = createTelemetryMessage(
-        config.deviceId,
-        sessionId,
-        sequence,
-        new Date().toISOString(),
-        flightStatus,
-        config.simulationSeed,
-      );
-      sequence += 1;
-      await client.publishAsync(telemetryTopic, JSON.stringify(telemetry), {
-        qos: 0,
-        retain: false,
-      });
-    } finally {
-      publishInProgress = false;
-    }
-  };
 
   const clearTelemetryTimer = (): void => {
     if (telemetryTimer !== undefined) {
@@ -134,8 +151,96 @@ export async function startSimulator(
     }
   };
 
-  const publishOnlineAndStartTelemetry = async (): Promise<void> => {
+  const failBuffer = (error: unknown): void => {
+    bufferError = error instanceof Error ? error : new Error(String(error));
     clearTelemetryTimer();
+    console.error("テレメトリバッファの保存に失敗しました", {
+      deviceId: config.deviceId,
+      error: bufferError,
+    });
+  };
+
+  const publishTelemetry = async (): Promise<void> => {
+    if (shuttingDown || bufferError !== undefined) {
+      return;
+    }
+
+    const telemetry = createTelemetryMessage(
+      config.deviceId,
+      sessionId,
+      sequence,
+      new Date().toISOString(),
+      flightStatus,
+      config.simulationSeed,
+    );
+    let stored: boolean;
+    try {
+      const result = buffer.append(telemetry);
+      sequence += 1;
+      stored = result.stored;
+      bufferStats = buffer.stats();
+      if (result.discard !== undefined) {
+        console.warn(
+          "テレメトリバッファの上限に達したためデータを破棄しました",
+          {
+            deviceId: config.deviceId,
+            ...result.discard,
+          },
+        );
+      }
+    } catch (error) {
+      failBuffer(error);
+      throw error;
+    }
+
+    if (!stored || !client.connected || publishInProgress) return;
+    publishInProgress = true;
+    try {
+      try {
+        buffer.markAttempted(
+          telemetry.sessionId,
+          telemetry.sequence,
+          new Date().toISOString(),
+        );
+      } catch (error) {
+        failBuffer(error);
+        throw error;
+      }
+      try {
+        await client.publishAsync(telemetryTopic, JSON.stringify(telemetry), {
+          qos: 0,
+          retain: false,
+        });
+      } catch (error) {
+        console.error("テレメトリのMQTT送信に失敗しました", error);
+        return;
+      }
+      try {
+        buffer.markPublished(
+          telemetry.sessionId,
+          telemetry.sequence,
+          new Date().toISOString(),
+        );
+      } catch (error) {
+        failBuffer(error);
+        throw error;
+      }
+    } finally {
+      publishInProgress = false;
+    }
+  };
+
+  const trackTelemetry = (): Promise<void> => {
+    const operation = publishTelemetry();
+    inFlightTelemetry.add(operation);
+    void operation.then(
+      () => inFlightTelemetry.delete(operation),
+      () => inFlightTelemetry.delete(operation),
+    );
+    return operation;
+  };
+
+  const publishOnlineAndStartTelemetry = async (): Promise<void> => {
     await client.subscribeAsync(commandsTopic, { qos: 1 });
     const online = createOnlineMessage(
       config.deviceId,
@@ -145,13 +250,13 @@ export async function startSimulator(
       qos: 1,
       retain: true,
     });
-    await publishTelemetry();
-    if (shuttingDown) {
+    await trackTelemetry();
+    if (shuttingDown || bufferError !== undefined) {
       return;
     }
-    telemetryTimer = setInterval(
+    telemetryTimer ??= setInterval(
       () =>
-        void publishTelemetry().catch((error: unknown) => {
+        void trackTelemetry().catch((error: unknown) => {
           console.error("テレメトリの送信に失敗しました", error);
         }),
       config.telemetryIntervalMs,
@@ -161,7 +266,7 @@ export async function startSimulator(
     );
   };
 
-  client.on("offline", clearTelemetryTimer);
+  // 切断中も生成とSQLite保存を続ける。再送は#111で実装する。
   client.on("reconnect", () => {
     client.options.will = createWill();
   });
@@ -218,11 +323,22 @@ export async function startSimulator(
     await publishOnlineAndStartTelemetry();
     initialConnectionHandled = true;
   } catch (error) {
-    await client.endAsync(true);
+    try {
+      await client.endAsync(true);
+    } finally {
+      buffer.close();
+    }
     throw error;
   }
 
   return {
+    getBufferStatus() {
+      return {
+        ...bufferStats,
+        healthy: bufferError === undefined,
+        ...(bufferError === undefined ? {} : { error: bufferError.message }),
+      };
+    },
     async shutdown(): Promise<void> {
       if (shuttingDown) {
         return;
@@ -230,22 +346,27 @@ export async function startSimulator(
 
       shuttingDown = true;
       clearTelemetryTimer();
+      await Promise.allSettled([...inFlightTelemetry]);
 
-      if (client.connected) {
-        const offline = createShutdownMessage(
-          config.deviceId,
-          new Date().toISOString(),
-        );
-        try {
-          await client.publishAsync(statusTopic, JSON.stringify(offline), {
-            qos: 1,
-            retain: true,
-          });
-        } finally {
-          await client.endAsync(false);
+      try {
+        if (client.connected) {
+          const offline = createShutdownMessage(
+            config.deviceId,
+            new Date().toISOString(),
+          );
+          try {
+            await client.publishAsync(statusTopic, JSON.stringify(offline), {
+              qos: 1,
+              retain: true,
+            });
+          } finally {
+            await client.endAsync(false);
+          }
+        } else {
+          await client.endAsync(true);
         }
-      } else {
-        await client.endAsync(true);
+      } finally {
+        buffer.close();
       }
 
       console.log(`${config.deviceId}のMQTT接続を終了しました`);

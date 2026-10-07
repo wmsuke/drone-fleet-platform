@@ -114,7 +114,7 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 
 次のツールを使用する。
 
-- Node.js 22以上
+- Node.js 22.13.0以上（simulatorの`node:sqlite`に必要）
 - Corepackから有効化するpnpm 10以上
 - Docker Engine
 - Docker Compose v2
@@ -366,6 +366,8 @@ SIMULATION_SEED=demo-2026
 ```
 
 シミュレータを`Ctrl+C`で終了すると、全機体がOFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
+
+simulatorは送信前にtelemetryを機体ごとのSQLiteファイルへ保存する。既定の保存先は`simulator-data/`で、Composeでは`simulator-data` volumeへ保存する。切断中も生成を続け、正常終了・再起動後も行を残す。`TELEMETRY_BUFFER_MAX_ROWS`（既定10,000行）と`TELEMETRY_BUFFER_MAX_BYTES`（既定32 MiB、JSONのUTF-8容量）が機体ごとの上限で、超過時は古い未確認行を破棄して履歴を記録する。ディスク書き込みなどに失敗した機体は生成を停止し、エラーをログに出す。現在は保存済み行の再送・DB保存確認後の削除は未実装なので、送信成功後も行が残り、上限に達しうる。これらは#111以降で扱う。ローカルのSQLiteファイルやCompose volumeを削除すると未確認データも失われる。
 
 AWS IoT Coreへ接続する場合は、[AWS IoT Coreへシミュレータを接続する](docs/aws/simulator.md)に従ってtransportと機体ごとのmTLS認証情報を設定する。ローカルMosquittoの起動方法と既定値は変わらない。
 

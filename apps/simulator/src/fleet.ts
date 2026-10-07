@@ -1,4 +1,5 @@
 import type { SimulatorConfig } from "./config.js";
+import { join } from "node:path";
 import {
   createDeviceMqttConnectionConfig,
   type DeviceMqttConnectionConfig,
@@ -48,6 +49,12 @@ export async function startSimulatorFleet(
             mqttUrl: connectionConfig.url,
             simulationSeed: config.simulationSeed,
             telemetryIntervalMs: config.telemetryIntervalMs,
+            telemetryBufferPath: join(
+              config.telemetryBufferDirectory,
+              `${deviceId}.sqlite`,
+            ),
+            telemetryBufferMaxRows: config.telemetryBufferMaxRows,
+            telemetryBufferMaxBytes: config.telemetryBufferMaxBytes,
           },
           connectClient,
         ),

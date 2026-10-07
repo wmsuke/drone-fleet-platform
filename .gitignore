@@ -15,6 +15,10 @@ pids
 *.seed
 *.pid.lock
 load-results/
+simulator-data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 # Terraform local files
 **/.terraform/
