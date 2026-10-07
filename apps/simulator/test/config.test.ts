@@ -20,6 +20,10 @@ describe("loadSimulatorConfig", () => {
       telemetryBufferDirectory: "simulator-data",
       telemetryBufferMaxRows: 10_000,
       telemetryBufferMaxBytes: 32 * 1024 * 1024,
+      telemetryRetryBaseMs: 1000,
+      telemetryRetryMaxMs: 30000,
+      telemetryReplayIntervalMs: 200,
+      telemetryPublishTimeoutMs: 10000,
     });
   });
 
@@ -45,6 +49,10 @@ describe("loadSimulatorConfig", () => {
       telemetryBufferDirectory: "simulator-data",
       telemetryBufferMaxRows: 10_000,
       telemetryBufferMaxBytes: 32 * 1024 * 1024,
+      telemetryRetryBaseMs: 1000,
+      telemetryRetryMaxMs: 30000,
+      telemetryReplayIntervalMs: 200,
+      telemetryPublishTimeoutMs: 10000,
     });
   });
 
@@ -81,6 +89,22 @@ describe("loadSimulatorConfig", () => {
       telemetryBufferDirectory: "/data/telemetry",
       telemetryBufferMaxRows: 12,
       telemetryBufferMaxBytes: 4096,
+    });
+  });
+
+  it("reads reconnect and replay pacing limits", () => {
+    expect(
+      loadSimulatorConfig({
+        TELEMETRY_RETRY_BASE_MS: "250",
+        TELEMETRY_RETRY_MAX_MS: "4000",
+        TELEMETRY_REPLAY_INTERVAL_MS: "50",
+        TELEMETRY_PUBLISH_TIMEOUT_MS: "5000",
+      }),
+    ).toMatchObject({
+      telemetryRetryBaseMs: 250,
+      telemetryRetryMaxMs: 4000,
+      telemetryReplayIntervalMs: 50,
+      telemetryPublishTimeoutMs: 5000,
     });
   });
 
@@ -158,6 +182,13 @@ describe("loadSimulatorConfig", () => {
     ["empty buffer directory", { TELEMETRY_BUFFER_DIR: "" }],
     ["zero buffer rows", { TELEMETRY_BUFFER_MAX_ROWS: "0" }],
     ["zero buffer bytes", { TELEMETRY_BUFFER_MAX_BYTES: "0" }],
+    ["zero retry base", { TELEMETRY_RETRY_BASE_MS: "0" }],
+    [
+      "retry max below base",
+      { TELEMETRY_RETRY_BASE_MS: "2000", TELEMETRY_RETRY_MAX_MS: "1000" },
+    ],
+    ["zero replay interval", { TELEMETRY_REPLAY_INTERVAL_MS: "0" }],
+    ["zero publish timeout", { TELEMETRY_PUBLISH_TIMEOUT_MS: "0" }],
   ])("rejects %s", (_name, environment) => {
     expect(() => loadSimulatorConfig(environment)).toThrow(TypeError);
   });
