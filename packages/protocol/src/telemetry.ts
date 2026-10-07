@@ -6,7 +6,7 @@ const finiteNumberSchema = z
   .number()
   .refine(Number.isFinite, "number must be finite");
 
-export const telemetryMessageSchema = z
+const telemetryV1MessageSchema = z
   .object({
     ...messageBaseSchema.shape,
     sequence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
@@ -23,4 +23,20 @@ export const telemetryMessageSchema = z
   })
   .strip();
 
+export const telemetryV2MessageSchema = telemetryV1MessageSchema.extend({
+  schemaVersion: z.literal(2),
+  sessionId: z
+    .string()
+    .regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      "sessionId must be a canonical lowercase UUID v4",
+    ),
+});
+
+export const telemetryMessageSchema = z.discriminatedUnion("schemaVersion", [
+  telemetryV1MessageSchema,
+  telemetryV2MessageSchema,
+]);
+
 export type TelemetryMessage = z.infer<typeof telemetryMessageSchema>;
+export type TelemetryV2Message = z.infer<typeof telemetryV2MessageSchema>;

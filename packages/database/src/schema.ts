@@ -65,6 +65,7 @@ export const telemetry = pgTable(
     deviceId: varchar("device_id", { length: 64 })
       .notNull()
       .references(() => devices.deviceId, { onDelete: "cascade" }),
+    sessionId: uuid("session_id"),
     sequence: bigint("sequence", { mode: "number" }).notNull(),
     deviceTimestamp: timestamp("device_timestamp", {
       withTimezone: true,

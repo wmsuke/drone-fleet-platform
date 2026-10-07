@@ -16,6 +16,12 @@ const validTelemetry = {
     status: "FLYING",
   },
 } as const;
+const sessionId = "a065e32b-c00b-452e-9cb1-3b52c43962fb";
+const validV2Telemetry = {
+  ...validTelemetry,
+  schemaVersion: 2,
+  sessionId,
+} as const;
 
 function withPayload(overrides: Record<string, unknown>): unknown {
   return {
@@ -30,6 +36,39 @@ describe("telemetryMessageSchema", () => {
       telemetryMessageSchema.parse(validTelemetry);
 
     expect(telemetry).toEqual(validTelemetry);
+  });
+
+  it("accepts v2 and distinguishes equal sequences across sessions", () => {
+    const first = telemetryMessageSchema.parse(validV2Telemetry);
+    const second = telemetryMessageSchema.parse({
+      ...validV2Telemetry,
+      sessionId: "5f6a6190-3748-40a6-b0de-2f80dcab2207",
+    });
+
+    expect(first.schemaVersion).toBe(2);
+    expect(first).toMatchObject({
+      deviceId: "drone-001",
+      sessionId,
+      sequence: 1234,
+    });
+    expect(second).toMatchObject({ deviceId: "drone-001", sequence: 1234 });
+    expect(second).not.toEqual(first);
+  });
+
+  it.each([
+    ["missing", { ...validV2Telemetry, sessionId: undefined }],
+    ["wrong type", { ...validV2Telemetry, sessionId: 42 }],
+    ["malformed", { ...validV2Telemetry, sessionId: "not-a-uuid" }],
+    [
+      "wrong version",
+      {
+        ...validV2Telemetry,
+        sessionId: "a065e32b-c00b-152e-9cb1-3b52c43962fb",
+      },
+    ],
+    ["overlong", { ...validV2Telemetry, sessionId: `${sessionId}0` }],
+  ])("rejects %s v2 sessionId", (_case, message) => {
+    expect(telemetryMessageSchema.safeParse(message).success).toBe(false);
   });
 
   it("accepts numeric boundary values", () => {

@@ -1,6 +1,6 @@
 import {
-  telemetryMessageSchema,
-  type TelemetryMessage,
+  telemetryV2MessageSchema,
+  type TelemetryV2Message,
 } from "@drone-fleet/protocol";
 
 const STATE_CYCLE_STEPS = 120;
@@ -20,10 +20,11 @@ function unitValue(value: string): number {
 
 export function createLoadTelemetry(
   deviceId: string,
+  sessionId: string,
   sequence: number,
   timestamp: string,
   simulationSeed: string,
-): TelemetryMessage {
+): TelemetryV2Message {
   const identity = `${simulationSeed}\u0000${deviceId}`;
   const phase = hashSeed(`${identity}\u0000phase`) % STATE_CYCLE_STEPS;
   const angle =
@@ -31,9 +32,10 @@ export function createLoadTelemetry(
     Math.PI *
     2;
 
-  return telemetryMessageSchema.parse({
-    schemaVersion: 1,
+  return telemetryV2MessageSchema.parse({
+    schemaVersion: 2,
     deviceId,
+    sessionId,
     sequence,
     timestamp,
     payload: {

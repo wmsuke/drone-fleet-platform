@@ -23,6 +23,8 @@ describe("database schema", () => {
   });
 
   it("distinguishes device timestamps from server receipt timestamps", () => {
+    expect(telemetry.sessionId.name).toBe("session_id");
+    expect(telemetry.sessionId.notNull).toBe(false);
     expect(telemetry.deviceTimestamp.name).toBe("device_timestamp");
     expect(telemetry.receivedAt.name).toBe("received_at");
     expect(telemetry.receivedAt.hasDefault).toBe(true);

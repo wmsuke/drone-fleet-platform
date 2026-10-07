@@ -8,6 +8,13 @@
       "when": 1790646466726,
       "tag": "0000_powerful_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791277005145,
+      "tag": "0001_flippant_expediter",
+      "breakpoints": true
     }
   ]
 }

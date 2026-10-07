@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { telemetryMessageSchema } from "@drone-fleet/protocol";
 
 import type { LoadGeneratorConfig } from "../src/config.js";
 import {
@@ -74,6 +75,47 @@ describe("createLoadDeviceIds", () => {
 });
 
 describe("runLoadGenerator", () => {
+  it("uses a distinct telemetry session per device and per run", async () => {
+    vi.useFakeTimers();
+    const run = async () => {
+      const harness = createHarness();
+      const result = runLoadGenerator(createConfig({ maxMessages: 4 }), {
+        openConnection: harness.openConnection,
+        writeReport: harness.writeReport,
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      await result;
+      return harness.clients.map(({ publishAsync }) =>
+        publishAsync.mock.calls.map((call) =>
+          telemetryMessageSchema.parse(JSON.parse(call[1])),
+        ),
+      );
+    };
+
+    const first = await run();
+    const second = await run();
+    const sessionIds = first.map((messages) => {
+      expect(messages.length).toBeGreaterThan(0);
+      expect(messages.every((message) => message.schemaVersion === 2)).toBe(
+        true,
+      );
+      const ids = messages.map((message) =>
+        message.schemaVersion === 2 ? message.sessionId : "",
+      );
+      expect(new Set(ids).size).toBe(1);
+      expect(messages.map((message) => message.sequence)).toEqual(
+        messages.map((_message, index) => index),
+      );
+      return ids[0];
+    });
+    expect(new Set(sessionIds).size).toBe(2);
+    expect(
+      second.map((messages) =>
+        messages[0]?.schemaVersion === 2 ? messages[0].sessionId : "",
+      ),
+    ).not.toEqual(sessionIds);
+  });
+
   it("rejects AWS warmup even when called with a constructed config", async () => {
     const harness = createHarness();
 

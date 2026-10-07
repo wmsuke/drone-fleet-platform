@@ -1,5 +1,6 @@
 import { createTelemetryTopic } from "@drone-fleet/protocol";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { connectAsync } from "mqtt";
 
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
   const sentAt = new Date();
   const telemetry = createLoadTelemetry(
     deviceId,
+    randomUUID(),
     0,
     sentAt.toISOString(),
     "aws-path-probe",

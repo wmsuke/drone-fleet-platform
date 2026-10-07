@@ -6,6 +6,7 @@ import {
   type TelemetryMessage,
 } from "@drone-fleet/protocol";
 import { connectAsync, type IClientOptions } from "mqtt";
+import { randomUUID } from "node:crypto";
 
 import { createCommandProcessor } from "./commands.js";
 import {
@@ -74,6 +75,7 @@ export async function startSimulator(
   const commandsTopic = createCommandsTopic(config.deviceId);
   const commandAcksTopic = createCommandAcksTopic(config.deviceId);
   const commandProcessor = createCommandProcessor(config.deviceId);
+  const sessionId = randomUUID();
   const createWill = (): NonNullable<IClientOptions["will"]> => ({
     topic: statusTopic,
     payload: Buffer.from(
@@ -109,16 +111,17 @@ export async function startSimulator(
     try {
       const telemetry = createTelemetryMessage(
         config.deviceId,
+        sessionId,
         sequence,
         new Date().toISOString(),
         flightStatus,
         config.simulationSeed,
       );
+      sequence += 1;
       await client.publishAsync(telemetryTopic, JSON.stringify(telemetry), {
         qos: 0,
         retain: false,
       });
-      sequence += 1;
     } finally {
       publishInProgress = false;
     }

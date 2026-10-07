@@ -3,16 +3,20 @@ import { describe, expect, it } from "vitest";
 
 import { createLoadTelemetry } from "../src/telemetry.js";
 
+const sessionId = "a065e32b-c00b-452e-9cb1-3b52c43962fb";
+
 describe("createLoadTelemetry", () => {
   it("reproduces the same payload for the same seed, device and sequence", () => {
     const first = createLoadTelemetry(
       "load-000123",
+      sessionId,
       42,
       "2026-10-01T00:00:00.000Z",
       "seed-a",
     );
     const second = createLoadTelemetry(
       "load-000123",
+      sessionId,
       42,
       "2026-10-02T00:00:00.000Z",
       "seed-a",
@@ -25,6 +29,7 @@ describe("createLoadTelemetry", () => {
   it("changes the series for another seed or device", () => {
     const baseline = createLoadTelemetry(
       "load-000123",
+      sessionId,
       42,
       "2026-10-01T00:00:00.000Z",
       "seed-a",
@@ -33,6 +38,7 @@ describe("createLoadTelemetry", () => {
     expect(
       createLoadTelemetry(
         "load-000123",
+        sessionId,
         42,
         "2026-10-01T00:00:00.000Z",
         "seed-b",
@@ -41,6 +47,7 @@ describe("createLoadTelemetry", () => {
     expect(
       createLoadTelemetry(
         "load-000124",
+        sessionId,
         42,
         "2026-10-01T00:00:00.000Z",
         "seed-a",
@@ -51,17 +58,21 @@ describe("createLoadTelemetry", () => {
   it("uses only the production telemetry schema", () => {
     const telemetry = createLoadTelemetry(
       "load-000001",
+      sessionId,
       0,
       "2026-10-01T00:00:00.000Z",
       "seed-a",
     );
 
     expect(telemetryMessageSchema.safeParse(telemetry).success).toBe(true);
+    expect(telemetry.schemaVersion).toBe(2);
+    expect(telemetry.sessionId).toBe(sessionId);
     expect(Object.keys(telemetry).sort()).toEqual([
       "deviceId",
       "payload",
       "schemaVersion",
       "sequence",
+      "sessionId",
       "timestamp",
     ]);
   });

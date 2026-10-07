@@ -1,0 +1,1 @@
+ALTER TABLE "telemetry" ADD COLUMN "session_id" uuid;
