@@ -38,12 +38,17 @@ export interface TelemetryBufferStats {
   discarded: number;
 }
 
+export interface PendingTelemetryStats {
+  count: number;
+  oldestCreatedAt: string | null;
+}
+
 export interface TelemetryAppendResult {
   stored: boolean;
   discard?: TelemetryDiscard;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export class TelemetryBuffer {
   private readonly database: DatabaseSync;
@@ -114,6 +119,15 @@ export class TelemetryBuffer {
             reason TEXT NOT NULL
           );
           PRAGMA user_version=1;
+        `);
+      });
+    }
+    if (version < 2) {
+      this.transaction(() => {
+        this.database.exec(`
+          CREATE INDEX telemetry_buffer_pending_idx
+            ON telemetry_buffer (published_at, id);
+          PRAGMA user_version=2;
         `);
       });
     }
@@ -279,6 +293,33 @@ export class TelemetryBuffer {
     `,
       )
       .all(this.deviceId) as unknown as BufferedTelemetry[];
+  }
+
+  peekPendingPublish(): BufferedTelemetry | undefined {
+    return this.database
+      .prepare(
+        `SELECT id, session_id AS sessionId, sequence,
+          payload_json AS payloadJson, created_at AS createdAt,
+          attempt_count AS attemptCount, last_attempt_at AS lastAttemptAt,
+          published_at AS publishedAt
+         FROM telemetry_buffer
+         WHERE device_id = ? AND published_at IS NULL
+         ORDER BY id LIMIT 1`,
+      )
+      .get(this.deviceId) as BufferedTelemetry | undefined;
+  }
+
+  pendingPublishStats(): PendingTelemetryStats {
+    return this.database
+      .prepare(
+        `SELECT count(*) AS count,
+           (SELECT created_at FROM telemetry_buffer
+             WHERE device_id = ? AND published_at IS NULL
+             ORDER BY id LIMIT 1) AS oldestCreatedAt
+         FROM telemetry_buffer
+         WHERE device_id = ? AND published_at IS NULL`,
+      )
+      .get(this.deviceId, this.deviceId) as unknown as PendingTelemetryStats;
   }
 
   listDiscards(): TelemetryDiscard[] {

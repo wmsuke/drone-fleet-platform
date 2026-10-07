@@ -37,7 +37,7 @@ telemetry-ingestorとAPIはデバイス証明書を使わず、サービスご�
 
 AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持する。Basic Ingestの`$aws/rules/<ruleName>/` prefixはPhase 2.5の負荷確認時だけproduction topicの前へ付け、通常のデバイス通信には使わない。詳細は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
-## 配信設定
+## 配信設定（Phase 1）
 
 | メッセージ | QoS | retain |
 |---|---:|---|
@@ -46,7 +46,7 @@ AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持�
 | コマンド | 1 | false |
 | ACK | 1 | false |
 
-Phase 1のテレメトリは欠損を許容する。Phase 3の#110でsimulatorのSQLite保存と切断中の生成を追加した。現在のMQTT送信はQoS 0のままで、保存済みデータの再送と保存確認後の削除は#111以降で実装する。
+Phase 1のテレメトリは欠損を許容する。Phase 3の#110でsimulatorのSQLite保存と切断中の生成、#111で未送信行の再送とQoS 1 publishを追加した。ingestorの購読と保存確認通知はまだ更新されていない。MQTTのPUBACKだけではDB保存を確認できないため、SQLiteの行は削除しない。
 
 コマンドはretainしない。Phase 1では永続セッションを使わず、オフライン中のコマンドを後から配送する機能は設けない。
 

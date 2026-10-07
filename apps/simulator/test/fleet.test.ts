@@ -130,6 +130,11 @@ describe("startSimulatorFleet", () => {
     expect(telemetry.map(({ message }) => message.deviceId)).toEqual(
       Array.from({ length: 10 }, (_, index) => createDeviceId(index + 1)),
     );
+    expect(fleet.getBufferStatuses()["drone-001"]).toMatchObject({
+      rows: 1,
+      backlog: 0,
+      healthy: true,
+    });
 
     await fleet.shutdown();
 

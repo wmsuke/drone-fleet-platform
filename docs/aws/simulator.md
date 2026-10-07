@@ -30,13 +30,13 @@ pnpm --filter @drone-fleet/simulator build
 node --env-file=.env apps/simulator/dist/index.js
 ```
 
-起動時にRoot CA、各deviceの証明書、秘密鍵を読み込めない場合は、認証情報の内容や実際のファイルパスを出さず、対象deviceIdと不足した種類を表示して終了する。初回接続で証明書が拒否された場合も再試行を続けず、起動エラーとして終了する。AWSモードはTLSのサーバー証明書検証を無効化しない。接続完了後に通信が切れた場合は、MQTT clientの再接続を使う。
+起動時にRoot CA、各deviceの証明書、秘密鍵を読み込めない場合は、認証情報の内容や実際のファイルパスを出さず、対象deviceIdと不足した種類を表示して終了する。初回接続で証明書が拒否された場合も再試行を続けず、起動エラーとして終了する。AWSモードはTLSのサーバー証明書検証を無効化しない。接続完了後の通信断では、ローカルと共通の指数バックオフとjitterで再接続する。
 
 ## 通信と終了処理
 
 - 接続時に自機の`commands`を購読し、retain付き`ONLINE`と最初のtelemetryを送る。
 - 予期しない切断では、自機の`status`へ設定したretain付きLWTが`OFFLINE / CONNECTION_LOST`を通知する。
-- MQTT clientは切断後に再接続し、再購読、`ONLINE`、telemetry送信を再開する。
+- MQTT clientは切断後に再接続し、再購読、`ONLINE`、SQLiteに残る未送信telemetryの古い順での再送を行う。
 - `SIGINT`または`SIGTERM`ではretain付き`OFFLINE / SHUTDOWN`を送ってから正常切断する。
 - コマンドは既存処理で実行し、自機の`command-acks`へACKを返す。
 

@@ -50,9 +50,31 @@ describe("TelemetryBuffer", () => {
     });
     expect(JSON.parse(rows[0]?.payloadJson ?? "")).toEqual(message(0));
     expect(reopened.stats()).toMatchObject({ rows: 2, discarded: 0 });
+    expect(reopened.peekPendingPublish()?.sequence).toBe(1);
+    expect(reopened.pendingPublishStats()).toEqual({
+      count: 1,
+      oldestCreatedAt: message(1).timestamp,
+    });
     expect(reopened.confirmStored(sessionId, 0)).toBe(true);
     expect(reopened.listUnconfirmed()).toHaveLength(1);
     reopened.close();
+  });
+
+  it("migrates a version-one buffer without losing its rows", () => {
+    const path = join(directory, "drone-001.sqlite");
+    const original = openBuffer();
+    original.append(message(7));
+    original.close();
+    const previous = new DatabaseSync(path);
+    previous.exec(
+      "DROP INDEX telemetry_buffer_pending_idx; PRAGMA user_version=1",
+    );
+    previous.close();
+
+    const migrated = openBuffer();
+    expect(migrated.peekPendingPublish()?.sequence).toBe(7);
+    expect(migrated.pendingPublishStats().count).toBe(1);
+    migrated.close();
   });
 
   it("migrates an empty version-zero database and rejects a newer schema", () => {
@@ -75,11 +97,11 @@ describe("TelemetryBuffer", () => {
     expect(
       (newer.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version,
-    ).toBe(1);
-    newer.exec("PRAGMA user_version=2");
+    ).toBe(2);
+    newer.exec("PRAGMA user_version=3");
     newer.close();
     expect(() => openBuffer()).toThrow(
-      "unsupported telemetry buffer schema version: 2",
+      "unsupported telemetry buffer schema version: 3",
     );
   });
 

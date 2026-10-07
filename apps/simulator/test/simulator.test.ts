@@ -124,6 +124,260 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("retries the same row after a PUBACK timeout without deleting it", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(1);
+    const logError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        telemetryPublishTimeoutMs: 1000,
+        telemetryRetryBaseMs: 1000,
+        telemetryRetryMaxMs: 1000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const release = client.blockNextPublish();
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      backlog: 1,
+      publishFailures: 1,
+    });
+    release();
+    await vi.advanceTimersByTimeAsync(1000);
+    const sequences = client.published
+      .filter(({ topic }) => topic.endsWith("/telemetry"))
+      .map(
+        ({ message }) =>
+          telemetryMessageSchema.parse(JSON.parse(message)).sequence,
+      );
+    expect(sequences).toEqual([0, 1, 1]);
+    expect(simulator.getBufferStatus().backlog).toBe(0);
+    await simulator.shutdown();
+    logError.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  it("retains an in-flight row when the connection closes before PUBACK", async () => {
+    vi.useFakeTimers();
+    const logError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const client = new FakeMqttClient();
+    const settings = bufferSettings();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        ...settings,
+      },
+      async () => client,
+    );
+    const release = client.blockNextPublish();
+    await vi.advanceTimersByTimeAsync(5000);
+    client.connected = false;
+    vi.spyOn(client, "reconnect").mockImplementation(() => client);
+    client.emit("close");
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      backlog: 1,
+      publishFailures: 1,
+    });
+    await simulator.shutdown();
+
+    const persisted = new TelemetryBuffer(
+      settings.telemetryBufferPath,
+      "drone-001",
+      {
+        maxRows: settings.telemetryBufferMaxRows,
+        maxBytes: settings.telemetryBufferMaxBytes,
+      },
+    );
+    expect(persisted.peekPendingPublish()?.sequence).toBe(1);
+    persisted.close();
+    logError.mockRestore();
+  });
+
+  it("replays old rows before telemetry generated after reconnect, at the configured pace", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        telemetryReplayIntervalMs: 2000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    client.connected = false;
+    vi.spyOn(client, "reconnect").mockImplementation(() => client);
+    client.emit("close");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(simulator.getBufferStatus()).toMatchObject({ backlog: 2, rows: 3 });
+
+    client.connected = true;
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(0);
+    const sequences = () =>
+      client.published
+        .filter(({ topic }) => topic.endsWith("/telemetry"))
+        .map(
+          ({ message }) =>
+            telemetryMessageSchema.parse(JSON.parse(message)).sequence,
+        );
+    expect(sequences()).toEqual([0, 1]);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(sequences()).toEqual([0, 1]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sequences()).toEqual([0, 1, 2]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sequences()).toEqual([0, 1, 2, 3]);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      backlog: 0,
+      replayed: 2,
+    });
+    expect(
+      client.published
+        .filter(({ topic }) => topic.endsWith("/telemetry"))
+        .every(({ options }) => options.qos === 1),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+
+  it("resumes unpublished rows from a previous process before the new session", async () => {
+    vi.useFakeTimers();
+    const settings = bufferSettings();
+    const config = {
+      deviceId: "drone-001",
+      mqttUrl: "mqtt://127.0.0.1:1883",
+      simulationSeed: "simulator-test",
+      telemetryIntervalMs: 5000,
+      ...settings,
+    };
+    const firstClient = new FakeMqttClient();
+    const first = await startSimulator(config, async () => firstClient);
+    firstClient.connected = false;
+    vi.spyOn(firstClient, "reconnect").mockImplementation(() => firstClient);
+    firstClient.emit("close");
+    await vi.advanceTimersByTimeAsync(5000);
+    await first.shutdown();
+
+    const secondClient = new FakeMqttClient();
+    const second = await startSimulator(config, async () => secondClient);
+    const initial = secondClient.published.find(({ topic }) =>
+      topic.endsWith("/telemetry"),
+    );
+    const sent = telemetryMessageSchema.parse(
+      JSON.parse(initial?.message ?? ""),
+    );
+    expect(sent.sequence).toBe(1);
+    expect(second.getBufferStatus().backlog).toBe(1);
+    await vi.advanceTimersByTimeAsync(200);
+    const next = secondClient.published.filter(({ topic }) =>
+      topic.endsWith("/telemetry"),
+    )[1];
+    const current = telemetryMessageSchema.parse(
+      JSON.parse(next?.message ?? ""),
+    );
+    expect(current.sequence).toBe(0);
+    if (sent.schemaVersion !== 2 || current.schemaVersion !== 2)
+      throw new Error("v2 expected");
+    expect(current.sessionId).not.toBe(sent.sessionId);
+    await second.shutdown();
+  });
+
+  it("backs off publish failures and exposes the retry result", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(1);
+    const logError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        telemetryRetryBaseMs: 1000,
+        telemetryRetryMaxMs: 1000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    client.failNextPublish(new Error("publish failed"));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      backlog: 1,
+      publishFailures: 1,
+    });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(
+      client.published.filter(({ topic }) => topic.endsWith("/telemetry")),
+    ).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(
+      client.published.filter(({ topic }) => topic.endsWith("/telemetry")),
+    ).toHaveLength(3);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      backlog: 0,
+      replayed: 1,
+    });
+    await simulator.shutdown();
+    logError.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  it("uses exponential jittered delays for reconnect attempts", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(1);
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://127.0.0.1:1883",
+        simulationSeed: "simulator-test",
+        telemetryIntervalMs: 5000,
+        telemetryRetryBaseMs: 1000,
+        telemetryRetryMaxMs: 4000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    client.connected = false;
+    vi.spyOn(client, "reconnect").mockImplementation(() => {
+      client.reconnectCount += 1;
+      client.emit("close");
+      return client;
+    });
+    client.emit("close");
+    await vi.advanceTimersByTimeAsync(999);
+    expect(client.reconnectCount).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.reconnectCount).toBe(1);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(client.reconnectCount).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.reconnectCount).toBe(2);
+    expect(simulator.getBufferStatus().reconnectAttempts).toBe(2);
+    await simulator.shutdown();
+    vi.restoreAllMocks();
+  });
+
   it("keeps generating into SQLite while MQTT is disconnected", async () => {
     vi.useFakeTimers();
     const client = new FakeMqttClient();
@@ -140,6 +394,7 @@ describe("startSimulator", () => {
     );
 
     client.connected = false;
+    vi.spyOn(client, "reconnect").mockImplementation(() => client);
     client.emit("offline");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(simulator.getBufferStatus()).toMatchObject({
@@ -259,6 +514,7 @@ describe("startSimulator", () => {
     expect(connectionOptions).toMatchObject({
       clean: true,
       clientId: "dev-drone-001",
+      reconnectPeriod: 0,
       rejectUnauthorized: true,
       will: {
         topic: "fleet/v1/devices/dev-drone-001/status",
@@ -403,7 +659,7 @@ describe("startSimulator", () => {
     const messages = client.published
       .filter(({ topic }) => topic.endsWith("/telemetry"))
       .map(({ message }) => telemetryMessageSchema.parse(JSON.parse(message)));
-    expect(messages.map(({ sequence }) => sequence)).toEqual([0, 1, 2]);
+    expect(messages.map(({ sequence }) => sequence)).toEqual([0, 1, 1, 2]);
     expect(messages.every((message) => message.schemaVersion === 2)).toBe(true);
     expect(logError).toHaveBeenCalledOnce();
     logError.mockRestore();

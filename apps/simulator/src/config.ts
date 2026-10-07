@@ -23,6 +23,10 @@ export interface SimulatorConfig {
   telemetryBufferDirectory: string;
   telemetryBufferMaxRows: number;
   telemetryBufferMaxBytes: number;
+  telemetryRetryBaseMs: number;
+  telemetryRetryMaxMs: number;
+  telemetryReplayIntervalMs: number;
+  telemetryPublishTimeoutMs: number;
 }
 
 export const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -34,6 +38,10 @@ export const MAX_DEVICE_ID_PREFIX_LENGTH = 59;
 export const DEFAULT_TELEMETRY_BUFFER_DIRECTORY = "simulator-data";
 export const DEFAULT_TELEMETRY_BUFFER_MAX_ROWS = 10_000;
 export const DEFAULT_TELEMETRY_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
+export const DEFAULT_TELEMETRY_RETRY_BASE_MS = 1_000;
+export const DEFAULT_TELEMETRY_RETRY_MAX_MS = 30_000;
+export const DEFAULT_TELEMETRY_REPLAY_INTERVAL_MS = 200;
+export const DEFAULT_TELEMETRY_PUBLISH_TIMEOUT_MS = 10_000;
 
 function parseInteger(
   value: string,
@@ -137,6 +145,34 @@ export function loadSimulatorConfig(
     1,
     Number.MAX_SAFE_INTEGER,
   );
+  const telemetryRetryBaseMs = parseInteger(
+    environment.TELEMETRY_RETRY_BASE_MS ??
+      String(DEFAULT_TELEMETRY_RETRY_BASE_MS),
+    "TELEMETRY_RETRY_BASE_MS",
+    1,
+    MAX_TIMER_DELAY_MS,
+  );
+  const telemetryRetryMaxMs = parseInteger(
+    environment.TELEMETRY_RETRY_MAX_MS ??
+      String(DEFAULT_TELEMETRY_RETRY_MAX_MS),
+    "TELEMETRY_RETRY_MAX_MS",
+    telemetryRetryBaseMs,
+    MAX_TIMER_DELAY_MS,
+  );
+  const telemetryReplayIntervalMs = parseInteger(
+    environment.TELEMETRY_REPLAY_INTERVAL_MS ??
+      String(DEFAULT_TELEMETRY_REPLAY_INTERVAL_MS),
+    "TELEMETRY_REPLAY_INTERVAL_MS",
+    1,
+    MAX_TIMER_DELAY_MS,
+  );
+  const telemetryPublishTimeoutMs = parseInteger(
+    environment.TELEMETRY_PUBLISH_TIMEOUT_MS ??
+      String(DEFAULT_TELEMETRY_PUBLISH_TIMEOUT_MS),
+    "TELEMETRY_PUBLISH_TIMEOUT_MS",
+    1,
+    MAX_TIMER_DELAY_MS,
+  );
 
   if (telemetryBufferDirectory.length === 0) {
     throw new TypeError("TELEMETRY_BUFFER_DIR must not be empty");
@@ -168,5 +204,9 @@ export function loadSimulatorConfig(
     telemetryBufferDirectory,
     telemetryBufferMaxRows,
     telemetryBufferMaxBytes,
+    telemetryRetryBaseMs,
+    telemetryRetryMaxMs,
+    telemetryReplayIntervalMs,
+    telemetryPublishTimeoutMs,
   };
 }

@@ -12,6 +12,10 @@ import {
 
 export interface RunningSimulatorFleet {
   shutdown(): Promise<void>;
+  getBufferStatuses(): Record<
+    string,
+    ReturnType<RunningSimulator["getBufferStatus"]>
+  >;
 }
 
 export type CreateDeviceMqttConnectionConfig = (
@@ -55,6 +59,10 @@ export async function startSimulatorFleet(
             ),
             telemetryBufferMaxRows: config.telemetryBufferMaxRows,
             telemetryBufferMaxBytes: config.telemetryBufferMaxBytes,
+            telemetryRetryBaseMs: config.telemetryRetryBaseMs,
+            telemetryRetryMaxMs: config.telemetryRetryMaxMs,
+            telemetryReplayIntervalMs: config.telemetryReplayIntervalMs,
+            telemetryPublishTimeoutMs: config.telemetryPublishTimeoutMs,
           },
           connectClient,
         ),
@@ -68,6 +76,14 @@ export async function startSimulatorFleet(
   }
 
   return {
+    getBufferStatuses() {
+      return Object.fromEntries(
+        simulators.map((simulator, index) => [
+          createDeviceId(index + 1, config.deviceIdPrefix),
+          simulator.getBufferStatus(),
+        ]),
+      );
+    },
     async shutdown(): Promise<void> {
       await Promise.all(
         simulators.map(async (simulator) => simulator.shutdown()),
