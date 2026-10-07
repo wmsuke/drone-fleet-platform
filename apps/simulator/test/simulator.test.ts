@@ -228,6 +228,7 @@ describe("startSimulator", () => {
     client.emit("close");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(simulator.getBufferStatus()).toMatchObject({ backlog: 2, rows: 3 });
+    expect(simulator.getBufferStatus().brokerAcknowledgedUnconfirmed).toBe(1);
 
     client.connected = true;
     client.emit("connect");

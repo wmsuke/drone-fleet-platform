@@ -371,6 +371,8 @@ simulatorは送信前にtelemetryを機体ごとのSQLiteファイルへ保存�
 
 QoS 1のPUBACK待ちは`TELEMETRY_PUBLISH_TIMEOUT_MS`（既定10秒）で打ち切り、同じ行を後で再試行する。タイムアウト後に先のpublishが成功する場合もあるため、重複送信を許容する。
 
+この段階の再送はPUBACKを得ていない行に限る。ブローカーが受理してもtelemetry-ingestorやPostgreSQLが停止していれば、その行はDB未保存のまま再送対象から外れる。`getBufferStatus()`の`backlog`はPUBACK未取得行数、`brokerAcknowledgedUnconfirmed`はPUBACK済みだがDB保存を確認していない行数である。#112のDB重複排除と#128の保存確認receipt経路が揃うまで、DBへのat-least-once保存は保証しない。
+
 AWS IoT Coreへ接続する場合は、[AWS IoT Coreへシミュレータを接続する](docs/aws/simulator.md)に従ってtransportと機体ごとのmTLS認証情報を設定する。ローカルMosquittoの起動方法と既定値は変わらない。
 
 確認後はブローカーを停止する。

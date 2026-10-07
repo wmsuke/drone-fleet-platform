@@ -46,7 +46,7 @@ AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持�
 | コマンド | 1 | false |
 | ACK | 1 | false |
 
-Phase 1のテレメトリは欠損を許容する。Phase 3の#110でsimulatorのSQLite保存と切断中の生成、#111で未送信行の再送とQoS 1 publishを追加した。ingestorの購読と保存確認通知はまだ更新されていない。MQTTのPUBACKだけではDB保存を確認できないため、SQLiteの行は削除しない。
+Phase 1のテレメトリは欠損を許容する。Phase 3の#110でsimulatorのSQLite保存と切断中の生成、#111のPRでPUBACK未取得行の再送とQoS 1 publishを追加した。ingestorの購読と保存確認通知はまだ更新されていない。MQTTのPUBACKだけではDB保存を確認できないため、SQLiteの行は削除しない。ただし現時点ではPUBACK済み行を再送しないため、DB保存も保証されない。#112の重複排除と#128のreceipt経路が揃うまではtransport-levelの再送に限る。
 
 コマンドはretainしない。Phase 1では永続セッションを使わず、オフライン中のコマンドを後から配送する機能は設けない。
 

@@ -34,6 +34,7 @@ export interface RunningSimulator {
     healthy: boolean;
     error?: string;
     backlog: number;
+    brokerAcknowledgedUnconfirmed: number;
     oldestBacklogAt: string | null;
     replayed: number;
     publishFailures: number;
@@ -433,6 +434,7 @@ export async function startSimulator(
       console.log("テレメトリの未送信分を再送します", {
         deviceId: config.deviceId,
         backlog: pendingStats.count,
+        brokerAcknowledgedUnconfirmed: bufferStats.rows - pendingStats.count,
         oldestBacklogAt: pendingStats.oldestCreatedAt,
       });
     }
@@ -522,6 +524,7 @@ export async function startSimulator(
       return {
         ...bufferStats,
         backlog: pendingStats.count,
+        brokerAcknowledgedUnconfirmed: bufferStats.rows - pendingStats.count,
         oldestBacklogAt: pendingStats.oldestCreatedAt,
         replayed,
         publishFailures,
