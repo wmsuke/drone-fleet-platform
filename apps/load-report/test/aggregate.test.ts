@@ -68,6 +68,40 @@ function ingestor(): IngestorReport {
 }
 
 describe("createLoadTestReport", () => {
+  it("aggregates duplicates and rejects content conflicts", async () => {
+    const input = ingestor();
+    input.counters.telemetryDuplicates = 2;
+    input.counters.telemetryConflicts = 1;
+    const report = await createLoadTestReport(
+      "test-1",
+      [
+        generator(
+          "worker-1",
+          "2026-10-01T00:00:01.000Z",
+          "2026-10-01T00:00:02.000Z",
+        ),
+        generator(
+          "worker-2",
+          "2026-10-01T00:00:03.000Z",
+          "2026-10-01T00:00:04.000Z",
+        ),
+      ],
+      [input],
+      {
+        findTelemetry: async () => [
+          { deviceId: "load-000001", sequence: 0 },
+          { deviceId: "load-000001", sequence: 1 },
+        ],
+      },
+    );
+    expect(report.counters).toMatchObject({
+      telemetryDuplicates: 2,
+      telemetryConflicts: 1,
+    });
+    expect(() => assertCompleteReport(report)).toThrow(
+      "失敗カウンタ expected=0 actual=1",
+    );
+  });
   it("keeps sequence resets separate by session time window", async () => {
     const first = generator(
       "worker-1",

@@ -85,7 +85,22 @@ export async function ingestTelemetry(
   );
 
   try {
-    await repository.save(parsed.message, receivedAt, isRetained);
+    const outcome =
+      (await repository.save(parsed.message, receivedAt, isRetained)) ??
+      "saved";
+    measuredMetrics?.recordTelemetryOutcome(outcome);
+    if (outcome === "conflict") {
+      logger.warn("テレメトリの識別子と内容が衝突しました", {
+        deviceId: parsed.message.deviceId,
+        sessionId:
+          parsed.message.schemaVersion === 2
+            ? parsed.message.sessionId
+            : undefined,
+        sequence: parsed.message.sequence,
+        topic,
+      });
+      return false;
+    }
     if (measurementStartedAt !== undefined) {
       measuredMetrics?.recordDbSaveSuccess(
         performance.now() - measurementStartedAt,

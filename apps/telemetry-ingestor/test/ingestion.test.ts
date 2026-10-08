@@ -86,6 +86,58 @@ describe("parseTelemetry", () => {
 });
 
 describe("ingestTelemetry", () => {
+  it("counts identical replays as successful and content conflicts separately", async () => {
+    const { logger } = createDependencies();
+    const metrics = createLoadMetrics({
+      testId: "dedup",
+      sessionId: "ingestor",
+      reportPath: "unused.json",
+    });
+    const receivedAt = new Date(v2Message.timestamp);
+    const repository: TelemetryPersistence = {
+      save: vi
+        .fn()
+        .mockResolvedValueOnce("duplicate")
+        .mockResolvedValueOnce("conflict"),
+    };
+    expect(
+      await ingestTelemetry(
+        topic,
+        payload(v2Message),
+        receivedAt,
+        repository,
+        logger,
+        false,
+        metrics,
+      ),
+    ).toBe(true);
+    expect(
+      await ingestTelemetry(
+        topic,
+        payload(v2Message),
+        receivedAt,
+        repository,
+        logger,
+        false,
+        metrics,
+      ),
+    ).toBe(false);
+    expect(metrics.snapshot().counters).toMatchObject({
+      dbSaveSucceeded: 1,
+      dbSaveFailed: 0,
+      dbInserted: 0,
+      telemetryDuplicates: 1,
+      telemetryConflicts: 1,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "テレメトリの識別子と内容が衝突しました",
+      expect.objectContaining({
+        deviceId: v2Message.deviceId,
+        sessionId: v2Message.sessionId,
+        sequence: v2Message.sequence,
+      }),
+    );
+  });
   it("saves valid telemetry with the server receipt time", async () => {
     const { logger, repository, saved } = createDependencies();
     const receivedAt = new Date("2026-09-29T02:00:01.000Z");

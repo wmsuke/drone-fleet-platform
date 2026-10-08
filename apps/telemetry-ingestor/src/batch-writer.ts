@@ -1,13 +1,17 @@
 import type { TelemetryMessage } from "@drone-fleet/protocol";
 
-import type { TelemetryBatchEntry, TelemetryRepository } from "./repository.js";
+import type {
+  TelemetryBatchEntry,
+  TelemetryRepository,
+  TelemetrySaveOutcome,
+} from "./repository.js";
 
 export interface TelemetryPersistence {
   save(
     message: TelemetryMessage,
     receivedAt: Date,
     isRetained?: boolean,
-  ): Promise<void>;
+  ): Promise<TelemetrySaveOutcome | void>;
 }
 
 export interface TelemetryBatchWriterOptions {
@@ -17,7 +21,7 @@ export interface TelemetryBatchWriterOptions {
 }
 
 interface PendingEntry extends TelemetryBatchEntry {
-  resolve(): void;
+  resolve(outcome: TelemetrySaveOutcome): void;
   reject(error: unknown): void;
 }
 
@@ -44,7 +48,7 @@ export class TelemetryBatchWriter implements TelemetryPersistence {
     message: TelemetryMessage,
     receivedAt: Date,
     isRetained = false,
-  ): Promise<void> {
+  ): Promise<TelemetrySaveOutcome> {
     if (this.stopped) {
       return Promise.reject(new Error("telemetry batch writer is stopped"));
     }
@@ -55,7 +59,7 @@ export class TelemetryBatchWriter implements TelemetryPersistence {
     }
 
     this.pendingCount += 1;
-    const completion = new Promise<void>((resolve, reject) => {
+    const completion = new Promise<TelemetrySaveOutcome>((resolve, reject) => {
       this.buffer.push({ message, receivedAt, isRetained, resolve, reject });
     });
 
@@ -71,6 +75,7 @@ export class TelemetryBatchWriter implements TelemetryPersistence {
     if (this.flushing !== undefined) return this.flushing;
     this.flushing = this.drain().finally(() => {
       this.flushing = undefined;
+      if (this.buffer.length > 0) void this.flush();
     });
     return this.flushing;
   }
@@ -78,7 +83,9 @@ export class TelemetryBatchWriter implements TelemetryPersistence {
   async shutdown(): Promise<void> {
     this.stopped = true;
     this.clearFlushTimer();
-    await this.flush();
+    do {
+      await this.flush();
+    } while (this.pendingCount > 0);
   }
 
   private scheduleFlush(): void {
@@ -100,14 +107,17 @@ export class TelemetryBatchWriter implements TelemetryPersistence {
     while (this.buffer.length > 0) {
       const batch = this.buffer.splice(0, this.options.batchSize);
       try {
-        await this.repository.saveBatch(
+        const outcomes = await this.repository.saveBatch(
           batch.map(({ message, receivedAt, isRetained }) => ({
             message,
             receivedAt,
             isRetained,
           })),
         );
-        for (const entry of batch) entry.resolve();
+        if (outcomes.length !== batch.length)
+          throw new Error("telemetry batch result count does not match input");
+        for (const [index, entry] of batch.entries())
+          entry.resolve(outcomes[index]!);
       } catch (error) {
         for (const entry of batch) entry.reject(error);
       } finally {

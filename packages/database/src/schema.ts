@@ -2,15 +2,18 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   bigint,
+  boolean,
   check,
   doublePrecision,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
   real,
   timestamp,
   uuid,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -66,6 +69,8 @@ export const telemetry = pgTable(
       .notNull()
       .references(() => devices.deviceId, { onDelete: "cascade" }),
     sessionId: uuid("session_id"),
+    identityOwner: boolean("identity_owner").notNull().default(true),
+    sourcePayload: jsonb("source_payload").$type<Record<string, unknown>>(),
     sequence: bigint("sequence", { mode: "number" }).notNull(),
     deviceTimestamp: timestamp("device_timestamp", {
       withTimezone: true,
@@ -85,6 +90,9 @@ export const telemetry = pgTable(
     flightStatus: flightStatusEnum("flight_status").notNull(),
   },
   (table) => [
+    uniqueIndex("telemetry_identity_idx")
+      .on(table.deviceId, table.sessionId, table.sequence)
+      .where(sql`${table.sessionId} is not null and ${table.identityOwner}`),
     index("telemetry_device_sequence_idx").on(table.deviceId, table.sequence),
     index("telemetry_device_received_at_idx").on(
       table.deviceId,

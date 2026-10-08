@@ -58,6 +58,9 @@ describe("createLoadMetrics", () => {
       validationFailed: 1,
       dbSaveSucceeded: 1,
       dbSaveFailed: 1,
+      dbInserted: 0,
+      telemetryDuplicates: 0,
+      telemetryConflicts: 0,
       offlineTransitions: 3,
     });
     expect(report.timings.deviceTimestampToMqttReceiveMs).toMatchObject({
