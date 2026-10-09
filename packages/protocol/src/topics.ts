@@ -3,6 +3,7 @@ const TOPIC_PREFIX = ["fleet", "v1", "devices"] as const;
 
 export type MqttTopicKind =
   | "telemetry"
+  | "telemetry-receipts"
   | "status"
   | "commands"
   | "command-acks";
@@ -33,6 +34,10 @@ export function createTelemetryTopic(deviceId: string): string {
   return createMqttTopic(deviceId, "telemetry");
 }
 
+export function createTelemetryReceiptsTopic(deviceId: string): string {
+  return createMqttTopic(deviceId, "telemetry-receipts");
+}
+
 export function createStatusTopic(deviceId: string): string {
   return createMqttTopic(deviceId, "status");
 }
@@ -48,6 +53,7 @@ export function createCommandAcksTopic(deviceId: string): string {
 function isMqttTopicKind(value: string): value is MqttTopicKind {
   return (
     value === "telemetry" ||
+    value === "telemetry-receipts" ||
     value === "status" ||
     value === "commands" ||
     value === "command-acks"

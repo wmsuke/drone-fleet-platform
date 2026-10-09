@@ -2,6 +2,7 @@ import {
   parseMqttTopic,
   telemetryMessageSchema,
   type TelemetryMessage,
+  type TelemetryReceiptMessage,
 } from "@drone-fleet/protocol";
 
 import type { TelemetryPersistence } from "./batch-writer.js";
@@ -59,6 +60,7 @@ export async function ingestTelemetry(
   isRetained = false,
   metrics?: LoadMetrics,
   mqttReceivedAtMonotonic?: number,
+  publishReceipt?: (receipt: TelemetryReceiptMessage) => Promise<void>,
 ): Promise<boolean> {
   const measurementStartedAt =
     metrics === undefined
@@ -105,6 +107,24 @@ export async function ingestTelemetry(
       measuredMetrics?.recordDbSaveSuccess(
         performance.now() - measurementStartedAt,
       );
+    }
+    if (parsed.message.schemaVersion === 2 && publishReceipt !== undefined) {
+      try {
+        await publishReceipt({
+          schemaVersion: 1,
+          deviceId: parsed.message.deviceId,
+          sessionId: parsed.message.sessionId,
+          sequence: parsed.message.sequence,
+          timestamp: new Date().toISOString(),
+          status: "STORED",
+        });
+      } catch (error) {
+        // DB commit済み。端末の再送で内容一致を確認し、receiptを再通知する。
+        logger.error("テレメトリの保存確認通知に失敗しました", {
+          error,
+          topic,
+        });
+      }
     }
     return true;
   } catch (error) {

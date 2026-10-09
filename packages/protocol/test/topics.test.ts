@@ -5,6 +5,7 @@ import {
   createCommandsTopic,
   createStatusTopic,
   createTelemetryTopic,
+  createTelemetryReceiptsTopic,
   isValidDeviceId,
   parseMqttTopic,
 } from "../src/index.js";
@@ -12,6 +13,7 @@ import {
 describe("MQTT topics", () => {
   it.each([
     [createTelemetryTopic, "telemetry"],
+    [createTelemetryReceiptsTopic, "telemetry-receipts"],
     [createStatusTopic, "status"],
     [createCommandsTopic, "commands"],
     [createCommandAcksTopic, "command-acks"],

@@ -15,13 +15,14 @@ MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protoc
 | トピック | 送信元 | 受信先 |
 |---|---|---|
 | `fleet/v1/devices/{deviceId}/telemetry` | デバイス | MQTT受信処理 |
+| `fleet/v1/devices/{deviceId}/telemetry-receipts` | MQTT受信処理 | デバイス |
 | `fleet/v1/devices/{deviceId}/status` | デバイス・ブローカーのLWT | MQTT受信処理 |
 | `fleet/v1/devices/{deviceId}/commands` | API | デバイス |
 | `fleet/v1/devices/{deviceId}/command-acks` | デバイス | MQTT受信処理 |
 
 `deviceId`は機体ごとに一意とする。使用できる文字は英数字、ハイフン、アンダースコアとし、1〜64文字に制限する。
 
-`packages/protocol`は`createTelemetryTopic`、`createStatusTopic`、`createCommandsTopic`、`createCommandAcksTopic`と`parseMqttTopic`を公開する。生成関数は不正な`deviceId`に対して`TypeError`を投げる。`parseMqttTopic`は完全一致するトピックから`kind`と`deviceId`を返し、不正な形式では`null`を返す。
+`packages/protocol`は`createTelemetryTopic`、`createTelemetryReceiptsTopic`、`createStatusTopic`、`createCommandsTopic`、`createCommandAcksTopic`と`parseMqttTopic`を公開する。生成関数は不正なdeviceIdにTypeErrorを返す。topicは完全一致で解析する。
 
 トピックとメッセージ内のdeviceIdが一致しない場合は受け付けない。
 
@@ -31,22 +32,23 @@ Phase 0の動作確認で使う`fleet/test`、`fleet/test/verify-*`、`fleet/hea
 
 Phase 2でも上表のproduction topicを変更しない。デバイスはThing name、MQTT clientId、メッセージ内とtopic内のdeviceIdを一致させる。
 
-デバイスごとに異なるX.509証明書とIoT Policyを使用し、自機のtelemetry・status・ACKのpublishと、自機宛てcommandのsubscribe・receiveだけを許可する。接続時のclientIdも対象deviceIdへ固定する。他機体のtopic、`+`や`#`を含むclientId、自機の権限外のpublish・subscribeは拒否する。
+デバイスごとに異なるX.509証明書を使い、自機telemetry・status・ACKのpublishと、自機commands・telemetry-receiptsのsubscribe / receiveだけを許可する。clientIdは対象deviceIdへ固定し、他機体のtopicや権限外の送受信は拒否する。
 
-telemetry-ingestorとAPIはデバイス証明書を使わず、サービスごとに独立したバックエンド証明書と固定clientIdを使う。telemetry-ingestorはtelemetry・status・ACKのsubscribe / receive、APIはcommandのpublishだけを許可する。
+telemetry-ingestorとAPIは独立した証明書と固定clientIdを使う。ingestorはtelemetry・status・ACKのsubscribe / receiveとreceiptのpublish、APIはcommandのpublishだけを許可する。
 
 AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持する。Basic Ingestの`$aws/rules/<ruleName>/` prefixはPhase 2.5の負荷確認時だけproduction topicの前へ付け、通常のデバイス通信には使わない。詳細は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 
-## 配信設定（Phase 1）
+## 配信設定（現在）
 
 | メッセージ | QoS | retain |
 |---|---:|---|
-| テレメトリ | 0 | false |
+| テレメトリ（simulator publish / ingestor subscribe） | 1 | false |
+| テレメトリ保存確認receipt | 1 | false |
 | 接続状態 | 1 | true |
 | コマンド | 1 | false |
 | ACK | 1 | false |
 
-Phase 1のテレメトリは欠損を許容する。Phase 3の#110でsimulatorのSQLite保存と切断中の生成、#111のPRでPUBACK未取得行の再送とQoS 1 publishを追加した。ingestorの購読と保存確認通知はまだ更新されていない。MQTTのPUBACKだけではDB保存を確認できないため、SQLiteの行は削除しない。ただし現時点ではPUBACK済み行を再送しないため、DB保存も保証されない。DBの重複排除は#112で実装済みだが、#128のreceipt経路が揃うまではtransport-levelの再送に限る。
+Phase 1の旧telemetryは欠損を許容する。Phase 3ではsimulatorがSQLite保存とQoS 1再送、ingestorがQoS 1購読・冪等保存・DB commit後のreceipt通知を行う。PUBACKだけでは削除せず、保存確認まで同じ最古行を再送する。容量・永続領域・復旧条件の保証境界は[ADR 0005](adr/0005-delivery-and-recovery.md)に従う。
 
 コマンドはretainしない。Phase 1では永続セッションを使わず、オフライン中のコマンドを後から配送する機能は設けない。
 
@@ -92,7 +94,7 @@ payloadの必須項目や意味を変える場合は、対象メッセージのs
 
 `sessionId`は小文字・ハイフン付き36文字のUUID v4とする。simulatorは機体ごと・プロセス起動ごとに生成し、MQTT再接続では変えない。load-generatorも実行ごと・機体ごとに生成する。レポート用の`LOAD_SESSION_ID`とは別の値である。再起動後は新しい`sessionId`で`sequence=0`から始める。同一セッション内の連番は単調増加し、送信失敗による欠番は許容する。1件の識別子は`(deviceId, sessionId, sequence)`とし、異なるセッションの同じ連番は別データである。
 
-旧v1 telemetryは移行中も受信・保存するが、`sessionId`がないため重複排除の対象にしない。v2は`(deviceId, sessionId, sequence)`で永続的に重複排除する。同じ送信内容の再受信は成功扱いにし、内容が違う場合は衝突として警告し、既存行を上書きしない。受信時刻は内容照合に含めない。移行と計測の詳細は[telemetry保存の冪等化](load-testing/telemetry-idempotency.md)を参照する。保存確認receiptは#128で追加する。topicとingestorのQoS 0購読は変更しない。
+旧v1 telemetryは移行中も受信・保存するが、`sessionId`がないため重複排除の対象にしない。v2は`(deviceId, sessionId, sequence)`で永続的に重複排除する。同じ送信内容の再受信は成功扱いにし、内容が違う場合は衝突として警告し、既存行を上書きしない。受信時刻は内容照合に含めない。移行と計測の詳細は[telemetry保存の冪等化](load-testing/telemetry-idempotency.md)を参照する。保存確認receiptは#128で追加した。詳細は[telemetry保存確認receipt](telemetry-receipts.md)を参照する。topicは変えず、ingestorはQoS 1で購読する。
 
 ### 項目
 
@@ -261,10 +263,10 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 
 ## Phase 3で追加する通信
 
-[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryの`sessionId`と`schemaVersion=2`は#109で実装済みである。以下の保存確認、QoS変更、command/ACKのv2化は未実装であり、上記の配信設定とcommand状態定義は現在の実装を示す。
+[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryのv2化、DB重複排除、QoS 1購読、保存確認receipt経路は実装済みである。command/ACKのv2化は未実装であり、上記のcommand状態定義は現在の実装を示す。
 
 - telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進めた。topicは変えず、`deviceId + sessionId + sequence`を1件の識別子とする。DBでの一意制約と重複排除は#112で実装済みである。
-- telemetryのpublishとingestorのsubscribeをQoS 1にする。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
+- telemetryのpublishとingestorのsubscribeをQoS 1にした。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
 - commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進める。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
 

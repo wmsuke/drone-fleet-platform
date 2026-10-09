@@ -16,6 +16,7 @@ import type { DeviceStatusRepository } from "../src/status.js";
 import { createLoadMetrics } from "../src/metrics.js";
 
 class FakeMqttClient implements TelemetryMqttClient {
+  publishAsync = vi.fn(async () => undefined);
   readonly endForces: Array<boolean | undefined> = [];
   readonly subscriptions: Array<{ topic: string; options: { qos: 0 | 1 } }> =
     [];
@@ -141,7 +142,7 @@ describe("startTelemetryIngestor", () => {
       },
     });
     expect(client.subscriptions).toEqual([
-      { topic: TELEMETRY_TOPIC_FILTER, options: { qos: 0 } },
+      { topic: TELEMETRY_TOPIC_FILTER, options: { qos: 1 } },
       { topic: STATUS_TOPIC_FILTER, options: { qos: 1 } },
       { topic: COMMAND_ACK_TOPIC_FILTER, options: { qos: 1 } },
     ]);
@@ -215,7 +216,7 @@ describe("startTelemetryIngestor", () => {
       shutdownCompleted = true;
     });
 
-    await vi.waitFor(() => expect(client.endForces).toEqual([false]));
+    expect(client.endForces).toEqual([]);
     await Promise.resolve();
     expect(shutdownCompleted).toBe(false);
 
@@ -228,7 +229,7 @@ describe("startTelemetryIngestor", () => {
     const client = new FakeMqttClient();
     const repository: TelemetryRepository = {
       saveBatch: vi.fn(async (entries) => {
-        expect(client.endForces).toEqual([false]);
+        expect(client.endForces).toEqual([]);
         return entries.map(() => "saved" as const);
       }),
     };

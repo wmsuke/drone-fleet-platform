@@ -9,7 +9,7 @@
 | connect             | clientIdが`${iot:Connection.Thing.ThingName}`と一致し、証明書がThingへattach済みの場合だけ。接続属性は`LastWill`だけを許可する |
 | publish             | 自機の`telemetry`、`status`、`command-acks`                                                                                    |
 | retained publish    | 自機の`status`だけ                                                                                                             |
-| subscribe / receive | 自機の`commands`だけ                                                                                                           |
+| subscribe / receive | 自機の`commands`と`telemetry-receipts`だけ                                                                                     |
 
 Policyは`${iot:ClientId}`をtopicへ使わない。clientIdに`+`や`#`を指定して権限を広げられないよう、`iot:Connect`のresourceをThing名へ固定し、全statementへ`iot:Connection.Thing.IsAttached = true`を指定する。
 

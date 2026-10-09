@@ -86,6 +86,104 @@ describe("parseTelemetry", () => {
 });
 
 describe("ingestTelemetry", () => {
+  it("sends receipts only after save completes, including duplicates but not conflicts or failures", async () => {
+    const { logger } = createDependencies();
+    const publishReceipt = vi.fn(async () => undefined);
+    let complete!: (outcome: "saved") => void;
+    const repository: TelemetryPersistence = {
+      save: () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    };
+    const task = ingestTelemetry(
+      topic,
+      payload(v2Message),
+      new Date(),
+      repository,
+      logger,
+      false,
+      undefined,
+      undefined,
+      publishReceipt,
+    );
+    expect(publishReceipt).not.toHaveBeenCalled();
+    complete("saved");
+    await task;
+    expect(publishReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "STORED",
+        deviceId: v2Message.deviceId,
+        sessionId: v2Message.sessionId,
+        sequence: v2Message.sequence,
+      }),
+    );
+    await ingestTelemetry(
+      topic,
+      payload(v2Message),
+      new Date(),
+      { save: async () => "duplicate" },
+      logger,
+      false,
+      undefined,
+      undefined,
+      publishReceipt,
+    );
+    expect(publishReceipt).toHaveBeenCalledTimes(2);
+    for (const save of [
+      async () => "conflict" as const,
+      async () => {
+        throw new Error("DB unavailable");
+      },
+    ]) {
+      await ingestTelemetry(
+        topic,
+        payload(v2Message),
+        new Date(),
+        { save },
+        logger,
+        false,
+        undefined,
+        undefined,
+        publishReceipt,
+      );
+    }
+    await ingestTelemetry(
+      topic,
+      payload(message),
+      new Date(),
+      { save: async () => "saved" },
+      logger,
+      false,
+      undefined,
+      undefined,
+      publishReceipt,
+    );
+    expect(publishReceipt).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the committed save successful when receipt publication fails", async () => {
+    const { logger } = createDependencies();
+    expect(
+      await ingestTelemetry(
+        topic,
+        payload(v2Message),
+        new Date(),
+        { save: async () => "saved" },
+        logger,
+        false,
+        undefined,
+        undefined,
+        async () => {
+          throw new Error("receipt lost");
+        },
+      ),
+    ).toBe(true);
+    expect(logger.error).toHaveBeenCalledWith(
+      "テレメトリの保存確認通知に失敗しました",
+      expect.anything(),
+    );
+  });
   it("counts identical replays as successful and content conflicts separately", async () => {
     const { logger } = createDependencies();
     const metrics = createLoadMetrics({

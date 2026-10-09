@@ -132,7 +132,7 @@ describe("startSimulatorFleet", () => {
     );
     expect(fleet.getBufferStatuses()["drone-001"]).toMatchObject({
       rows: 1,
-      backlog: 0,
+      backlog: 1,
       healthy: true,
     });
 

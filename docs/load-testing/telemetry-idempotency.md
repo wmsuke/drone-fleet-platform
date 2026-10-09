@@ -26,4 +26,4 @@ ingestorの計測モードでは次を分ける。
 
 実PostgreSQLのintegration testで、同一batchの重複・衝突、同時受信、別sessionId、旧v1、既存重複行の移行、古い再送と衝突時のdevice更新を検証する。`DATABASE_INTEGRATION=true`とテスト専用DBの`POSTGRES_*`設定を指定し、`pnpm db:test:integration`および`pnpm telemetry:test:integration`を実行する。migrationは並列実行しない。
 
-#112は受信側の保存冪等性だけを実装する。ingestorの保存確認receipt、simulatorの確認済み削除と全未確認行の再送は#128の対象であり、SQLiteからPostgreSQLへのat-least-once保存はまだ保証しない。
+#112は受信側の保存冪等性を実装する。#128でDB commit後のreceipt、simulatorの確認済み削除と全未確認行の再送を追加した。保証境界と試験方法は[telemetry保存確認receipt](../telemetry-receipts.md)を参照する。

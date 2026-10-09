@@ -35,11 +35,11 @@ endpointには`mqtts://`やpathを付けない。clientIdは`terraform output -j
 
 ## 購読と再接続
 
-接続後に次を購読する。
+接続後に次を購読する。v2のDB commit後は機体別telemetry-receiptsにQoS 1・retainなしで通知する。Policyはこのsuffixだけのpublishを許可する。実AWS確認前にPolicy更新を適用する。[telemetry保存確認receipt](../telemetry-receipts.md)に保証と費用境界を記す。
 
 | topic filter                      | QoS | 処理                                     |
 | --------------------------------- | --: | ---------------------------------------- |
-| `fleet/v1/devices/+/telemetry`    |   0 | protocol検証後に既存のバッチ処理でDB保存 |
+| `fleet/v1/devices/+/telemetry`    |   1 | 冪等保存し、v2のcommit後にreceipt通知    |
 | `fleet/v1/devices/+/status`       |   1 | ONLINE / OFFLINEとretainを既存規則で反映 |
 | `fleet/v1/devices/+/command-acks` |   1 | 対応するcommandをACKNOWLEDGEDへ更新      |
 

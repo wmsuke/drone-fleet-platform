@@ -4,7 +4,7 @@
 
 仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、PUBACK未取得行の再送、DB保存の重複排除を追加した。DB保存確認receiptは未実装であり、配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後も、ローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、未確認行の再送、DB重複排除、DB保存確認receiptを追加した。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後もローカルだけで動作する構成を維持する。
 
 Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
@@ -104,9 +104,9 @@ scripts/
 
 Phase 0の開発基盤、Phase 1のローカル構成に加え、Phase 2のTerraform、証明書管理、AWS IoT transport、E2Eを実装済みである。
 
-Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定してからMQTTへ送る。切断中も生成と保存を続け、再起動後も未確認行を保持する。MQTT送信成功だけでは削除しない。PUBACK未取得行の再送は#111で追加した。ingestorによる保存確認と確認後の削除は#128の対象である。保存先と容量上限は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`、`TELEMETRY_BUFFER_MAX_BYTES`で設定する。上限は機体ごとに行数とJSONの論理バイト数で判定し、最古の行の破棄履歴を同じSQLiteに残す。保存エラー時はその機体の生成を止め、ログとbuffer状態で確認できる。
+simulatorはtelemetryを機体ごとのSQLiteに確定してからMQTTへ送る。切断中も生成・保存を続け、再起動後も未確認行を保持する。保存先と容量上限は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`、`TELEMETRY_BUFFER_MAX_BYTES`で設定する。最古行の破棄履歴はSQLiteに残し、保存エラー時は生成を停止する。PUBACKでは削除せず、一致するDB保存receiptだけを削除条件にする。
 
-#111のPRではMQTT切断後の再接続を指数バックオフとjitterで制御し、SQLiteの`published_at`がない行を追加順にQoS 1で送る。復旧中の新規telemetryは末尾に保存し、蓄積分を先に送る。送信間隔と再試行待機時間は設定可能である。PUBACKを得た行は再送対象から外すがSQLiteからは削除しない。ingestorは永続重複排除を実装済みだが保存確認通知は未実装のため、PUBACK済みの行がDBへ未保存のまま残り得る。現段階ではSQLiteからPostgreSQLへのat-least-once保存は保証しない。DB重複排除は#112で追加した。#128で全未確認行の再送、receipt待ち、保存確認後の削除を扱う。現在の`backlog`はPUBACK未取得行数であり、SQLiteに残る全未確認行数とは異なる。
+simulatorはPUBACK済みを含む全未確認行をSQLiteへの追加順にQoS 1で送る。ingestorのbatch transactionがcommitした後、新規保存・内容一致の重複にだけreceiptをQoS 1・retainなしで送る。衝突・DB失敗時は通知しない。simulatorは自機のreceiptを検証し、識別子が一致した行だけを削除する。receiptがない間は次行へ進まず、再送には指数バックオフ・jitter・速度制限を適用する。復旧中の新規telemetryは末尾に保存する。`backlog`は全未確認行数である。停止・容量超過を含む保証境界は[telemetry保存確認receipt](telemetry-receipts.md)を参照する。
 
 ### apps/api
 
