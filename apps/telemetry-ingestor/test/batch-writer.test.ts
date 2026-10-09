@@ -23,11 +23,42 @@ const message = (sequence: number): TelemetryMessage => ({
 });
 
 describe("TelemetryBatchWriter", () => {
+  it("persists the next save immediately after the previous result resolves", async () => {
+    const writer = new TelemetryBatchWriter(
+      { saveBatch: async (entries) => entries.map(() => "saved") },
+      {
+        batchSize: 1,
+        flushIntervalMs: 50,
+        maxBufferSize: 10,
+      },
+    );
+    expect(await writer.save(message(0), new Date())).toBe("saved");
+    expect(await writer.save(message(1), new Date())).toBe("saved");
+    await writer.shutdown();
+  });
+  it("returns each committed result independently in a mixed batch", async () => {
+    const writer = new TelemetryBatchWriter(
+      { saveBatch: async () => ["saved", "duplicate", "conflict"] },
+      {
+        batchSize: 3,
+        flushIntervalMs: 50,
+        maxBufferSize: 10,
+      },
+    );
+    expect(
+      await Promise.all([
+        writer.save(message(0), new Date()),
+        writer.save(message(1), new Date()),
+        writer.save(message(2), new Date()),
+      ]),
+    ).toEqual(["saved", "duplicate", "conflict"]);
+    await writer.shutdown();
+  });
   afterEach(() => vi.useRealTimers());
 
   it("flushes when the batch size is reached", async () => {
     const repository: TelemetryRepository = {
-      saveBatch: vi.fn().mockResolvedValue(undefined),
+      saveBatch: vi.fn(async (entries) => entries.map(() => "saved" as const)),
     };
     const writer = new TelemetryBatchWriter(repository, {
       batchSize: 2,
@@ -49,7 +80,7 @@ describe("TelemetryBatchWriter", () => {
   it("flushes after the configured interval", async () => {
     vi.useFakeTimers();
     const repository: TelemetryRepository = {
-      saveBatch: vi.fn().mockResolvedValue(undefined),
+      saveBatch: vi.fn(async (entries) => entries.map(() => "saved" as const)),
     };
     const writer = new TelemetryBatchWriter(repository, {
       batchSize: 10,
@@ -89,7 +120,12 @@ describe("TelemetryBatchWriter", () => {
     const blocked = new Promise<void>((resolve) => {
       finishBatch = resolve;
     });
-    const repository: TelemetryRepository = { saveBatch: () => blocked };
+    const repository: TelemetryRepository = {
+      saveBatch: async () => {
+        await blocked;
+        return ["saved"];
+      },
+    };
     const writer = new TelemetryBatchWriter(repository, {
       batchSize: 1,
       flushIntervalMs: 1_000,
@@ -107,7 +143,7 @@ describe("TelemetryBatchWriter", () => {
 
   it("flushes the remaining buffer during shutdown", async () => {
     const repository: TelemetryRepository = {
-      saveBatch: vi.fn().mockResolvedValue(undefined),
+      saveBatch: vi.fn(async (entries) => entries.map(() => "saved" as const)),
     };
     const writer = new TelemetryBatchWriter(repository, {
       batchSize: 10,

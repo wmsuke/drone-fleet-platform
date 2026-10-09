@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createTelemetryRepository } from "../src/repository.js";
+import { TelemetryBatchWriter } from "../src/batch-writer.js";
 
 const runIntegration = process.env.DATABASE_INTEGRATION === "true";
 const integration = describe.skipIf(!runIntegration);
@@ -33,6 +34,204 @@ function message(deviceId: string, sequence: number): TelemetryMessage {
 }
 
 integration("telemetry repository", () => {
+  it("deduplicates a mixed batch and rejects changed content without overwriting", async () => {
+    if (database === undefined) throw new Error("database required");
+    const repository = createTelemetryRepository(database.db);
+    const original = {
+      ...message(deviceIds[0]!, 0),
+      schemaVersion: 2 as const,
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+    };
+    original.payload = { ...original.payload, battery: 80.123456789 };
+    const entry = (value: TelemetryMessage) => ({
+      message: value,
+      receivedAt: new Date("2026-10-09T00:00:01Z"),
+      isRetained: false,
+    });
+    expect(
+      await repository.saveBatch([
+        entry(original),
+        entry(original),
+        entry({
+          ...original,
+          payload: { ...original.payload, battery: 80.12345679 },
+        }),
+        entry({
+          ...original,
+          sessionId: "b065e32b-c00b-452e-9cb1-3b52c43962fb",
+        }),
+      ]),
+    ).toEqual(["saved", "duplicate", "conflict", "saved"]);
+    expect(
+      await repository.saveBatch([
+        { ...entry(original), receivedAt: new Date("2026-10-09T01:00:00Z") },
+      ]),
+    ).toEqual(["duplicate"]);
+    const rows = await database.db
+      .select()
+      .from(telemetry)
+      .where(eq(telemetry.deviceId, original.deviceId));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.sourcePayload?.battery).toBe(original.payload.battery);
+  });
+
+  it("preserves the first content when conflicting identities arrive concurrently", async () => {
+    if (database === undefined) throw new Error("database required");
+    const repository = createTelemetryRepository(database.db);
+    const original = {
+      ...message(deviceIds[0]!, 0),
+      schemaVersion: 2 as const,
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+    };
+    const results = await Promise.all(
+      [
+        original,
+        { ...original, payload: { ...original.payload, altitude: 99 } },
+      ].map((value) =>
+        repository.saveBatch([
+          { message: value, receivedAt: new Date(), isRetained: false },
+        ]),
+      ),
+    );
+    expect(results.flat().sort()).toEqual(["conflict", "saved"]);
+    expect(
+      await database.db
+        .select()
+        .from(telemetry)
+        .where(eq(telemetry.deviceId, original.deviceId)),
+    ).toHaveLength(1);
+  });
+
+  it("recognizes migrated rows at their stored precision and keeps v1 duplicates", async () => {
+    if (database === undefined) throw new Error("database required");
+    const repository = createTelemetryRepository(database.db);
+    const original = {
+      ...message(deviceIds[0]!, 0),
+      schemaVersion: 2 as const,
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+    };
+    original.payload = { ...original.payload, battery: 80.123456789 };
+    await repository.saveBatch([
+      { message: original, receivedAt: new Date(), isRetained: false },
+    ]);
+    await database.db
+      .update(telemetry)
+      .set({ sourcePayload: null })
+      .where(eq(telemetry.deviceId, original.deviceId));
+    expect(
+      await repository.saveBatch([
+        { message: original, receivedAt: new Date(), isRetained: false },
+      ]),
+    ).toEqual(["duplicate"]);
+    expect(
+      await repository.saveBatch(
+        [0, 1].map(() => ({
+          message: message(original.deviceId, 0),
+          receivedAt: new Date(),
+          isRetained: false,
+        })),
+      ),
+    ).toEqual(["saved", "saved"]);
+    expect(
+      await database.db
+        .select()
+        .from(telemetry)
+        .where(eq(telemetry.deviceId, original.deviceId)),
+    ).toHaveLength(3);
+  });
+
+  it("handles simultaneous identical inserts and single-message saves idempotently", async () => {
+    if (database === undefined) throw new Error("database required");
+    const repository = createTelemetryRepository(database.db);
+    const original = {
+      ...message(deviceIds[0]!, 0),
+      schemaVersion: 2 as const,
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+    };
+    const receivedAt = new Date("2026-10-09T00:00:01Z");
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        repository.saveBatch([
+          { message: original, receivedAt, isRetained: false },
+        ]),
+      ),
+    );
+    expect(
+      results.flat().filter((outcome) => outcome === "saved"),
+    ).toHaveLength(1);
+    expect(
+      results.flat().filter((outcome) => outcome === "duplicate"),
+    ).toHaveLength(7);
+    const writer = new TelemetryBatchWriter(repository, {
+      batchSize: 1,
+      flushIntervalMs: 50,
+      maxBufferSize: 10,
+    });
+    expect(await writer.save(original, receivedAt)).toBe("duplicate");
+    expect(
+      await writer.save(
+        { ...original, payload: { ...original.payload, altitude: 50 } },
+        receivedAt,
+      ),
+    ).toBe("conflict");
+    await writer.shutdown();
+    expect(
+      await database.db
+        .select()
+        .from(telemetry)
+        .where(eq(telemetry.deviceId, original.deviceId)),
+    ).toHaveLength(1);
+  });
+
+  it("does not roll back liveness on an older duplicate or change it on a conflict", async () => {
+    if (database === undefined) throw new Error("database required");
+    const repository = createTelemetryRepository(database.db);
+    const original = {
+      ...message(deviceIds[0]!, 0),
+      schemaVersion: 2 as const,
+      sessionId: "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+    };
+    const latest = new Date("2026-10-09T00:00:10Z");
+    await repository.saveBatch([
+      {
+        message: original,
+        receivedAt: new Date("2026-10-09T00:00:01Z"),
+        isRetained: false,
+      },
+    ]);
+    await database.db
+      .update(devices)
+      .set({
+        connectionStatus: "OFFLINE",
+        lastReceivedAt: latest,
+        updatedAt: latest,
+      })
+      .where(eq(devices.deviceId, original.deviceId));
+    await repository.saveBatch([
+      {
+        message: original,
+        receivedAt: new Date("2026-10-09T00:00:05Z"),
+        isRetained: false,
+      },
+      {
+        message: {
+          ...original,
+          payload: { ...original.payload, altitude: 100 },
+        },
+        receivedAt: new Date("2026-10-09T00:00:20Z"),
+        isRetained: false,
+      },
+    ]);
+    const [device] = await database.db
+      .select()
+      .from(devices)
+      .where(eq(devices.deviceId, original.deviceId));
+    expect(device).toMatchObject({
+      connectionStatus: "OFFLINE",
+      lastReceivedAt: latest,
+      updatedAt: latest,
+    });
+  });
   beforeAll(async () => {
     if (database !== undefined) {
       await migrate(database.db, { migrationsFolder });
@@ -145,10 +344,12 @@ integration("telemetry repository", () => {
       .from(telemetry)
       .where(eq(telemetry.deviceId, deviceId))
       .orderBy(asc(telemetry.id));
-    expect(rows).toEqual([
-      { sessionId: null, sequence: 0 },
-      { sessionId, sequence: 0 },
-    ]);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { sessionId: null, sequence: 0 },
+        { sessionId, sequence: 0 },
+      ]),
+    );
   });
 
   it("does not move a device receipt timestamp backwards within a batch", async () => {

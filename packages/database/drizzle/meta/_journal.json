@@ -15,6 +15,13 @@
       "when": 1791277005145,
       "tag": "0001_flippant_expediter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791502992291,
+      "tag": "0002_true_santa_claus",
+      "breakpoints": true
     }
   ]
 }

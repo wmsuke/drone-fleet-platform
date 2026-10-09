@@ -190,6 +190,12 @@ export async function createLoadTestReport(
         ingestorCounters.map(({ dbSaveFailed }) => dbSaveFailed),
       ),
       dbPersisted,
+      telemetryDuplicates: add(
+        ingestorCounters.map((counter) => counter.telemetryDuplicates ?? 0),
+      ),
+      telemetryConflicts: add(
+        ingestorCounters.map((counter) => counter.telemetryConflicts ?? 0),
+      ),
       missing,
       missingRate: sentSucceeded === 0 ? 0 : missing / sentSucceeded,
       offlineTransitions: add(
@@ -225,12 +231,16 @@ export function assertCompleteReport(report: LoadTestReport): void {
   if (
     counters.sentFailed > 0 ||
     counters.validationFailed > 0 ||
-    counters.dbSaveFailed > 0
+    counters.dbSaveFailed > 0 ||
+    counters.telemetryConflicts > 0
   ) {
     mismatches.push([
       "失敗カウンタ",
       0,
-      counters.sentFailed + counters.validationFailed + counters.dbSaveFailed,
+      counters.sentFailed +
+        counters.validationFailed +
+        counters.dbSaveFailed +
+        counters.telemetryConflicts,
     ]);
   }
   if (mismatches.length > 0) {

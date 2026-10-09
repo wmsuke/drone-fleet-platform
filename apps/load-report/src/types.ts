@@ -40,6 +40,9 @@ export interface IngestorReport {
     validationFailed: number;
     dbSaveSucceeded: number;
     dbSaveFailed: number;
+    dbInserted?: number;
+    telemetryDuplicates?: number;
+    telemetryConflicts?: number;
     offlineTransitions: number;
   };
   timings: {
@@ -85,6 +88,8 @@ export interface LoadTestReport {
     dbSaveSucceeded: number;
     dbSaveFailed: number;
     dbPersisted: number;
+    telemetryDuplicates: number;
+    telemetryConflicts: number;
     missing: number;
     missingRate: number;
     offlineTransitions: number;

@@ -4,7 +4,7 @@
 
 仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionIdを追加した。通信断中の永続バッファと再送は後続Issueで扱う。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後も、ローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、PUBACK未取得行の再送、DB保存の重複排除を追加した。DB保存確認receiptは未実装であり、配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後も、ローカルだけで動作する構成を維持する。
 
 Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
@@ -104,9 +104,9 @@ scripts/
 
 Phase 0の開発基盤、Phase 1のローカル構成に加え、Phase 2のTerraform、証明書管理、AWS IoT transport、E2Eを実装済みである。
 
-Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定してからMQTTへ送る。切断中も生成と保存を続け、再起動後も未確認行を保持する。MQTT送信成功だけでは削除しない。再送、ingestorによる保存確認、確認後の削除は#111以降の対象である。保存先と容量上限は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`、`TELEMETRY_BUFFER_MAX_BYTES`で設定する。上限は機体ごとに行数とJSONの論理バイト数で判定し、最古の行の破棄履歴を同じSQLiteに残す。保存エラー時はその機体の生成を止め、ログとbuffer状態で確認できる。
+Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定してからMQTTへ送る。切断中も生成と保存を続け、再起動後も未確認行を保持する。MQTT送信成功だけでは削除しない。PUBACK未取得行の再送は#111で追加した。ingestorによる保存確認と確認後の削除は#128の対象である。保存先と容量上限は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`、`TELEMETRY_BUFFER_MAX_BYTES`で設定する。上限は機体ごとに行数とJSONの論理バイト数で判定し、最古の行の破棄履歴を同じSQLiteに残す。保存エラー時はその機体の生成を止め、ログとbuffer状態で確認できる。
 
-#111のPRではMQTT切断後の再接続を指数バックオフとjitterで制御し、SQLiteの`published_at`がない行を追加順にQoS 1で送る。復旧中の新規telemetryは末尾に保存し、蓄積分を先に送る。送信間隔と再試行待機時間は設定可能である。PUBACKを得た行は再送対象から外すがSQLiteからは削除しない。現在のingestorは保存確認通知と永続重複排除を実装していないため、PUBACK済みの行がDBへ未保存のまま残り得る。現段階ではSQLiteからPostgreSQLへのat-least-once保存は保証しない。#112のDB重複排除後、#128で全未確認行の再送、receipt待ち、保存確認後の削除を扱う。現在の`backlog`はPUBACK未取得行数であり、SQLiteに残る全未確認行数とは異なる。
+#111のPRではMQTT切断後の再接続を指数バックオフとjitterで制御し、SQLiteの`published_at`がない行を追加順にQoS 1で送る。復旧中の新規telemetryは末尾に保存し、蓄積分を先に送る。送信間隔と再試行待機時間は設定可能である。PUBACKを得た行は再送対象から外すがSQLiteからは削除しない。ingestorは永続重複排除を実装済みだが保存確認通知は未実装のため、PUBACK済みの行がDBへ未保存のまま残り得る。現段階ではSQLiteからPostgreSQLへのat-least-once保存は保証しない。DB重複排除は#112で追加した。#128で全未確認行の再送、receipt待ち、保存確認後の削除を扱う。現在の`backlog`はPUBACK未取得行数であり、SQLiteに残る全未確認行数とは異なる。
 
 ### apps/api
 
@@ -121,7 +121,7 @@ Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定し
 
 ### apps/telemetry-ingestor
 
-テレメトリ、接続状態、ACKトピックの購読、通信仕様による検証、初回受信時のデバイス登録、テレメトリ保存、LWTと最終受信時刻によるオンライン・オフライン判定、ACKによるコマンド状態更新を実装済みである。telemetry v1/v2を受け付け、v2のsessionIdを検証・保存する。負荷試験のtestIdとレポート用sessionIdはプロセス設定およびJSONレポートで管理し、productionのテレメトリには追加しない。telemetry v2のsessionIdとは別の値である。
+テレメトリ、接続状態、ACKトピックの購読、通信仕様による検証、初回受信時のデバイス登録、テレメトリ保存、LWTと最終受信時刻によるオンライン・オフライン判定、ACKによるコマンド状態更新を実装済みである。telemetry v1/v2を受け付け、v2のsessionIdを検証・保存し、同じ識別子の再送をDBで重複排除する。負荷試験のtestIdとレポート用sessionIdはプロセス設定およびJSONレポートで管理し、productionのテレメトリには追加しない。telemetry v2のsessionIdとは別の値である。
 
 - 初回受信時のデバイス登録（実装済み）
 - テレメトリの保存（実装済み）
@@ -130,7 +130,7 @@ Phase 3の#110では、simulatorがtelemetryを機体ごとのSQLiteに確定し
 
 不正なメッセージは保存せず、原因をログに残す。検証済みテレメトリは件数または最大待機時間で区切った小さなbatchとして1 transactionで保存する。同じbatch内のdevice更新は最新の受信時刻へ集約し、保存待ち・保存中の件数には上限を設ける。batch保存失敗と上限超過はメッセージ単位の失敗としてmetricsとログへ記録する。
 
-計測モードではMQTT受信、protocol検証成功・失敗、DB保存成功・失敗、実際のOFFLINE遷移を別々に数える。device timestampからMQTT受信時刻までの遅延と、MQTT受信からそのメッセージを含むbatch transaction完了までの保存時間も分離する。時間値は固定bucketのヒストグラムとして保持し、メッセージ件数に比例してメモリ使用量が増えないようにする。shutdownではMQTT受信を停止し、残りのbufferと処理中の保存を待ってから計測結果をJSONへ書き出す。
+計測モードではMQTT受信、protocol検証成功・失敗、DB保存成功・失敗、新規INSERT、内容一致の重複、内容衝突、実際のOFFLINE遷移を別々に数える。DB保存成功は新規保存と内容一致の再受信を含み、衝突は成功・保存失敗のどちらにも含めない。device timestampからMQTT受信時刻までの遅延と、MQTT受信からそのメッセージを含むbatch transaction完了までの保存時間も分離する。時間値は固定bucketのヒストグラムとして保持し、メッセージ件数に比例してメモリ使用量が増えないようにする。shutdownではMQTT受信を停止し、残りのbufferと処理中の保存を待ってから計測結果をJSONへ書き出す。
 
 ### apps/simulator
 
@@ -226,7 +226,7 @@ Phase 1では、次の3テーブルを使用する。
 | telemetry | デバイスID、v2のセッションID（v1はnull）、連番、デバイス計測時刻、サーバー受信時刻、バッテリー残量、位置、高度、温度、飛行状態 |
 | commands | コマンドID、対象デバイス、種類、処理状態、作成・送信・ACK受信・タイムアウト時刻 |
 
-接続状態は`devices.connection_status`、飛行状態は`telemetry.flight_status`として別に管理する。テレメトリのsequenceはプロセス再起動で0へ戻るため単独では一意制約に使わず、機体とsequence、および機体と受信時刻の複合インデックスを持つ。v2のsessionIdは保存するが、一意制約と重複排除は#112で追加する。コマンドは機体と作成時刻、状態と作成時刻のインデックスを持つ。
+接続状態は`devices.connection_status`、飛行状態は`telemetry.flight_status`として別に管理する。テレメトリのsequenceはプロセス再起動で0へ戻るため単独では一意制約に使わず、機体とsequence、および機体と受信時刻の複合インデックスを持つ。v2は機体・sessionId・sequenceの部分一意インデックスで重複排除する。既存の重複履歴を削除しない移行と内容照合の詳細は[telemetry保存の冪等化](load-testing/telemetry-idempotency.md)を参照する。コマンドは機体と作成時刻、状態と作成時刻のインデックスを持つ。
 
 初めて受信したdeviceIdは`devices`の主キーとupsertを使って登録する。同じdeviceIdの同時受信でも1行だけを保持する。`last_received_at`と`updated_at`は既存値と受信時刻の大きい方を保存し、並行処理の完了順によって時刻が戻らないようにする。Phase 1のメッセージには機体情報がないため、`model`と`software_version`は初期値を`null`とする。
 

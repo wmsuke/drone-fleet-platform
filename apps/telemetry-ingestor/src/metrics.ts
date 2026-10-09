@@ -29,6 +29,9 @@ export interface LoadMetricsReport {
     validationFailed: number;
     dbSaveSucceeded: number;
     dbSaveFailed: number;
+    dbInserted: number;
+    telemetryDuplicates: number;
+    telemetryConflicts: number;
     offlineTransitions: number;
   };
   timings: {
@@ -80,6 +83,7 @@ export interface LoadMetrics {
   recordValidationFailure(): void;
   recordDbSaveSuccess(durationMs: number): void;
   recordDbSaveFailure(durationMs: number): void;
+  recordTelemetryOutcome(outcome: "saved" | "duplicate" | "conflict"): void;
   recordOfflineTransitions(count: number, updatedAt?: Date): void;
   writeReport(endedAt?: Date): Promise<LoadMetricsReport>;
   snapshot(endedAt?: Date): LoadMetricsReport;
@@ -117,6 +121,9 @@ export function createLoadMetrics(
     validationFailed: 0,
     dbSaveSucceeded: 0,
     dbSaveFailed: 0,
+    dbInserted: 0,
+    telemetryDuplicates: 0,
+    telemetryConflicts: 0,
     offlineTransitions: 0,
   };
   const receiveLatency = new Histogram();
@@ -163,6 +170,11 @@ export function createLoadMetrics(
     recordDbSaveFailure(durationMs) {
       counters.dbSaveFailed += 1;
       saveDuration.record(durationMs);
+    },
+    recordTelemetryOutcome(outcome) {
+      if (outcome === "saved") counters.dbInserted += 1;
+      else if (outcome === "duplicate") counters.telemetryDuplicates += 1;
+      else counters.telemetryConflicts += 1;
     },
     recordOfflineTransitions(count, updatedAt = now()) {
       if (!isMeasured(updatedAt)) return;

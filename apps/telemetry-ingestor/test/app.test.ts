@@ -111,6 +111,7 @@ describe("startTelemetryIngestor", () => {
     const repository: TelemetryRepository = {
       async saveBatch(entries) {
         saved.push(...entries.map((entry) => entry.message.deviceId));
+        return entries.map(() => "saved" as const);
       },
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
@@ -183,9 +184,10 @@ describe("startTelemetryIngestor", () => {
       releaseSave = resolve;
     });
     const repository: TelemetryRepository = {
-      async saveBatch() {
+      async saveBatch(entries) {
         markSaveStarted();
         await saveBlocker;
+        return entries.map(() => "saved" as const);
       },
     };
     const logger: IngestionLogger = { warn: vi.fn(), error: vi.fn() };
@@ -225,8 +227,9 @@ describe("startTelemetryIngestor", () => {
   it("disconnects MQTT and flushes a partial batch during shutdown", async () => {
     const client = new FakeMqttClient();
     const repository: TelemetryRepository = {
-      saveBatch: vi.fn(async () => {
+      saveBatch: vi.fn(async (entries) => {
         expect(client.endForces).toEqual([false]);
+        return entries.map(() => "saved" as const);
       }),
     };
     const statusRepository: DeviceStatusRepository = {
@@ -298,7 +301,9 @@ describe("startTelemetryIngestor", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-29T02:00:15.000Z"));
     const client = new FakeMqttClient();
-    const repository: TelemetryRepository = { saveBatch: vi.fn() };
+    const repository: TelemetryRepository = {
+      saveBatch: vi.fn(async (entries) => entries.map(() => "saved" as const)),
+    };
     const statusRepository: DeviceStatusRepository = {
       saveStatus: vi.fn(async () => 0),
       markTimedOut: vi.fn(async () => 0),
@@ -338,7 +343,9 @@ describe("startTelemetryIngestor", () => {
       },
       { writeFile },
     );
-    const repository: TelemetryRepository = { saveBatch: vi.fn() };
+    const repository: TelemetryRepository = {
+      saveBatch: vi.fn(async (entries) => entries.map(() => "saved" as const)),
+    };
     const statusRepository: DeviceStatusRepository = {
       saveStatus: vi.fn(async () => 0),
       markTimedOut: vi.fn(async () => 0),

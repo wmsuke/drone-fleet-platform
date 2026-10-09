@@ -52,6 +52,47 @@ jobs:
       - name: Verify telemetry path
         run: ./scripts/test-telemetry-path.sh
 
+  database-integration:
+    name: PostgreSQL migration and ingestion integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: drone_fleet
+          POSTGRES_USER: drone_fleet
+          POSTGRES_PASSWORD: local-development-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U drone_fleet -d drone_fleet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_INTEGRATION: "true"
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: drone_fleet
+      POSTGRES_USER: drone_fleet
+      POSTGRES_PASSWORD: local-development-only
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify migrations and ingestion
+        run: |
+          pnpm db:test:integration
+          pnpm telemetry:test:integration
+
   load-report-e2e:
     name: Load report integration
     runs-on: ubuntu-latest
