@@ -50,10 +50,11 @@ describe("TelemetryBuffer", () => {
     });
     expect(JSON.parse(rows[0]?.payloadJson ?? "")).toEqual(message(0));
     expect(reopened.stats()).toMatchObject({ rows: 2, discarded: 0 });
-    expect(reopened.peekPendingPublish()?.sequence).toBe(1);
+    expect(reopened.peekPendingPublish()?.sequence).toBe(0);
+    expect(reopened.brokerAcknowledgedCount()).toBe(1);
     expect(reopened.pendingPublishStats()).toEqual({
-      count: 1,
-      oldestCreatedAt: message(1).timestamp,
+      count: 2,
+      oldestCreatedAt: message(0).timestamp,
     });
     expect(reopened.confirmStored(sessionId, 0)).toBe(true);
     expect(reopened.listUnconfirmed()).toHaveLength(1);

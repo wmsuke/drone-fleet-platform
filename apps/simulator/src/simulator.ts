@@ -3,6 +3,8 @@ import {
   createCommandsTopic,
   createStatusTopic,
   createTelemetryTopic,
+  createTelemetryReceiptsTopic,
+  telemetryReceiptMessageSchema,
   type TelemetryMessage,
 } from "@drone-fleet/protocol";
 import { connectAsync, type IClientOptions } from "mqtt";
@@ -39,6 +41,7 @@ export interface RunningSimulator {
     replayed: number;
     publishFailures: number;
     reconnectAttempts: number;
+    receiptTimeouts: number;
   };
 }
 
@@ -70,7 +73,11 @@ export interface SimulatorMqttClient {
   on(event: "error", listener: (error: Error) => void): this;
   on(
     event: "message",
-    listener: (topic: string, payload: Buffer) => void,
+    listener: (
+      topic: string,
+      payload: Buffer,
+      packet?: { retain: boolean },
+    ) => void,
   ): this;
   publishAsync(
     topic: string,
@@ -97,6 +104,8 @@ export type TelemetryBufferStore = Pick<
   | "markPublished"
   | "peekPendingPublish"
   | "pendingPublishStats"
+  | "brokerAcknowledgedCount"
+  | "confirmStored"
   | "stats"
   | "close"
 >;
@@ -122,6 +131,7 @@ export async function startSimulator(
 ): Promise<RunningSimulator> {
   const statusTopic = createStatusTopic(config.deviceId);
   const telemetryTopic = createTelemetryTopic(config.deviceId);
+  const receiptsTopic = createTelemetryReceiptsTopic(config.deviceId);
   const commandsTopic = createCommandsTopic(config.deviceId);
   const commandAcksTopic = createCommandAcksTopic(config.deviceId);
   const commandProcessor = createCommandProcessor(config.deviceId);
@@ -140,9 +150,11 @@ export async function startSimulator(
   });
   let bufferStats: TelemetryBufferStats;
   let pendingStats: PendingTelemetryStats;
+  let brokerAcknowledgedUnconfirmed: number;
   try {
     bufferStats = buffer.stats();
     pendingStats = buffer.pendingPublishStats();
+    brokerAcknowledgedUnconfirmed = buffer.brokerAcknowledgedCount();
   } catch (error) {
     buffer.close();
     throw error;
@@ -177,6 +189,15 @@ export async function startSimulator(
   let replayTimer: NodeJS.Timeout | undefined;
   let reconnectTimer: NodeJS.Timeout | undefined;
   let publishInProgress = false;
+  let waitingReceipt:
+    | {
+        sessionId: string;
+        sequence: number;
+        confirmed: boolean;
+        puback: boolean;
+      }
+    | undefined;
+  let receiptTimeouts = 0;
   let reconnectFailures = 0;
   let publishFailures = 0;
   let consecutivePublishFailures = 0;
@@ -226,6 +247,7 @@ export async function startSimulator(
   const refreshBufferStatus = (): void => {
     bufferStats = buffer.stats();
     pendingStats = buffer.pendingPublishStats();
+    brokerAcknowledgedUnconfirmed = buffer.brokerAcknowledgedCount();
   };
 
   const scheduleReconnect = (): void => {
@@ -253,6 +275,12 @@ export async function startSimulator(
       return;
     replayTimer = setTimeout(() => {
       replayTimer = undefined;
+      if (
+        waitingReceipt !== undefined &&
+        !waitingReceipt.confirmed &&
+        waitingReceipt.puback
+      )
+        receiptTimeouts += 1;
       void sendNextPending().catch((error: unknown) => {
         console.error("テレメトリの再送に失敗しました", error);
       });
@@ -276,6 +304,13 @@ export async function startSimulator(
       throw error;
     }
     if (pending === undefined) return;
+    waitingReceipt = {
+      sessionId: pending.sessionId,
+      sequence: pending.sequence,
+      confirmed: false,
+      puback: false,
+    };
+    const receiptWait = waitingReceipt;
     publishInProgress = true;
     try {
       try {
@@ -324,10 +359,11 @@ export async function startSimulator(
         );
         consecutivePublishFailures += 1;
         console.error("テレメトリのMQTT送信に失敗しました", error);
-        scheduleReplay(delay);
+        scheduleReplay(Math.max(replayIntervalMs, delay));
         return;
       }
       try {
+        receiptWait.puback = true;
         buffer.markPublished(
           pending.sessionId,
           pending.sequence,
@@ -345,7 +381,7 @@ export async function startSimulator(
       ) {
         replayed += 1;
       }
-      consecutivePublishFailures = 0;
+      if (receiptWait.confirmed) consecutivePublishFailures = 0;
       if (pendingStats.count === 0 && backlogRecoveryActive) {
         backlogRecoveryActive = false;
         console.log("テレメトリの未送信分を送信しました", {
@@ -354,7 +390,18 @@ export async function startSimulator(
           publishFailures,
         });
       }
-      scheduleReplay(replayIntervalMs);
+      if (receiptWait.confirmed) {
+        scheduleReplay(replayIntervalMs);
+      } else {
+        // PUBACKでは先へ進まない。保存確認が欠けた同じ最古行を再送する。
+        const delay = Math.max(
+          replayIntervalMs,
+          publishTimeoutMs,
+          retryDelayMs(consecutivePublishFailures, retryBaseMs, retryMaxMs),
+        );
+        consecutivePublishFailures += 1;
+        scheduleReplay(delay);
+      }
     } finally {
       publishInProgress = false;
     }
@@ -406,6 +453,7 @@ export async function startSimulator(
 
   const publishOnlineAndStartTelemetry = async (): Promise<void> => {
     await client.subscribeAsync(commandsTopic, { qos: 1 });
+    await client.subscribeAsync(receiptsTopic, { qos: 1 });
     const online = createOnlineMessage(
       config.deviceId,
       new Date().toISOString(),
@@ -434,7 +482,7 @@ export async function startSimulator(
       console.log("テレメトリの未送信分を再送します", {
         deviceId: config.deviceId,
         backlog: pendingStats.count,
-        brokerAcknowledgedUnconfirmed: bufferStats.rows - pendingStats.count,
+        brokerAcknowledgedUnconfirmed,
         oldestBacklogAt: pendingStats.oldestCreatedAt,
       });
     }
@@ -456,7 +504,36 @@ export async function startSimulator(
   client.on("error", (error) => {
     console.error("MQTT接続でエラーが発生しました", error);
   });
-  client.on("message", (topic, payload) => {
+  client.on("message", (topic, payload, packet) => {
+    if (topic === receiptsTopic) {
+      if (shuttingDown || bufferError !== undefined || packet?.retain === true)
+        return;
+      try {
+        const receipt = telemetryReceiptMessageSchema.safeParse(
+          JSON.parse(payload.toString("utf8")),
+        );
+        if (!receipt.success || receipt.data.deviceId !== config.deviceId)
+          return;
+        if (
+          !buffer.confirmStored(receipt.data.sessionId, receipt.data.sequence)
+        )
+          return;
+        refreshBufferStatus();
+        if (
+          waitingReceipt?.sessionId === receipt.data.sessionId &&
+          waitingReceipt.sequence === receipt.data.sequence
+        ) {
+          waitingReceipt.confirmed = true;
+          consecutivePublishFailures = 0;
+          clearReplayTimer();
+          if (!publishInProgress) scheduleReplay(replayIntervalMs);
+        }
+      } catch (error) {
+        if (error instanceof SyntaxError) return;
+        failBuffer(error);
+      }
+      return;
+    }
     commandQueue = commandQueue
       .then(async () => {
         const processed = commandProcessor.process(
@@ -524,11 +601,12 @@ export async function startSimulator(
       return {
         ...bufferStats,
         backlog: pendingStats.count,
-        brokerAcknowledgedUnconfirmed: bufferStats.rows - pendingStats.count,
+        brokerAcknowledgedUnconfirmed,
         oldestBacklogAt: pendingStats.oldestCreatedAt,
         replayed,
         publishFailures,
         reconnectAttempts,
+        receiptTimeouts,
         healthy: bufferError === undefined,
         ...(bufferError === undefined ? {} : { error: bufferError.message }),
       };

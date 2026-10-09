@@ -1,6 +1,6 @@
 # ADR 0005: 通信断時の配送保証と復旧境界
 
-- 状態: 採用（#111のtransport-level再送と#112のDB重複排除は実装済み。保存確認receipt経路は#128で扱う）
+- 状態: 採用（telemetryの永続バッファ・再送・重複排除・保存確認receiptは実装済み。command/ACKのv2化とoutboxは未実装）
 - 決定日: 2026-10-06
 - 対象: #108、後続の#109〜#116
 
@@ -81,7 +81,7 @@ telemetryはSQLiteへのcommit前、上限超過で破棄した行、保存先�
 | PostgreSQLのcommands / outbox   | expiresAt、送信試行、期限切れ状態、同一transactionで作るoutbox                                               | #113、#114       |
 | `packages/protocol`とIoT Policy | v2 telemetry、telemetry-receipts、v2 command/ACK、機体のreceipt購読とingestorのreceipt送信権限               | #109、#111〜#113 |
 
-#111ではMQTT再接続とPUBACK未取得行の順序付き再送だけを実装する。この段階では`published_at`行がDB未保存でも再送されないため、SQLiteに行が残っていてもat-least-once保存保証は成立しない。DBの永続重複排除は#112で実装済みである。#128でingestorのDB commit後receipt発行とsimulatorのreceipt購読・検証・確認済み削除を実装する。#128ではPUBACK済みを含む全未確認行を再送対象とし、receiptを待つ間は次行を送らない。#94のAWS IoT Policyには、このtopicだけの機体購読・ingestor送信権限を追加する。通常経路のtopicと処理はlocal / AWSで共通とし、認証設定とブローカーの接続先だけを切り替える。#115ではDB commit直後、receipt欠落、バッファ上限、API・simulator再起動、command操作試行中の停止を検証する。AWSでの確認は#64の費用上限を守る小規模経路試験に限る。
+#111のtransport-level再送を#112のDB重複排除と#128の保存確認receiptにつないだ。ingestorのDB commit後通知とsimulatorの検証・確認済み削除を実装し、PUBACK済みを含む全未確認行を再送対象とする。receipt待ちの間は次行を送らない。AWS IoT Policyには自機receiptの購読・受信とingestorのreceipt送信だけを追加した。詳細な実装と検証は[telemetry保存確認receipt](../telemetry-receipts.md)を参照する。#115では通信断・バッファ上限・command操作試行中の停止を横断的に検証する。AWSの確認は#64の費用境界を守る小規模経路試験に限る。
 
 ## 理由とトレードオフ
 

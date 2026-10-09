@@ -1,4 +1,5 @@
 import { connectAsync, type IClientOptions, type IPublishPacket } from "mqtt";
+import { createTelemetryReceiptsTopic } from "@drone-fleet/protocol";
 
 import {
   ingestAcknowledgement,
@@ -20,6 +21,11 @@ export const STATUS_TOPIC_FILTER = "fleet/v1/devices/+/status";
 export const COMMAND_ACK_TOPIC_FILTER = "fleet/v1/devices/+/command-acks";
 
 export interface TelemetryMqttClient {
+  publishAsync(
+    topic: string,
+    payload: string,
+    options: { qos: 1; retain: false },
+  ): Promise<unknown>;
   endAsync(force?: boolean): Promise<void>;
   on(
     event: "message",
@@ -83,11 +89,13 @@ export async function startTelemetryIngestor(
     resubscribe: true,
   });
   const inFlight = new Set<Promise<unknown>>();
+  let stopping = false;
 
   client.on("error", (error) => {
     logger.error("MQTT接続でエラーが発生しました", { error });
   });
   client.on("message", (topic, payload, packet) => {
+    if (stopping) return;
     const receivedAt = new Date();
     const task = topic.endsWith("/command-acks")
       ? ingestAcknowledgement(
@@ -119,6 +127,29 @@ export async function startTelemetryIngestor(
               packet.retain,
               metrics,
               mqttReceivedAtMonotonic,
+              async (receipt) => {
+                let timer: ReturnType<typeof setTimeout> | undefined;
+                try {
+                  await Promise.race([
+                    client.publishAsync(
+                      createTelemetryReceiptsTopic(receipt.deviceId),
+                      JSON.stringify(receipt),
+                      { qos: 1, retain: false },
+                    ),
+                    new Promise<never>((_resolve, reject) => {
+                      timer = setTimeout(
+                        () =>
+                          reject(
+                            new Error("telemetry receipt PUBACK timed out"),
+                          ),
+                        10_000,
+                      );
+                    }),
+                  ]);
+                } finally {
+                  if (timer !== undefined) clearTimeout(timer);
+                }
+              },
             );
           })();
     inFlight.add(task);
@@ -128,7 +159,7 @@ export async function startTelemetryIngestor(
   });
 
   try {
-    await client.subscribeAsync(TELEMETRY_TOPIC_FILTER, { qos: 0 });
+    await client.subscribeAsync(TELEMETRY_TOPIC_FILTER, { qos: 1 });
     await client.subscribeAsync(STATUS_TOPIC_FILTER, { qos: 1 });
     await client.subscribeAsync(COMMAND_ACK_TOPIC_FILTER, { qos: 1 });
   } catch (error) {
@@ -159,16 +190,16 @@ export async function startTelemetryIngestor(
 
   return {
     async shutdown() {
+      stopping = true;
       clearInterval(timeoutTimer);
+      await telemetryWriter.shutdown();
+      await Promise.allSettled([...inFlight]);
       let disconnectError: unknown;
       try {
         await client.endAsync(false);
       } catch (error) {
         disconnectError = error;
       }
-
-      await telemetryWriter.shutdown();
-      await Promise.allSettled([...inFlight]);
 
       let reportError: unknown;
       try {

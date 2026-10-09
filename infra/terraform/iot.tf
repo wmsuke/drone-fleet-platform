@@ -54,10 +54,13 @@ resource "aws_iot_policy" "device" {
         }
       },
       {
-        Sid      = "SubscribeToCommands"
-        Effect   = "Allow"
-        Action   = "iot:Subscribe"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands"
+        Sid    = "SubscribeToCommands"
+        Effect = "Allow"
+        Action = "iot:Subscribe"
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands",
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry-receipts"
+        ]
         Condition = {
           Bool = {
             "iot:Connection.Thing.IsAttached" = "true"
@@ -65,10 +68,13 @@ resource "aws_iot_policy" "device" {
         }
       },
       {
-        Sid      = "ReceiveCommands"
-        Effect   = "Allow"
-        Action   = "iot:Receive"
-        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands"
+        Sid    = "ReceiveCommands"
+        Effect = "Allow"
+        Action = "iot:Receive"
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands",
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry-receipts"
+        ]
         Condition = {
           Bool = {
             "iot:Connection.Thing.IsAttached" = "true"
@@ -117,6 +123,12 @@ resource "aws_iot_policy" "telemetry_ingestor" {
           "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/status",
           "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/command-acks"
         ]
+      },
+      {
+        Sid      = "PublishTelemetryReceipts"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/telemetry-receipts"
       }
     ]
   })

@@ -367,11 +367,11 @@ SIMULATION_SEED=demo-2026
 
 シミュレータを`Ctrl+C`で終了すると、全機体がOFFLINE / SHUTDOWNをretain付きで送信してからMQTT接続を閉じる。購読側のJSONは`packages/protocol`の`connectionStatusMessageSchema`と`telemetryMessageSchema`で検証できる。
 
-simulatorは送信前にtelemetryを機体ごとのSQLiteファイルへ保存する。既定の保存先は`simulator-data/`で、Composeでは`simulator-data` volumeへ保存する。切断中も生成を続け、正常終了・再起動後も行を残す。`TELEMETRY_BUFFER_MAX_ROWS`（既定10,000行）と`TELEMETRY_BUFFER_MAX_BYTES`（既定32 MiB、JSONのUTF-8容量）が機体ごとの上限で、超過時は古い未確認行を破棄して履歴を記録する。ディスク書き込みなどに失敗した機体は生成を停止し、エラーをログに出す。再接続後は未送信行を古い順にQoS 1で再送し、通常送信に戻る。再接続・送信失敗には指数バックオフとjitterを使い、`TELEMETRY_RETRY_BASE_MS`（既定1秒）と`TELEMETRY_RETRY_MAX_MS`（既定30秒）で待機時間を制御する。蓄積分の送信間隔は`TELEMETRY_REPLAY_INTERVAL_MS`（既定200ミリ秒）で設定する。現在はDB保存確認後の削除が未実装なので、PUBACKを得た行もSQLiteに残り、上限に達しうる。DBの重複排除は実装済みで、保存確認は#128で扱う。ローカルのSQLiteファイルやCompose volumeを削除すると未確認データも失われる。
+simulatorはtelemetryを機体ごとのSQLiteへ保存してから送る。保存先と容量設定は`TELEMETRY_BUFFER_DIR`、`TELEMETRY_BUFFER_MAX_ROWS`（既定10,000行）、`TELEMETRY_BUFFER_MAX_BYTES`（既定32 MiB）を使う。切断中も生成し、再起動後も未確認行を保持する。上限超過では最古の未確認行を破棄して履歴を残し、書き込み失敗時は機体の生成を停止する。ingestorはDB commit後にreceiptを送り、simulatorは一致するreceiptを受けてから行を削除する。PUBACKでは削除せず、保存確認まで機体ごとに最古の行を再送する。未確認行が残る間は次の行を送らない。保存領域の削除・故障や上限超過は保証対象外となる。
 
 QoS 1のPUBACK待ちは`TELEMETRY_PUBLISH_TIMEOUT_MS`（既定10秒）で打ち切り、同じ行を後で再試行する。タイムアウト後に先のpublishが成功する場合もあるため、重複送信を許容する。
 
-この段階の再送はPUBACKを得ていない行に限る。ブローカーが受理してもtelemetry-ingestorやPostgreSQLが停止していれば、その行はDB未保存のまま再送対象から外れる。`getBufferStatus()`の`backlog`はPUBACK未取得行数、`brokerAcknowledgedUnconfirmed`はPUBACK済みだがDB保存を確認していない行数である。DBの重複排除は#112で追加したが、#128の保存確認receipt経路が揃うまで、DBへのat-least-once保存は保証しない。
+`getBufferStatus()`の`backlog`はPUBACK済みを含む全未確認行数、`brokerAcknowledgedUnconfirmed`はそのうちPUBACK済みの行数である。`receiptTimeouts`はPUBACK後の保存確認待ちが期限に達した回数を示す。待機・速度制限と費用境界は[telemetry保存確認receipt](docs/telemetry-receipts.md)を参照する。SQLiteへのcommit後、容量内で永続領域が保たれ、通信・ingestor・DB・receipt経路が最終的に復旧する条件でat-least-once保存する。
 
 AWS IoT Coreへ接続する場合は、[AWS IoT Coreへシミュレータを接続する](docs/aws/simulator.md)に従ってtransportと機体ごとのmTLS認証情報を設定する。ローカルMosquittoの起動方法と既定値は変わらない。
 

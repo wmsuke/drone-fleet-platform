@@ -25,8 +25,10 @@ export {
   createCommandsTopic,
   createStatusTopic,
   createTelemetryTopic,
+  createTelemetryReceiptsTopic,
   isValidDeviceId,
   parseMqttTopic,
   type MqttTopicKind,
   type ParsedMqttTopic,
 } from "./topics.js";
+export * from "./telemetry-receipt.js";

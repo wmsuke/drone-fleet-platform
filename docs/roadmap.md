@@ -127,7 +127,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 通信が途切れてもデータを保持し、再接続後に送信を再開できるようにする。
 
-配送保証、SQLiteからの削除条件、重複排除、commandの期限とoutboxの設計は[ADR 0005](adr/0005-delivery-and-recovery.md)に記録した。#109でtelemetryのsessionId、#110でsimulatorのSQLite永続バッファ、#111のPRでMQTT再接続とPUBACK未取得行の再送を追加した。これはtransport-levelの復旧であり、DB保存保証ではない。DB重複排除は#112で実装済みである。#128で保存確認receiptと確認済み削除を実装して、初めてSQLiteからPostgreSQLまでの保証を検証する。
+配送保証、SQLiteからの削除条件、重複排除、commandの期限とoutboxの設計は[ADR 0005](adr/0005-delivery-and-recovery.md)に記録した。#109でsessionId、#110でSQLite、#111でtransport-level再送、#112でDB重複排除、#128でDB commit後receiptと確認済み削除を追加した。永続領域と容量が保たれ、通信・DB・receipt経路が最終的に復旧する条件で、SQLite commitからPostgreSQLまでat-least-once保存する。
 
 ### 作業範囲
 

@@ -101,10 +101,26 @@ run "phase2_foundation_plan" {
 
   assert {
     condition = (
-      jsondecode(aws_iot_policy.device.policy).Statement[3].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands" &&
-      jsondecode(aws_iot_policy.device.policy).Statement[4].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands"
+      toset(jsondecode(aws_iot_policy.device.policy).Statement[3].Resource) == toset([
+        "arn:aws:iot:ap-northeast-1:123456789012:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands",
+        "arn:aws:iot:ap-northeast-1:123456789012:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry-receipts"
+      ]) &&
+      toset(jsondecode(aws_iot_policy.device.policy).Statement[4].Resource) == toset([
+        "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/commands",
+        "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/telemetry-receipts"
+      ])
     )
-    error_message = "device policy must subscribe to and receive only its command topic"
+    error_message = "device policy must subscribe to and receive only its command and receipt topics"
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[3].Action == "iot:Publish" &&
+      jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[3].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/telemetry-receipts" &&
+      length(jsondecode(aws_iot_policy.device.policy).Statement) == 5 &&
+      length(jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement) == 4
+    )
+    error_message = "ingestor must publish only receipts without RetainPublish or extra permissions"
   }
 
   assert {

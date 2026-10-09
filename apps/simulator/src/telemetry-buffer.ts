@@ -303,7 +303,7 @@ export class TelemetryBuffer {
           attempt_count AS attemptCount, last_attempt_at AS lastAttemptAt,
           published_at AS publishedAt
          FROM telemetry_buffer
-         WHERE device_id = ? AND published_at IS NULL
+         WHERE device_id = ?
          ORDER BY id LIMIT 1`,
       )
       .get(this.deviceId) as BufferedTelemetry | undefined;
@@ -314,10 +314,10 @@ export class TelemetryBuffer {
       .prepare(
         `SELECT count(*) AS count,
            (SELECT created_at FROM telemetry_buffer
-             WHERE device_id = ? AND published_at IS NULL
+             WHERE device_id = ?
              ORDER BY id LIMIT 1) AS oldestCreatedAt
          FROM telemetry_buffer
-         WHERE device_id = ? AND published_at IS NULL`,
+         WHERE device_id = ?`,
       )
       .get(this.deviceId, this.deviceId) as unknown as PendingTelemetryStats;
   }
@@ -333,6 +333,16 @@ export class TelemetryBuffer {
     `,
       )
       .all() as unknown as TelemetryDiscard[];
+  }
+
+  brokerAcknowledgedCount(): number {
+    return (
+      this.database
+        .prepare(
+          "SELECT count(*) AS count FROM telemetry_buffer WHERE device_id = ? AND published_at IS NOT NULL",
+        )
+        .get(this.deviceId) as { count: number }
+    ).count;
   }
 
   stats(): TelemetryBufferStats {

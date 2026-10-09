@@ -37,6 +37,7 @@ function bufferSettings() {
 afterAll(() => rmSync(bufferRoot, { recursive: true, force: true }));
 
 class FakeMqttClient implements SimulatorMqttClient {
+  autoReceipt = true;
   connected = true;
   options: IClientOptions = {};
   readonly published: PublishedMessage[] = [];
@@ -63,6 +64,23 @@ class FakeMqttClient implements SimulatorMqttClient {
     this.nextPublishError = undefined;
     if (error !== undefined) {
       throw error;
+    }
+    if (this.autoReceipt && this.connected && topic.endsWith("/telemetry")) {
+      const telemetry = telemetryMessageSchema.parse(JSON.parse(message));
+      if (telemetry.schemaVersion === 2)
+        this.emitMessage(
+          topic.replace(/telemetry$/, "telemetry-receipts"),
+          Buffer.from(
+            JSON.stringify({
+              schemaVersion: 1,
+              deviceId: telemetry.deviceId,
+              sessionId: telemetry.sessionId,
+              sequence: telemetry.sequence,
+              timestamp: telemetry.timestamp,
+              status: "STORED",
+            }),
+          ),
+        );
     }
   }
 
@@ -100,9 +118,9 @@ class FakeMqttClient implements SimulatorMqttClient {
     }
   }
 
-  emitMessage(topic: string, payload: Buffer): void {
+  emitMessage(topic: string, payload: Buffer, retain = false): void {
     for (const listener of this.listeners.get("message") ?? []) {
-      listener(topic, payload);
+      listener(topic, payload, { retain });
     }
   }
 
@@ -124,6 +142,142 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("ignores receipts for discarded rows and retained receipts without deleting the remaining row", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    client.autoReceipt = false;
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "receipt",
+        telemetryIntervalMs: 100,
+        ...bufferSettings(),
+        telemetryBufferMaxRows: 1,
+      },
+      async () => client,
+    );
+    const original = telemetryMessageSchema.parse(
+      JSON.parse(client.published[1]!.message),
+    );
+    if (original.schemaVersion !== 2) throw new Error("v2 required");
+    const receipt = {
+      schemaVersion: 1,
+      deviceId: original.deviceId,
+      sessionId: original.sessionId,
+      sequence: original.sequence,
+      timestamp: original.timestamp,
+      status: "STORED",
+    };
+    await vi.advanceTimersByTimeAsync(300);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      rows: 1,
+      discarded: 3,
+    });
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry-receipts",
+      Buffer.from(JSON.stringify(receipt)),
+    );
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry-receipts",
+      Buffer.from(JSON.stringify({ ...receipt, sequence: 3 })),
+      true,
+    );
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/telemetry-receipts",
+      Buffer.from("{"),
+    );
+    expect(simulator.getBufferStatus()).toMatchObject({
+      rows: 1,
+      healthy: true,
+    });
+    await simulator.shutdown();
+  });
+  it("keeps PUBACKed rows until a valid receipt, retries the same row, and ignores foreign or duplicate receipts", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    client.autoReceipt = false;
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "receipt",
+        telemetryIntervalMs: 100,
+        telemetryPublishTimeoutMs: 500,
+        telemetryRetryBaseMs: 100,
+        telemetryRetryMaxMs: 500,
+        telemetryReplayIntervalMs: 50,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const sent = () =>
+      client.published
+        .filter(({ topic }) => topic.endsWith("/telemetry"))
+        .map(({ message }) =>
+          telemetryMessageSchema.parse(JSON.parse(message)),
+        );
+    const first = sent()[0]!;
+    if (first.schemaVersion !== 2) throw new Error("v2 required");
+    const receipt = {
+      schemaVersion: 1,
+      deviceId: first.deviceId,
+      sessionId: first.sessionId,
+      sequence: first.sequence,
+      timestamp: first.timestamp,
+      status: "STORED",
+    };
+    const deliver = (
+      value: unknown,
+      topic = "fleet/v1/devices/drone-001/telemetry-receipts",
+    ) => client.emitMessage(topic, Buffer.from(JSON.stringify(value)));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sent().map(({ sequence }) => sequence)).toEqual([0, 0]);
+    expect(simulator.getBufferStatus()).toMatchObject({
+      rows: 6,
+      backlog: 6,
+      brokerAcknowledgedUnconfirmed: 1,
+    });
+    deliver({ ...receipt, deviceId: "drone-002" });
+    deliver(receipt, "fleet/v1/devices/drone-002/telemetry-receipts");
+    deliver({ ...receipt, sequence: 99 });
+    deliver({ ...receipt, status: "FAILED" });
+    expect(simulator.getBufferStatus().rows).toBe(6);
+    deliver(receipt);
+    deliver(receipt);
+    expect(simulator.getBufferStatus().rows).toBe(5);
+    await vi.advanceTimersByTimeAsync(49);
+    expect(sent()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sent().map(({ sequence }) => sequence)).toEqual([0, 0, 1]);
+    await simulator.shutdown();
+  });
+
+  it("replays PUBACKed unconfirmed rows after a process restart", async () => {
+    vi.useFakeTimers();
+    const settings = bufferSettings();
+    const config = {
+      deviceId: "drone-001",
+      mqttUrl: "mqtt://localhost",
+      simulationSeed: "receipt",
+      telemetryIntervalMs: 5000,
+      ...settings,
+    };
+    const firstClient = new FakeMqttClient();
+    firstClient.autoReceipt = false;
+    const first = await startSimulator(config, async () => firstClient);
+    const original = firstClient.published.find(({ topic }) =>
+      topic.endsWith("/telemetry"),
+    )!.message;
+    await first.shutdown();
+    const nextClient = new FakeMqttClient();
+    const next = await startSimulator(config, async () => nextClient);
+    expect(
+      nextClient.published.find(({ topic }) => topic.endsWith("/telemetry"))!
+        .message,
+    ).toBe(original);
+    await next.shutdown();
+  });
   it("retries the same row after a PUBACK timeout without deleting it", async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(1);
@@ -159,7 +313,7 @@ describe("startSimulator", () => {
         ({ message }) =>
           telemetryMessageSchema.parse(JSON.parse(message)).sequence,
       );
-    expect(sequences).toEqual([0, 1, 1]);
+    expect(sequences).toEqual([0, 1]);
     expect(simulator.getBufferStatus().backlog).toBe(0);
     await simulator.shutdown();
     logError.mockRestore();
@@ -227,8 +381,8 @@ describe("startSimulator", () => {
     vi.spyOn(client, "reconnect").mockImplementation(() => client);
     client.emit("close");
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(simulator.getBufferStatus()).toMatchObject({ backlog: 2, rows: 3 });
-    expect(simulator.getBufferStatus().brokerAcknowledgedUnconfirmed).toBe(1);
+    expect(simulator.getBufferStatus()).toMatchObject({ backlog: 2, rows: 2 });
+    expect(simulator.getBufferStatus().brokerAcknowledgedUnconfirmed).toBe(0);
 
     client.connected = true;
     client.emit("connect");
@@ -399,7 +553,7 @@ describe("startSimulator", () => {
     client.emit("offline");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(simulator.getBufferStatus()).toMatchObject({
-      rows: 3,
+      rows: 2,
       healthy: true,
     });
     expect(
@@ -416,7 +570,7 @@ describe("startSimulator", () => {
       },
     );
     expect(reopened.listUnconfirmed().map(({ sequence }) => sequence)).toEqual([
-      0, 1, 2,
+      1, 2,
     ]);
     reopened.close();
   });
@@ -454,7 +608,7 @@ describe("startSimulator", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(simulator.getBufferStatus()).toMatchObject({
       healthy: false,
-      rows: 1,
+      rows: 0,
       error: "disk unavailable",
     });
     expect(logError).toHaveBeenCalledWith(
@@ -462,7 +616,7 @@ describe("startSimulator", () => {
       expect.objectContaining({ deviceId: "drone-001" }),
     );
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(simulator.getBufferStatus().rows).toBe(1);
+    expect(simulator.getBufferStatus().rows).toBe(0);
     await simulator.shutdown();
     logError.mockRestore();
   });
@@ -566,6 +720,10 @@ describe("startSimulator", () => {
     expect(client.subscriptions).toEqual([
       {
         topic: "fleet/v1/devices/drone-001/commands",
+        options: { qos: 1 },
+      },
+      {
+        topic: "fleet/v1/devices/drone-001/telemetry-receipts",
         options: { qos: 1 },
       },
     ]);
@@ -751,7 +909,7 @@ describe("startSimulator", () => {
       JSON.parse(client.published[3]?.message ?? ""),
     );
     expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
-    expect(client.subscriptions).toHaveLength(2);
+    expect(client.subscriptions).toHaveLength(4);
     const initialTelemetry = telemetryMessageSchema.parse(
       JSON.parse(client.published[1]?.message ?? ""),
     );
