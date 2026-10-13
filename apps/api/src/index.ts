@@ -1,6 +1,7 @@
 import { createDatabase } from "@drone-fleet/database";
 
 import { buildApi } from "./app.js";
+import { createGroupRepository } from "./group-repository.js";
 import { createCommandOutbox, loadOutboxOptions } from "./command-outbox.js";
 import { createOutboxPublisher } from "./outbox-publisher.js";
 import { createCommandRepository } from "./command-repository.js";
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
   const app = buildApi(createDeviceRepository(db), commandService, {
     dashboardOrigin: config.dashboardOrigin,
     outboxStatus: outbox.status,
+    groupRepository: createGroupRepository(db),
   });
 
   outbox.start();

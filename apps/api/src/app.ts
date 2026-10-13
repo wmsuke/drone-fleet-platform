@@ -1,4 +1,6 @@
 import cors from "@fastify/cors";
+import { registerGroupRoutes } from "./group-routes.js";
+import type { GroupRepository } from "./group-repository.js";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import type { DeviceRepository } from "./repository.js";
@@ -23,9 +25,12 @@ export function buildApi(
   options: {
     dashboardOrigin?: string | null;
     outboxStatus?: () => Promise<unknown>;
+    groupRepository?: GroupRepository;
   } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (options.groupRepository)
+    registerGroupRoutes(app, options.groupRepository);
   if (options.outboxStatus)
     app.get("/command-outbox/status", options.outboxStatus);
   if (
