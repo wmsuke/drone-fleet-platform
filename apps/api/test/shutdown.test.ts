@@ -12,6 +12,23 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe("createShutdown", () => {
+  it("waits for outbox delivery before closing its database", async () => {
+    const finished = deferred();
+    const worker = { stop: vi.fn(() => finished.promise) };
+    const database = { end: vi.fn(async () => undefined) };
+    const shutdown = createShutdown(
+      { close: async () => undefined },
+      null,
+      database,
+      worker,
+    );
+    const pending = shutdown();
+    await vi.waitFor(() => expect(worker.stop).toHaveBeenCalledOnce());
+    expect(database.end).not.toHaveBeenCalled();
+    finished.resolve();
+    await pending;
+    expect(database.end).toHaveBeenCalledOnce();
+  });
   it("waits for an in-flight request before closing MQTT and the database", async () => {
     const requestCompleted = deferred();
     const closeStarted = deferred();

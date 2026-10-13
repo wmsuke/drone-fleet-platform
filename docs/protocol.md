@@ -228,9 +228,9 @@ simulatorはcommandId・本文・受領・操作試行・結果・再送待ちAC
 | `PENDING` | DBへ記録済み、送信待ち |
 | `SENT` | ブローカーへの送信を確認した |
 | `ACKNOWLEDGED` | デバイスから受領確認が届いた |
-| `FAILED` | 送信処理でエラーを検出した |
+| `FAILED` | 試行上限まで送信を確認できなかった |
 | `TIMED_OUT` | ACK待ちの期限を過ぎた |
-| `EXPIRED` | 端末から操作開始期限切れを受信した |
+| `EXPIRED` | 未試行で操作開始期限を過ぎた、または端末から期限切れを受信した |
 
 正常系はPENDING → SENT → ACKNOWLEDGEDとする。
 
@@ -238,7 +238,7 @@ ACK待ちの期限は、初期設定でコマンド作成から30秒とする。
 
 ACKが送信結果のDB更新より先に届く場合もあるため、ACKNOWLEDGEDを後からSENTへ戻さない。
 
-Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイスが操作していないことの証明にはならない。
+Phase 3ではAPI outboxから期限内に同じcommandIdを再送する。FAILEDやTIMED_OUTは、デバイスが操作していないことの証明にはならない。
 
 ## 入力検証
 
@@ -266,7 +266,7 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 
 ## Phase 3で追加する通信
 
-[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryのv2化・保存確認、command/ACKのv2化とsimulatorの永続履歴は実装済みである。API outboxは#114で扱う。
+[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryのv2化・保存確認、command/ACKのv2化とsimulatorの永続履歴、API outboxによる期限内の再送は実装済みである。
 
 - telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進めた。topicは変えず、`deviceId + sessionId + sequence`を1件の識別子とする。DBでの一意制約と重複排除は#112で実装済みである。
 - telemetryのpublishとingestorのsubscribeをQoS 1にした。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。

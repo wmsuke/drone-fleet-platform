@@ -110,7 +110,7 @@ simulatorはPUBACK済みを含む全未確認行をSQLiteへの追加順にQoS 1
 
 ### apps/api
 
-デバイス一覧・詳細・テレメトリ履歴・コマンド送信・コマンド履歴APIを実装済みである。一覧は各deviceをdeviceId順で返し、接続状態と最新テレメトリの概要を取得できる。詳細はdeviceの基本情報と最新テレメトリの全項目を返す。テレメトリ履歴は受信時刻、コマンド履歴は作成時刻の新しい順に返し、どちらも既定100件、`limit`で最大1000件まで指定できる。コマンド送信はPENDINGでDBへ保存してからQoS 1、retainなしでMQTTへ送信し、結果をSENTまたはFAILEDへ更新する。状態更新はPENDINGの行だけを対象とし、先に届いたACKによるACKNOWLEDGEDを上書きしない。
+デバイス一覧・詳細・テレメトリ履歴・コマンド送信・コマンド履歴APIを実装済みである。一覧は各deviceをdeviceId順で返し、接続状態と最新テレメトリの概要を取得できる。詳細はdeviceの基本情報と最新テレメトリの全項目を返す。テレメトリ履歴は受信時刻、コマンド履歴は作成時刻の新しい順に返し、どちらも既定100件、`limit`で最大1000件まで指定できる。コマンド受付はcommandとoutboxを同じDB transactionで保存し、202 / PENDINGを返す。workerがQoS 1、retainなしで送信し、再送・送信確認・期限・失敗を記録する。先に届いたACKによるACKNOWLEDGEDを送信結果で上書きしない。
 
 - デバイス一覧・詳細の取得
 - テレメトリ履歴の取得
@@ -214,7 +214,7 @@ Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-flee
 
 ACKはコマンドの受領を示す。帰還や再起動の完了とは区別する。
 
-DB保存とMQTT送信は単一のtransactionにはならない。APIはv2 commandと30秒の操作開始期限をDBへ記録する。simulatorは受領・開始・結果とACKをSQLiteへ記録し、再起動後も重複操作を防ぐ。受領ACKは完了ではない。期限切れ通知はEXPIREDへ反映し、後着の受領ACKは履歴だけを補いEXPIREDを戻さない。API outboxは#114で扱う。[コマンドの期限と永続化](command-durability.md)に停止境界と設定を記す。
+DB保存とMQTT送信は単一のtransactionにはならない。APIはv2 commandと30秒の操作開始期限、outboxをDBへ記録する。workerが期限内に同じcommandIdを再送し、ACK後は再送を止める。simulatorは受領・開始・結果とACKをSQLiteへ記録し、再起動後も重複操作を防ぐ。受領ACKは完了ではない。期限切れ通知はEXPIREDへ反映し、後着の受領ACKは履歴だけを補いEXPIREDを戻さない。[コマンドの期限と永続化](command-durability.md)に停止境界と設定を記す。
 
 ## Phase 1で保存するデータ
 
@@ -295,7 +295,7 @@ flowchart LR
 
 telemetry-ingestorは`MQTT_TRANSPORT=local`で従来のMosquitto、`aws-iot`でATS endpointへ接続する。AWSモードではデバイスやAPIと共有しない証明書、固定clientId、telemetry・status・ACKだけを購読できるPolicyを使う。接続完了後の切断ではMQTT clientが再接続と再購読を行い、受信したmessageはtransportに関係なく既存のprotocol検証とDB保存へ渡す。
 
-APIも`MQTT_TRANSPORT`でMosquittoとAWS IoT Coreを切り替える。AWSモードではデバイスやtelemetry-ingestorと共有しない証明書と固定clientIdを使い、commands topicへのpublishだけを許可する。コマンドはtransportに関係なくPENDING保存、QoS 1 publish、SENTまたはFAILED更新、ACK追跡の既存処理を通す。アプリケーションで別commandIdを作る再試行は行わず、接続後の切断ではmqtt.jsが同じQoS 1 publishを再送する。
+APIも`MQTT_TRANSPORT`でMosquittoとAWS IoT Coreを切り替える。AWSモードではデバイスやtelemetry-ingestorと共有しない証明書と固定clientIdを使い、commands topicへのpublishだけを許可する。transportに関係なくoutboxから同じcommandId・payloadを期限内に再送する。各試行の接続を時間制限付きで破棄し、mqtt.jsの自動再接続キューは使わない。
 
 Phase 2.5のBasic IngestとIoT Ruleは、短時間のテレメトリ負荷確認専用とし、通常運用の双方向経路とは分ける。接続経路、サービスの責務、認証情報の管理、採用しなかった案は[ADR 0004](adr/0004-aws-iot-connection-and-credentials.md)に記載する。
 

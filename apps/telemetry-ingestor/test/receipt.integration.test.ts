@@ -212,18 +212,30 @@ describe.skipIf(process.env.DATABASE_INTEGRATION !== "true")(
         let commandPayload = "";
         const service = createCommandService(
           createCommandRepository(database.db),
-          {
-            async publish(message) {
-              commandPayload = JSON.stringify(message);
-              await observer!.publishAsync(
-                `fleet/v1/devices/${deviceId}/commands`,
-                commandPayload,
-                { qos: 1, retain: false },
-              );
-            },
-          },
         );
         const command = await service.send(deviceId, "RETURN_HOME");
+        const { createCommandOutbox } =
+          await import("../../api/src/command-outbox.js");
+        const { createOutboxPublisher } =
+          await import("../../api/src/outbox-publisher.js");
+        const publish = createOutboxPublisher({
+          url,
+          clientOptions: { clean: true, clientId: "receipt-api-test" },
+        });
+        const offlinePublish = createOutboxPublisher(
+          { url: "mqtt://127.0.0.1:1", clientOptions: { clean: true } },
+          1000,
+        );
+        await createCommandOutbox(database.client, offlinePublish).runOnce();
+        await createCommandOutbox(
+          database.client,
+          async (topic, payload, expiresAt) => {
+            commandPayload = payload;
+            await publish(topic, payload, expiresAt);
+          },
+          undefined,
+          () => new Date(Date.now() + 2000),
+        ).runOnce();
         await vi.waitFor(
           async () =>
             expect(

@@ -127,7 +127,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 通信が途切れてもデータを保持し、再接続後に送信を再開できるようにする。
 
-#113でcommand/ACK v2、操作開始期限、simulatorの永続履歴とACK再送を追加した。停止境界と移行手順は[コマンドの期限と永続化](command-durability.md)を参照する。API outboxの自動再送は#114で扱う。
+#113でcommand/ACK v2、操作開始期限、simulatorの永続履歴とACK再送、#114でAPI outboxの永続化と期限内の自動再送を追加した。停止境界と移行手順は[コマンドの期限と永続化](command-durability.md)を参照する。
 
 配送保証、SQLiteからの削除条件、重複排除、commandの期限とoutboxの設計は[ADR 0005](adr/0005-delivery-and-recovery.md)に記録した。#109でsessionId、#110でSQLite、#111でtransport-level再送、#112でDB重複排除、#128でDB commit後receiptと確認済み削除を追加した。永続領域と容量が保たれ、通信・DB・receipt経路が最終的に復旧する条件で、SQLite commitからPostgreSQLまでat-least-once保存する。
 

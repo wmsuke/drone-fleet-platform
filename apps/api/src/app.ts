@@ -2,11 +2,7 @@ import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import type { DeviceRepository } from "./repository.js";
-import {
-  CommandPublishError,
-  DeviceNotFoundError,
-  type CommandService,
-} from "./command-service.js";
+import { DeviceNotFoundError, type CommandService } from "./command-service.js";
 import {
   commandRequestSchema,
   commandHistoryResponseSchema,
@@ -24,9 +20,14 @@ const DEFAULT_COMMAND_LIMIT = 100;
 export function buildApi(
   repository: DeviceRepository,
   commandService: CommandService,
-  options: { dashboardOrigin?: string | null } = {},
+  options: {
+    dashboardOrigin?: string | null;
+    outboxStatus?: () => Promise<unknown>;
+  } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (options.outboxStatus)
+    app.get("/command-outbox/status", options.outboxStatus);
   if (
     options.dashboardOrigin !== undefined &&
     options.dashboardOrigin !== null
@@ -101,11 +102,6 @@ export function buildApi(
       } catch (error) {
         if (error instanceof DeviceNotFoundError) {
           return reply.code(404).send({ error: "deviceが見つかりません" });
-        }
-        if (error instanceof CommandPublishError) {
-          return reply
-            .code(502)
-            .send(commandResponseSchema.parse(error.command));
         }
         throw error;
       }
