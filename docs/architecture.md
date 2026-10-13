@@ -328,11 +328,13 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 4の設計（未実装）
+## Phase 4の設計と実装範囲
+
+#137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。詳細は[機体グループAPI](groups-api.md)を参照する。画面、operation、alert、auditは未実装である。
 
 複数機体操作は受付transactionでgroup membershipを固定し、対象ごとの既存command/outboxを作成する。APIが受付と集約、ingestorが受領・実行結果の保存、simulatorが操作と永続結果通知を担当する。受領ACKと実行完了は別に扱う。alert evaluatorはDBの確定済み状態から異常を判定し、telemetry保存とは分離する。重要操作の成功auditは業務変更と同時commitする。
 
-エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。DB・通信・API・画面の実装は#137〜#148で行い、現時点では利用できない。
+エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。group管理以外のDB・通信・API・画面は後続Issueで実装する。
 
 ## 関連ADR
 

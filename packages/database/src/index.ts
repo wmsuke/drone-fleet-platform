@@ -12,6 +12,8 @@ export {
   commandTypeEnum,
   connectionStatusEnum,
   devices,
+  groups,
+  groupMemberships,
   flightStatusEnum,
   telemetry,
   type Command,

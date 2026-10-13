@@ -202,6 +202,52 @@ export const commandOutbox = pgTable(
     ),
   ],
 );
+export const groups = pgTable(
+  "groups",
+  {
+    groupId: uuid("group_id").primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: varchar("description", { length: 1000 }),
+    revision: integer("revision").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    index("groups_active_created_idx")
+      .on(table.createdAt, table.groupId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      "groups_name_valid",
+      sql`length(btrim(${table.name})) BETWEEN 1 AND 100 AND ${table.name} = btrim(${table.name}) AND ${table.name} !~ '[[:cntrl:]]'`,
+    ),
+    check("groups_revision_positive", sql`${table.revision} > 0`),
+  ],
+);
+
+export const groupMemberships = pgTable(
+  "group_memberships",
+  {
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.groupId, { onDelete: "restrict" }),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.deviceId] }),
+    index("group_memberships_device_idx").on(table.deviceId, table.groupId),
+  ],
+);
+
 export type Device = typeof devices.$inferSelect;
 export type NewDevice = typeof devices.$inferInsert;
 export type Telemetry = typeof telemetry.$inferSelect;
