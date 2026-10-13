@@ -92,7 +92,7 @@ payloadの必須項目や意味を変える場合は、対象メッセージのs
 
 `packages/protocol`はZodの`telemetryMessageSchema`と、スキーマから推論した`TelemetryMessage`型を公開する。`schemaVersion=1`と`2`を受け付け、v2では`sessionId`を必須とする。`parse`または`safeParse`で検証した値では、入力に含まれる未知の追加フィールドを無視して取り除く。
 
-`sessionId`は小文字・ハイフン付き36文字のUUID v4とする。simulatorは機体ごと・プロセス起動ごとに生成し、MQTT再接続では変えない。load-generatorも実行ごと・機体ごとに生成する。レポート用の`LOAD_SESSION_ID`とは別の値である。再起動後は新しい`sessionId`で`sequence=0`から始める。同一セッション内の連番は単調増加し、送信失敗による欠番は許容する。1件の識別子は`(deviceId, sessionId, sequence)`とし、異なるセッションの同じ連番は別データである。
+`sessionId`は小文字・ハイフン付き36文字のUUID v4とする。simulatorは機体ごと・プロセス起動ごとに生成し、MQTT再接続では変えない。load-generatorも実行ごと・機体ごとに生成する。レポート用の`LOAD_SESSION_ID`とは別の値である。再起動後は新しい`sessionId`で`sequence=0`から始める。同一セッション内の連番は単調増加する。simulatorは通信失敗時も同じ識別子を再送し、容量超過などで破棄した場合は欠番が残り得る。欠番だけで原因を断定せず破棄記録と照合する。1件の識別子は`(deviceId, sessionId, sequence)`とし、異なるセッションの同じ連番は別データである。
 
 旧v1 telemetryは移行中も受信・保存するが、`sessionId`がないため重複排除の対象にしない。v2は`(deviceId, sessionId, sequence)`で永続的に重複排除する。同じ送信内容の再受信は成功扱いにし、内容が違う場合は衝突として警告し、既存行を上書きしない。受信時刻は内容照合に含めない。移行と計測の詳細は[telemetry保存の冪等化](load-testing/telemetry-idempotency.md)を参照する。保存確認receiptは#128で追加した。詳細は[telemetry保存確認receipt](telemetry-receipts.md)を参照する。topicは変えず、ingestorはQoS 1で購読する。
 
@@ -129,7 +129,7 @@ sequenceは起動時に0から始め、送信ごとに1増やす。MQTTの再接
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "deviceId": "drone-001",
   "timestamp": "2026-09-25T08:00:00.000Z",
   "payload": {
@@ -171,7 +171,7 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "commandId": "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
   "deviceId": "drone-001",
   "type": "RETURN_HOME",
@@ -256,11 +256,11 @@ Phase 3ではAPI outboxから期限内に同じcommandIdを再送する。FAILED
 
 ## 現在の制約
 
-- テレメトリの欠損や重複を完全には防がない。
-- 通信断中のデータを保存・再送しない。
+- v2 telemetryはSQLite commitからDB保存receiptまで保持し、同じ識別子・同じ本文を再送する。容量・永続領域・通信とDBとreceipt経路の復旧条件付きであり、exactly-once配送ではない。
+- SQLite commit前、容量超過、ディスク故障・volume消失、停止中の未生成サンプルは保持できない。旧v1 telemetryはreceipt・永続的な重複排除の対象外である。
 - コマンドの実行完了は追跡しない。
 - コマンド履歴の永続領域・期限判定の時計・容量の前提が失われる場合は、重複防止の保証範囲外となる。
-- DB保存とMQTT送信の間の障害に対する自動復旧は行わない。
+- APIの202はcommand/outboxの受付であり、送信確認でも受領ACKでもない。outboxは期限・試行上限内で再送する。別のHTTP POSTで作られた新しいcommandIdの重複操作は防がない。
 - ローカルMosquitto構成は開発用の匿名接続であり、外部公開しない。
 - AWS IoT Core構成ではX.509証明書で個体認証し、IoT Policyでtopicを制限する。アプリケーション側でもtopicと本文のdeviceId照合を継続する。
 
@@ -272,5 +272,7 @@ Phase 3ではAPI outboxから期限内に同じcommandIdを再送する。FAILED
 - telemetryのpublishとingestorのsubscribeをQoS 1にした。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
 - commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進めた。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
+
+設定値、保持できない条件、時計とディスクの前提は[復旧デモと運用制約](recovery-demo.md)にまとめた。未確認telemetryの時間保持期限はなく、commandの操作開始期限30秒とは別である。DBの重複排除情報はtelemetry行の存続期間保持し、端末のcommand履歴は期限から7日・10000件を上限に次の受信時に掃除する。容量によって期限切れ履歴を早く消す場合があり、履歴を消した後も期限切れcommandは実行しない。
 
 旧telemetry v1は受け付けるが、保存確認と永続重複排除の対象にしない。commandの新規送信・実行はv2へ切り替える。新しいsimulatorはv1 commandを実行しない。ingestorは既存v1行のv1 ACKを受け付けるが、v1/v2のACKを別versionの行へ反映しない。更新はcommand受付を止めたうえでサービスを揃えて行う。詳細は[コマンドの期限と永続化](command-durability.md)を参照する。

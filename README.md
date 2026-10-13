@@ -6,7 +6,7 @@ TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置
 
 ## 開発状況
 
-Phase 2のAWS IoT接続まで実装済みで、`v0.2.0`として次の範囲を利用できる。
+Phase 3の復旧処理まで実装済みで、`v0.3.0`として次の範囲を利用できる。変更点は[v0.3.0リリースノート](docs/releases/v0.3.0.md)を参照する。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -25,6 +25,11 @@ Phase 2のAWS IoT接続まで実装済みで、`v0.2.0`として次の範囲を�
 - 機体単位のIoT Policyによるtopic制限
 - simulator、telemetry-ingestor、APIのローカル/AWS IoT transport切替
 - AWS経由のtelemetry・status・command・ACKと権限制御のE2E
+- telemetry v2のsessionId、SQLite永続バッファ、DB保存receipt、再送時の重複排除
+- commandの操作開始期限、永続履歴、API outboxと再起動後の再送
+- 通信断・再起動・容量超過のローカル復旧E2Eとログ保存
+
+通信断中の蓄積から再送完了までを確認するには[復旧デモと運用制約](docs/recovery-demo.md)を使う。専用Compose環境のため、通常の開発データやAWS環境は使わない。容量内・永続領域維持・通信とDBとreceipt経路の復旧を条件にat-least-once保存するもので、exactly-once配送・操作完了を保証しない。
 
 ## Performance / Load testing
 
@@ -66,7 +71,7 @@ APIから10台を確認する場合は、次のURLを使用する。
 curl http://127.0.0.1:3000/devices
 ```
 
-デモを終了する。PostgreSQLとMosquittoのデータはvolumeに残る。
+デモを終了する。PostgreSQL、Mosquitto、simulatorのSQLiteデータはvolumeに残る。
 
 ```bash
 docker compose down
@@ -104,13 +109,14 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 ### 現在の制約
 
 - MosquittoはComposeネットワーク内で匿名接続を許可する開発用設定であり、外部公開を想定しない。
-- AWS IoT Coreは仮想ドローン2台の短時間E2Eまで確認済みで、継続負荷や実機は未確認である。
+- AWS IoT CoreはPhase 2の2台E2Eと#64の100台の短時間接続・クラウド経路に確認記録がある。Phase 3のreceipt・outboxを含む実AWSの復旧障害注入と実機は未検証である。
 - 操作できるコマンドは`RETURN_HOME`と`REBOOT`のみである。
 - ACKは仮想ドローンがコマンドを受領したことを示し、実行完了を示すものではない。
 - commandは30秒の操作開始期限を持つ。simulatorはSQLiteに受領・操作試行・結果とACKを残し、プロセス再起動後も同じIDの操作を繰り返さない。停止境界・時刻同期・履歴上限・更新手順は[コマンドの期限と永続化](docs/command-durability.md)を参照する。
 - APIはcommandとoutboxを同時に保存し、202 / PENDINGで受付を返す。送信はバックグラウンドで期限内に再試行し、API再起動後も同じcommandIdを使う。`GET /command-outbox/status`で滞留件数・最古時刻・試行数・失敗数を確認できる。
 - モデル名とソフトウェアバージョンはPhase 1のメッセージに含まれないため、画面では未登録と表示する。
-- 通信断中の永続バッファと再送、証明書の自動ローテーション、OTA、ROS 2連携は後続Phaseで扱う。
+- 長期切断での容量超過、ディスク故障・volume削除、SQLite commit前のサンプルは保持保証の対象外である。時計ずれや操作開始後の結果不明も自動で救済しない。設定と容量計算は[復旧デモと運用制約](docs/recovery-demo.md)を参照する。
+- 証明書の自動ローテーション、OTA、ROS 2連携は後続Phaseで扱う。
 
 ## 開発環境
 

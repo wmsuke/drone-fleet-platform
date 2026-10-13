@@ -1,6 +1,6 @@
 # ADR 0005: 通信断時の配送保証と復旧境界
 
-- 状態: 採用（telemetryの保存確認とcommand/ACK v2・simulatorの永続履歴は実装済み。API outboxは#114で扱う）
+- 状態: 採用（telemetry receipt、command/ACK v2、simulator永続履歴、API outbox、ローカル復旧E2Eを実装済み。実AWSのPhase 3障害注入は未検証）
 - 決定日: 2026-10-06
 - 対象: #108、後続の#109〜#116
 
@@ -72,7 +72,7 @@ APIの状態遷移は次のとおりとする。`FAILED`と`TIMED_OUT`も配送�
 
 telemetryはSQLiteへのcommit前、上限超過で破棄した行、保存先の故障やデータ消失、端末を長期間動かせない場合に欠損し得る。受領通知経路が復旧しない間は行を保持するが、上限を超えると古い未確認行を破棄する。commandは期限切れ、端末時刻のずれ、操作試行開始後の停止で実行できないか結果が不明になり得る。機体の物理操作とSQLiteのtransactionは原子的にできないため、exactly-once実行や実行完了の保証はしない。接続状態のretained通知は現在の到達確認ではなく、オンライン判定には従来どおり新しい受信とタイムアウトを使う。
 
-## 保存先と後続Issue
+## 保存先と実装Issue
 
 | 保存先                          | Phase 3で追加する情報                                                                                        | 主な担当Issue    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------- |
@@ -81,7 +81,7 @@ telemetryはSQLiteへのcommit前、上限超過で破棄した行、保存先�
 | PostgreSQLのcommands / outbox   | expiresAt、送信試行、期限切れ状態、同一transactionで作るoutbox                                               | #113、#114       |
 | `packages/protocol`とIoT Policy | v2 telemetry、telemetry-receipts、v2 command/ACK、機体のreceipt購読とingestorのreceipt送信権限               | #109、#111〜#113 |
 
-#111のtransport-level再送を#112のDB重複排除と#128の保存確認receiptにつないだ。ingestorのDB commit後通知とsimulatorの検証・確認済み削除を実装し、PUBACK済みを含む全未確認行を再送対象とする。receipt待ちの間は次行を送らない。AWS IoT Policyには自機receiptの購読・受信とingestorのreceipt送信だけを追加した。詳細な実装と検証は[telemetry保存確認receipt](../telemetry-receipts.md)を参照する。#115では通信断・バッファ上限・command操作試行中の停止を横断的に検証する。AWSの確認は#64の費用境界を守る小規模経路試験に限る。
+#111のtransport-level再送を#112のDB重複排除と#128の保存確認receiptにつないだ。ingestorのDB commit後通知とsimulatorの検証・確認済み削除を実装し、PUBACK済みを含む全未確認行を再送対象とする。receipt待ちの間は次行を送らない。AWS IoT Policyには自機receiptの購読・受信とingestorのreceipt送信だけを追加した。詳細な実装と検証は[telemetry保存確認receipt](../telemetry-receipts.md)を参照する。#114でAPI outbox、#115で[ローカル復旧E2E](../recovery-e2e.md)、#116で[復旧デモと運用制約](../recovery-demo.md)を追加した。STARTED直後の停止は公開CommandStoreによる停止境界fixtureであり、実機の物理操作試験ではない。AWSの確認は#64の費用境界を守る小規模経路試験に限り、Phase 3の実AWS障害注入は未検証である。
 
 ## 理由とトレードオフ
 
