@@ -3,6 +3,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 
 import { DeviceDetailPage } from "./device-detail.js";
 import { DeviceListPage } from "./device-list.js";
+import { GroupsPage } from "./groups.js";
 
 export interface DashboardAppProps {
   apiBaseUrl: string | null;
@@ -18,6 +19,7 @@ function Layout({ children }: { children: ReactNode }) {
         </div>
         <nav aria-label="メインナビゲーション">
           <NavLink to="/">ダッシュボード</NavLink>
+          <NavLink to="/groups">機体グループ</NavLink>
         </nav>
       </header>
       <main>{children}</main>
@@ -62,6 +64,14 @@ export function DashboardApp({ apiBaseUrl }: DashboardAppProps) {
     <Layout>
       <Routes>
         <Route path="/" element={<HomePage apiBaseUrl={apiBaseUrl} />} />
+        <Route
+          path="/groups"
+          element={<GroupsPage apiBaseUrl={apiBaseUrl} />}
+        />
+        <Route
+          path="/groups/:groupId"
+          element={<GroupsPage apiBaseUrl={apiBaseUrl} />}
+        />
         <Route
           path="/devices/:deviceId"
           element={<DeviceDetailPage apiBaseUrl={apiBaseUrl} />}
