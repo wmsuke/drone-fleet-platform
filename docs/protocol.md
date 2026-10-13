@@ -129,7 +129,7 @@ sequenceは起動時に0から始め、送信ごとに1増やす。MQTTの再接
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "deviceId": "drone-001",
   "timestamp": "2026-09-25T08:00:00.000Z",
   "payload": {
@@ -171,7 +171,7 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "commandId": "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
   "deviceId": "drone-001",
   "type": "RETURN_HOME",
