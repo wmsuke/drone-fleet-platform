@@ -1,0 +1,143 @@
+# 復旧E2E専用。通常のCompose環境・.env・AWS認証情報を使用しない。
+x-runtime: &runtime
+  build:
+    context: .
+    target: runtime
+  image: ${COMPOSE_PROJECT_NAME}-runtime
+  restart: "no"
+
+x-database: &database
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: recovery
+  POSTGRES_USER: recovery
+  POSTGRES_PASSWORD: recovery-test-only
+
+x-simulator: &simulator
+  MQTT_TRANSPORT: local
+  MQTT_HOST: mqtt
+  MQTT_PORT: 1883
+  DRONE_COUNT: 1
+  SIMULATION_SEED: recovery-e2e
+  TELEMETRY_INTERVAL_MS: 300
+  TELEMETRY_BUFFER_DIR: /workspace/simulator-data
+  TELEMETRY_BUFFER_MAX_ROWS: 1000
+  TELEMETRY_BUFFER_MAX_BYTES: 33554432
+  TELEMETRY_RETRY_BASE_MS: 100
+  TELEMETRY_RETRY_MAX_MS: 500
+  TELEMETRY_REPLAY_INTERVAL_MS: 20
+  TELEMETRY_PUBLISH_TIMEOUT_MS: 1000
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      <<: *database
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "recovery", "-d", "recovery"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  mqtt:
+    image: eclipse-mosquitto:2.0.22
+    ports:
+      - "127.0.0.1::1883"
+    volumes:
+      - ./infra/local/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt-data:/mosquitto/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mosquitto_pub",
+          "-h",
+          "localhost",
+          "-t",
+          "fleet/health",
+          "-m",
+          "ready",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *runtime
+    command: ["node", "packages/database/dist/migrate.js"]
+    environment: *database
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  telemetry-ingestor:
+    <<: *runtime
+    command: ["node", "apps/telemetry-ingestor/dist/index.js"]
+    environment:
+      <<: *database
+      MQTT_TRANSPORT: local
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      TELEMETRY_BATCH_SIZE: 10
+      TELEMETRY_FLUSH_INTERVAL_MS: 20
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_healthy
+
+  api:
+    <<: *runtime
+    command: ["node", "apps/api/dist/index.js"]
+    ports:
+      - "127.0.0.1::3000"
+    environment:
+      <<: *database
+      API_HOST: 0.0.0.0
+      MQTT_TRANSPORT: local
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      COMMAND_OUTBOX_POLL_MS: 100
+      COMMAND_OUTBOX_RETRY_BASE_MS: 500
+      COMMAND_OUTBOX_RETRY_MAX_MS: 1000
+      COMMAND_OUTBOX_MAX_ATTEMPTS: 20
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  simulator:
+    <<: *runtime
+    command: ["node", "apps/simulator/dist/index.js"]
+    environment: *simulator
+    volumes:
+      - simulator-data:/workspace/simulator-data
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      telemetry-ingestor:
+        condition: service_started
+
+  limited-simulator:
+    <<: *runtime
+    profiles: [limited]
+    command: ["node", "apps/simulator/dist/index.js"]
+    environment:
+      <<: *simulator
+      DEVICE_ID_PREFIX: limited
+      TELEMETRY_BUFFER_MAX_ROWS: 3
+    volumes:
+      - simulator-data:/workspace/simulator-data
+
+  probe:
+    <<: *runtime
+    command: ["node", "-e", "setInterval(() => {}, 1000000)"]
+    environment: *database
+    volumes:
+      - simulator-data:/workspace/simulator-data
+
+volumes:
+  postgres-data:
+  mqtt-data:
+  simulator-data:

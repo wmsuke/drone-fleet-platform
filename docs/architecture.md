@@ -194,6 +194,8 @@ Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-flee
 
 `scripts/test-telemetry-path.sh`は専用のComposeプロジェクトでPostgreSQL、Mosquitto、DBマイグレーション、MQTT受信処理、シミュレータ1台、APIを起動する。シミュレータが生成したテレメトリがAPIへ到達することに加え、固定テレメトリをMQTTへ送信してAPIのテレメトリ履歴で全項目が一致することを、それぞれ上限時間付きで待つ。失敗時は経路上のサービス状態とログを出力し、終了時はテスト用データとプロセスを削除する。
 
+Phase 3の横断検証は`pnpm test:recovery`で行う。専用Compose環境でbroker停止、simulatorとAPIの強制停止・再起動、telemetry重複配送、command重複・期限切れ、バッファ上限到達を確認する。結果・識別子の突き合わせ・cleanupとAWS未確認範囲は[復旧E2E](recovery-e2e.md)を参照する。
+
 ## Phase 1のデータの流れ
 
 ### テレメトリ

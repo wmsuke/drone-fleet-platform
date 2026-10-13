@@ -164,9 +164,10 @@ cp .env.example .env
 | `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
+| `pnpm test:recovery`       | 通信断・再起動・再接続のローカル復旧E2E    |
 | `pnpm test:aws-iot-e2e`    | AWS IoT Coreの短時間E2E（認証情報が必要）  |
 
-Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、負荷試験レポートの小規模E2Eを実行する。
+Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、PostgreSQLのintegration test、負荷試験レポートの小規模E2E、通信断・再起動の復旧E2Eを実行する。
 
 ### 負荷生成器
 
@@ -268,6 +269,8 @@ pnpm test:telemetry-path
 ```
 
 テストは専用のComposeプロジェクトを使用する。固定テレメトリとシミュレータのテレメトリは、それぞれAPIへの反映を最大30秒待つ。成功・失敗を問わずコンテナ、ネットワーク、volumeを削除する。失敗時はPostgreSQL、Mosquitto、マイグレーション、MQTT受信処理、シミュレータ、APIの状態とログを出力する。外部のAWSや実機には接続しない。Pull Requestと`main`へのpushでも同じテストを実行する。
+
+通信断・APIとsimulatorの強制停止・バッファ容量超過からの復旧は`pnpm test:recovery`で検証する。実測件数と識別子、成功・失敗時のログを保存し、試験用環境を片付ける。手順とAWSの未確認範囲は[復旧E2E](docs/recovery-e2e.md)を参照する。
 
 ダッシュボードの開発サーバーは、`.env`の`VITE_API_BASE_URL`を接続先として起動する。
 
