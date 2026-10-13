@@ -25,7 +25,25 @@ simulatorは機体のtelemetryと同じSQLiteファイルの`command_history`へ
 
 ACKは独立してQoS 1・retainなしで送信し、PUBACKを待たずに操作する。送信失敗・切断・タイムアウトではSQLiteに残し、再接続・再起動後に保存済みACKを再送する。遅れた古いACKのPUBACKで、新しい期限切れACKの送信待ちを解除しない。再試行は既存の`TELEMETRY_RETRY_BASE_MS` / `TELEMETRY_RETRY_MAX_MS`、速度の下限は`TELEMETRY_REPLAY_INTERVAL_MS`、PUBACK待ち上限は`TELEMETRY_PUBLISH_TIMEOUT_MS`を使う。
 
-ACKのPUBACKはingestorによるDB更新を保証しない。DBが停止している間にACKを失うと、APIが`TIMED_OUT`のままの場合がある。同じcommandの再配送時はACKを再送するが、API outboxによる自動再送は#114で扱う。
+ACKのPUBACKはingestorによるDB更新を保証しない。DBが停止している間にACKを失うと、APIが`TIMED_OUT`のままの場合がある。同じcommandの再配送時は保存済みACKを再送する。
+
+## API outbox
+
+APIはcommandと`command_outbox`を同じPostgreSQL transactionで保存し、`202 / PENDING`を返す。これは受付完了であり、MQTT送信や操作開始の確認ではない。DBが使える限り、brokerに接続できなくても受け付ける。認証ファイルの読み取り失敗は起動エラーとする。
+
+outboxには送信先topic、変更しないpayload・commandId、作成時刻・期限、試行数・失敗数、次回試行時刻と状態を残す。既存commandをoutboxへ移して再実行することはない。migrationを適用してAPIを更新する。
+
+workerはcommandIdごとのPostgreSQL session advisory lockを取得する。ロック中でもcommand行を送信中にロックしないため、ACK受信処理は進められる。試行数と次回時刻を送信前にcommitし、API停止後も再処理する。プロセス停止でDB接続が閉じるとロックは解放される。DB接続自体が失われた場合や送信直後の停止では配送結果が不明になるため、端末の永続的な重複防止を併用する。
+
+送信はlocal / AWS共通でQoS 1・retainなしとする。各試行で接続し、接続・PUBACK待ちを合計5秒または残り期限で打ち切る。mqtt.jsの自動再接続は止め、成功・失敗とも接続を破棄して期限後のキュー送信を防ぐ。常時接続より接続回数は増えるが、未送信packetの寿命を試行内に限定できる。AWSでは既存の固定clientIdと証明書を使う。複数APIから同じAWS clientIdを使うと接続が競合するため、APIごとにPolicyで許可した専用clientId・証明書が必要である。
+
+- `COMMAND_OUTBOX_POLL_MS`: 確認間隔。既定250ミリ秒。
+- `COMMAND_OUTBOX_RETRY_BASE_MS` / `COMMAND_OUTBOX_RETRY_MAX_MS`: 指数バックオフの基準・上限。既定1000 / 8000ミリ秒。各回の上限の50〜100%のjitterを付ける。
+- `COMMAND_OUTBOX_MAX_ATTEMPTS`: 接続・publish試行の上限。既定5回。
+
+PUBACKで`SENT`に更新し、最初の送信確認時刻を残す。ACKがなければ期限内に同じpayloadを再送する。上限までPUBACKが一度もなければ`FAILED`、PUBACKがあれば再送を止めて期限までACKを待つ。期限時に一度も試行していないcommandは`EXPIRED`、試行済みなら操作の有無を断定せず`TIMED_OUT`とする。受領ACKや期限切れACKを上書きしない。ACK更新後は次の取得で再送を止めるが、既に開始した送信を撤回することはできない。
+
+`GET /command-outbox/status`で`backlog`（未終端の滞留件数）、`oldest`（最古の作成時刻、空ならnull）、`attempts`・`failures`（保存行の累計）を確認する。終端のoutboxも調査用に残す。自動削除は行わない。
 
 ## 履歴上限と端末時刻
 

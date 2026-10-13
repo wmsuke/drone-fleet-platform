@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildApi } from "../src/app.js";
 import {
-  CommandPublishError,
   DeviceNotFoundError,
   type CommandService,
 } from "../src/command-service.js";
@@ -18,6 +17,25 @@ const commandId = "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c";
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map(async (app) => app.close()));
+});
+
+it("exposes outbox backlog and attempt counters", async () => {
+  const status = {
+    backlog: 2,
+    oldest: "2026-10-13T00:00:00.000Z",
+    attempts: 4,
+    failures: 1,
+  };
+  const app = buildApi(repository(), commands(), {
+    outboxStatus: async () => status,
+  });
+  apps.push(app);
+  const response = await app.inject({
+    method: "GET",
+    url: "/command-outbox/status",
+  });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual(status);
 });
 
 function repository(
@@ -337,17 +355,17 @@ describe("POST /devices/:deviceId/commands", () => {
     expect(response.json()).toEqual({ error: "deviceが見つかりません" });
   });
 
-  it("returns the failed command when MQTT publish fails", async () => {
+  it("returns the queued command before MQTT delivery", async () => {
     const failed = {
       commandId,
       deviceId: "drone-001",
       type: "REBOOT" as const,
-      status: "FAILED" as const,
+      status: "PENDING" as const,
       createdAt: "2026-09-30T02:00:00.000Z",
       sentAt: null,
     };
     const send = vi.fn(async () => {
-      throw new CommandPublishError(failed);
+      return failed;
     });
     const app = buildApi(repository(), commands(send));
     apps.push(app);
@@ -358,7 +376,7 @@ describe("POST /devices/:deviceId/commands", () => {
       payload: { type: "REBOOT" },
     });
 
-    expect(response.statusCode).toBe(502);
+    expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual(failed);
   });
 

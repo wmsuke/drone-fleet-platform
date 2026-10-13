@@ -1,39 +1,39 @@
 import { createDatabase } from "@drone-fleet/database";
 
 import { buildApi } from "./app.js";
-import { createCommandPublisher } from "./command-publisher.js";
+import { createCommandOutbox, loadOutboxOptions } from "./command-outbox.js";
+import { createOutboxPublisher } from "./outbox-publisher.js";
 import { createCommandRepository } from "./command-repository.js";
 import { createCommandService } from "./command-service.js";
 import { loadApiConfig } from "./config.js";
-import {
-  connectApiMqttClient,
-  createApiMqttConnectionConfig,
-} from "./mqtt-transport.js";
+import { createApiMqttConnectionConfig } from "./mqtt-transport.js";
 import { createDeviceRepository } from "./repository.js";
 import { createShutdown } from "./shutdown.js";
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
+  const outboxOptions = loadOutboxOptions();
   const { client, db } = createDatabase();
-  let mqttClient;
+  let connection;
   try {
-    const connection = await createApiMqttConnectionConfig(
-      config.mqttTransport,
-    );
-    mqttClient = await connectApiMqttClient(connection);
+    connection = await createApiMqttConnectionConfig(config.mqttTransport);
   } catch (error) {
     await client.end();
     throw error;
   }
-  const commandService = createCommandService(
-    createCommandRepository(db),
-    createCommandPublisher(mqttClient),
+  const commandService = createCommandService(createCommandRepository(db));
+  const outbox = createCommandOutbox(
+    client,
+    createOutboxPublisher(connection),
+    outboxOptions,
   );
   const app = buildApi(createDeviceRepository(db), commandService, {
     dashboardOrigin: config.dashboardOrigin,
+    outboxStatus: outbox.status,
   });
 
-  const shutdown = createShutdown(app, mqttClient, client);
+  outbox.start();
+  const shutdown = createShutdown(app, null, client, outbox);
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 

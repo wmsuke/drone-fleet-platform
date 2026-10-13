@@ -6,6 +6,8 @@ import {
   check,
   doublePrecision,
   index,
+  integer,
+  text,
   jsonb,
   pgEnum,
   pgTable,
@@ -160,6 +162,46 @@ export const commands = pgTable(
   ],
 );
 
+export const commandOutbox = pgTable(
+  "command_outbox",
+  {
+    commandId: uuid("command_id")
+      .primaryKey()
+      .references(() => commands.commandId, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    payload: text("payload").notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    failures: integer("failures").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    state: text("state").notNull().default("PENDING"),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (table) => [
+    index("command_outbox_due_idx").on(table.state, table.nextAttemptAt),
+    check(
+      "command_outbox_state",
+      sql`${table.state} IN ('PENDING', 'WAITING_ACK', 'ACKNOWLEDGED', 'FAILED', 'EXPIRED', 'TIMED_OUT')`,
+    ),
+    check(
+      "command_outbox_counts",
+      sql`${table.attempts} >= 0 AND ${table.failures} >= 0 AND ${table.failures} <= ${table.attempts}`,
+    ),
+  ],
+);
 export type Device = typeof devices.$inferSelect;
 export type NewDevice = typeof devices.$inferInsert;
 export type Telemetry = typeof telemetry.$inferSelect;

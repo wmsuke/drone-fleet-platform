@@ -79,7 +79,7 @@ describe("CommandControls", () => {
 
     resolveRequest(commandResponse("RETURN_HOME"));
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "帰還コマンドを送信しました。状態: SENT",
+      "帰還コマンドを受け付けました。状態: SENT",
     );
   });
 
@@ -102,7 +102,7 @@ describe("CommandControls", () => {
     fireEvent.click(confirm);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "再起動コマンドを送信しました。",
+      "再起動コマンドを受け付けました。",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "http://api.example.test/devices/drone-001/commands",

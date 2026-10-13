@@ -177,7 +177,7 @@ for device_id in "${device_one}" "${device_two}"; do
   curl --fail --silent --show-error -X POST -H 'content-type: application/json' \
     -d '{"type":"RETURN_HOME"}' \
     "http://127.0.0.1:${api_port}/devices/${device_id}/commands" >"${command_file}"
-  command_id="$(node -e 'const value=require(process.argv[1]); if(value.deviceId!==process.argv[2]||value.status!=="SENT")process.exit(1); process.stdout.write(value.commandId)' "${command_file}" "${device_id}")"
+  command_id="$(node -e 'const value=require(process.argv[1]); if(value.deviceId!==process.argv[2]||value.status!=="PENDING")process.exit(1); process.stdout.write(value.commandId)' "${command_file}" "${device_id}")"
   acknowledged=false
   for _ in {1..30}; do
     if curl --fail --silent "http://127.0.0.1:${api_port}/devices/${device_id}/commands" | \

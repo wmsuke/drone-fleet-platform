@@ -138,7 +138,7 @@ export function CommandControls({
 
       {lastCommand !== null && (
         <p className="command-result command-success" role="status">
-          {commandLabels[lastCommand.type]}コマンドを送信しました。
+          {commandLabels[lastCommand.type]}コマンドを受け付けました。
           <span>状態: {lastCommand.status}</span>
         </p>
       )}

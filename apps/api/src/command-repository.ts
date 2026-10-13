@@ -1,4 +1,13 @@
-import { commands, devices, type Database } from "@drone-fleet/database";
+import {
+  commands,
+  commandOutbox,
+  devices,
+  type Database,
+} from "@drone-fleet/database";
+import {
+  createCommandsTopic,
+  commandMessageSchema,
+} from "@drone-fleet/protocol";
 import { and, desc, eq } from "drizzle-orm";
 
 import type { CommandHistoryItem, CommandResponse } from "./schema.js";
@@ -50,6 +59,24 @@ export function createCommandRepository(database: Database): CommandRepository {
           ...command,
           status: "PENDING",
         });
+        if (command.expiresAt !== undefined) {
+          const payload = commandMessageSchema.parse({
+            schemaVersion: 2,
+            commandId: command.commandId,
+            deviceId: command.deviceId,
+            type: command.type,
+            timestamp: command.createdAt.toISOString(),
+            expiresAt: command.expiresAt.toISOString(),
+          });
+          await transaction.insert(commandOutbox).values({
+            commandId: command.commandId,
+            topic: createCommandsTopic(command.deviceId),
+            payload: JSON.stringify(payload),
+            createdAt: command.createdAt,
+            expiresAt: command.expiresAt,
+            nextAttemptAt: command.createdAt,
+          });
+        }
         return {
           ...command,
           status: "PENDING",
