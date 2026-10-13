@@ -4,7 +4,7 @@
 
 仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
 
-Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、未確認行の再送、DB重複排除、DB保存確認receiptを追加した。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後もローカルだけで動作する構成を維持する。
+Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、未確認行の再送、DB重複排除、DB保存確認receipt、commandの永続履歴とAPI outboxを追加した。[復旧デモと運用制約](recovery-demo.md)で停止・復旧・容量計画を確認できる。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後もローカルだけで動作する構成を維持する。
 
 Phase 0でTypeScriptのモノレポ、Mosquitto、共通検証コマンド、CIを整備し、Phase 1でテレメトリ、データ保存、HTTP API、シミュレータ、ダッシュボードを実装した。Phase 2でTerraform、mTLS、機体単位のIoT Policy、各サービスのAWS IoT transport、AWS E2Eを追加した。
 
@@ -232,6 +232,12 @@ Phase 1では、次の3テーブルを使用する。
 
 初めて受信したdeviceIdは`devices`の主キーとupsertを使って登録する。同じdeviceIdの同時受信でも1行だけを保持する。`last_received_at`と`updated_at`は既存値と受信時刻の大きい方を保存し、並行処理の完了順によって時刻が戻らないようにする。Phase 1のメッセージには機体情報がないため、`model`と`software_version`は初期値を`null`とする。
 
+### Phase 3の永続領域と保証境界
+
+端末SQLiteは未確認telemetry、破棄記録、commandの受領・操作試行・結果・ACKを保持する。PostgreSQLはtelemetryとその重複排除情報、commands、`command_outbox`を保持する。outboxには元のtopic・payload・期限・試行回数・失敗数・次回時刻・状態を残す。APIのcommand/outbox作成は原子的だが、MQTT送信や機体操作と同じtransactionにはできない。
+
+SQLite commit済みtelemetryは容量・永続領域・通信・DB・receiptの回復条件の範囲でat-least-once保存し、受信側で同一内容の重複を排除する。PUBACK、保存receipt、command受領ACK、操作結果はそれぞれ別の境界である。exactly-once配送・物理操作完了は保証しない。未確認telemetryに時間保持期限は設けず、DB telemetry・終端outbox・SQLite破棄記録にも自動削除はない。論理的なJSON容量上限とは別に物理ディスクを監視する。
+
 ## Phase 1の接続状態の判定
 
 接続時はONLINEを通知する。予期しない切断はMQTTのLWTでOFFLINEを通知する。
@@ -315,8 +321,6 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 ## 後続Phaseで扱うこと
 
-- 通信断中のローカル保存と再送
-- メッセージの重複排除
 - 複数機体への一括操作
 - OTAと段階的な配信
 - ROS 2との接続

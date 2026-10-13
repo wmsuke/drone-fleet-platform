@@ -56,6 +56,16 @@ cp .env.example .env
 | `DEVICE_ID_PREFIX` | シミュレータが生成するdeviceIdの接頭辞 |
 | `SIMULATION_SEED` | シミュレータの状態系列を再現するシード |
 | `TELEMETRY_INTERVAL_MS` | テレメトリの送信間隔（ミリ秒） |
+| `TELEMETRY_BUFFER_DIR` | 機体ごとのSQLite配置先 |
+| `TELEMETRY_BUFFER_MAX_ROWS` / `TELEMETRY_BUFFER_MAX_BYTES` | 未確認行数・保存JSONバイト数の機体別上限 |
+| `TELEMETRY_RETRY_BASE_MS` / `TELEMETRY_RETRY_MAX_MS` | 再接続・再送・ACKの指数バックオフ |
+| `TELEMETRY_REPLAY_INTERVAL_MS` | 最短再送間隔 |
+| `TELEMETRY_PUBLISH_TIMEOUT_MS` | PUBACK待ち上限とreceipt再試行の最小待機時間 |
+| `COMMAND_HISTORY_RETENTION_MS` / `COMMAND_HISTORY_MAX_ROWS` | 端末command履歴の期限からの保持期間・件数上限 |
+| `COMMAND_CLOCK_TRUSTED` | 端末UTC時刻の同期を運用側が確認済みか |
+| `COMMAND_OUTBOX_POLL_MS` | API outboxの確認間隔 |
+| `COMMAND_OUTBOX_RETRY_BASE_MS` / `COMMAND_OUTBOX_RETRY_MAX_MS` | API outboxの指数バックオフ |
+| `COMMAND_OUTBOX_MAX_ATTEMPTS` | API outboxの最大試行回数 |
 | `AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID` | telemetry-ingestor用IoT Policyと一致する固定clientId |
 | `AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH` | telemetry-ingestor専用クライアント証明書のパス |
 | `AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH` | telemetry-ingestor専用秘密鍵のパス |
@@ -64,6 +74,8 @@ cp .env.example .env
 | `AWS_IOT_API_PRIVATE_KEY_PATH` | API専用秘密鍵のパス |
 
 値と値ごとの説明は`.env.example`を正とし、この文書へ重複して記載しない。サンプルの`POSTGRES_HOST`と`MQTT_HOST`は、ホストOSから各サービスへ接続する値である。Compose内のアプリには、接続先をそれぞれ`postgres`と`mqtt`として渡す。通常の一括起動ではPostgreSQLとMosquittoをホストへ公開しない。ホスト側の開発コマンドから接続するときだけ`compose.dev.yaml`を併用する。接続URLは各サービスの起動時にこれらの値から組み立て、ユーザー名やパスワードを別の環境変数へ重複して記載しない。AWS IoT Coreの作成から削除までの順序は[AWS IoT Core接続手順](aws/README.md)、サービス別の設定は[シミュレータ](aws/simulator.md)、[telemetry-ingestor](aws/telemetry-ingestor.md)、[API](aws/api.md)を参照する。
+
+復旧設定の既定値、JSON容量と物理ディスクの区別、保持時間・再送速度の見積もりは[復旧デモと運用制約](recovery-demo.md#設定と容量の考え方)を参照する。commandの操作開始期限は30秒の固定値であり、設定可能な環境変数はない。
 
 ## 秘密情報の扱い
 
