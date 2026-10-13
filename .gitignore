@@ -15,6 +15,7 @@ pids
 *.seed
 *.pid.lock
 load-results/
+recovery-results/
 simulator-data/
 *.sqlite
 *.sqlite-wal
