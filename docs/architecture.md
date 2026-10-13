@@ -328,9 +328,16 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
+## Phase 4の設計（未実装）
+
+複数機体操作は受付transactionでgroup membershipを固定し、対象ごとの既存command/outboxを作成する。APIが受付と集約、ingestorが受領・実行結果の保存、simulatorが操作と永続結果通知を担当する。受領ACKと実行完了は別に扱う。alert evaluatorはDBの確定済み状態から異常を判定し、telemetry保存とは分離する。重要操作の成功auditは業務変更と同時commitする。
+
+エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。DB・通信・API・画面の実装は#137〜#148で行い、現時点では利用できない。
+
 ## 関連ADR
 
 - [ADR 0001: pnpmでTypeScriptのモノレポを構成する](adr/0001-monorepo.md)
 - [ADR 0002: デバイスとの通信にMQTTを使う](adr/0002-mqtt-protocol.md)
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](adr/0003-database.md)
 - [ADR 0004: AWS IoT Coreへ既存サービスを直接MQTT接続する](adr/0004-aws-iot-connection-and-credentials.md)
+- [ADR 0006: 複数機体操作の集約状態と運用記録](adr/0006-fleet-operations-alerts-and-audit.md)
