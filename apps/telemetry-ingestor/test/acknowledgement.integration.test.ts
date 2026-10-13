@@ -30,6 +30,70 @@ function acknowledgement(
 }
 
 integration("command acknowledgement repository", () => {
+  it("records a late acceptance ACK without undoing an earlier expiry rejection", async () => {
+    if (database === undefined) throw new Error("database required");
+    await database.db.insert(commands).values({
+      commandId,
+      deviceId,
+      type: "REBOOT",
+      expiresAt: new Date("2026-10-13T00:00:30Z"),
+    });
+    const repository = createCommandAcknowledgementRepository(database.db);
+    const ack = { ...acknowledgement(), schemaVersion: 2 as const };
+    await repository.acknowledge(
+      { ...ack, status: "REJECTED_EXPIRED" },
+      new Date(),
+    );
+    expect(await repository.acknowledge(ack, new Date())).toBe("updated");
+    expect(await readCommand()).toMatchObject({
+      status: "EXPIRED",
+      acknowledgementReceivedAt: expect.any(Date),
+    });
+  });
+  it("keeps expiry terminal while preserving a previously accepted ACK and ignores v1 for v2 commands", async () => {
+    if (database === undefined) throw new Error("database required");
+    await database.db.insert(commands).values({
+      commandId,
+      deviceId,
+      type: "RETURN_HOME",
+      expiresAt: new Date("2026-10-13T00:00:30Z"),
+    });
+    const repository = createCommandAcknowledgementRepository(database.db);
+    expect(await repository.acknowledge(acknowledgement(), new Date())).toBe(
+      "not_found",
+    );
+    const ack = { ...acknowledgement(), schemaVersion: 2 as const };
+    const acceptedAt = new Date("2026-10-13T00:00:01Z");
+    expect(await repository.acknowledge(ack, acceptedAt)).toBe("updated");
+    expect(
+      await repository.acknowledge(
+        { ...ack, status: "REJECTED_EXPIRED" },
+        new Date("2026-10-13T00:00:30Z"),
+      ),
+    ).toBe("updated");
+    expect(
+      await repository.acknowledge(ack, new Date("2026-10-13T00:00:31Z")),
+    ).toBe("duplicate");
+    expect(await readCommand()).toMatchObject({
+      status: "EXPIRED",
+      acknowledgementReceivedAt: acceptedAt,
+      expiredAt: new Date("2026-10-13T00:00:30Z"),
+    });
+  });
+
+  it("rejects a v2 ACK for an existing v1 command", async () => {
+    if (database === undefined) throw new Error("database required");
+    await database.db
+      .insert(commands)
+      .values({ commandId, deviceId, type: "REBOOT", status: "SENT" });
+    expect(
+      await createCommandAcknowledgementRepository(database.db).acknowledge(
+        { ...acknowledgement(), schemaVersion: 2 },
+        new Date(),
+      ),
+    ).toBe("not_found");
+    expect(await readCommand()).toMatchObject({ status: "SENT" });
+  });
   beforeAll(async () => {
     if (database !== undefined) {
       await migrate(database.db, { migrationsFolder });

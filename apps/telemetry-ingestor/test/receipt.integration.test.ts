@@ -1,5 +1,15 @@
-import { createDatabase, devices, telemetry } from "@drone-fleet/database";
-import { telemetryMessageSchema } from "@drone-fleet/protocol";
+import {
+  commands,
+  createDatabase,
+  devices,
+  telemetry,
+} from "@drone-fleet/database";
+import {
+  commandAcknowledgementMessageSchema,
+  telemetryMessageSchema,
+} from "@drone-fleet/protocol";
+import { createCommandService } from "../../api/src/command-service.js";
+import { createCommandRepository } from "../../api/src/command-repository.js";
 import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { connectAsync } from "mqtt";
@@ -61,13 +71,27 @@ describe.skipIf(process.env.DATABASE_INTEGRATION !== "true")(
         const port = stdout.trim().split(":").at(-1);
         const url = `mqtt://127.0.0.1:${port}`;
         observer = await connectAsync(url, { connectTimeout: 5000 });
-        const received: Array<{ sequence: number; sessionId?: string }> = [];
-        observer.on("message", (_topic, payload) => {
+        const received: Array<{
+          sequence: number;
+          sessionId?: string;
+          status: string;
+        }> = [];
+        const acks: string[] = [];
+        observer.on("message", (topic, payload) => {
+          if (topic.endsWith("/command-acks")) {
+            acks.push(
+              commandAcknowledgementMessageSchema.parse(
+                JSON.parse(payload.toString()),
+              ).commandId,
+            );
+            return;
+          }
           const message = telemetryMessageSchema.parse(
             JSON.parse(payload.toString()),
           );
           received.push({
             sequence: message.sequence,
+            status: message.payload.status,
             ...(message.schemaVersion === 2
               ? { sessionId: message.sessionId }
               : {}),
@@ -77,7 +101,7 @@ describe.skipIf(process.env.DATABASE_INTEGRATION !== "true")(
           `fleet/v1/devices/${deviceId}/telemetry`,
           { qos: 1 },
         );
-        simulator = await startSimulator({
+        const simulatorConfig = {
           deviceId,
           mqttUrl: url,
           simulationSeed: "receipt-test",
@@ -89,7 +113,8 @@ describe.skipIf(process.env.DATABASE_INTEGRATION !== "true")(
           telemetryRetryBaseMs: 100,
           telemetryRetryMaxMs: 200,
           telemetryReplayIntervalMs: 50,
-        });
+        };
+        simulator = await startSimulator(simulatorConfig);
         await vi.waitFor(
           () => expect(received.length).toBeGreaterThanOrEqual(2),
           { timeout: 5000 },
@@ -180,10 +205,74 @@ describe.skipIf(process.env.DATABASE_INTEGRATION !== "true")(
             ),
           ).size,
         ).toBe(1);
+        await observer.subscribeAsync(
+          `fleet/v1/devices/${deviceId}/command-acks`,
+          { qos: 1 },
+        );
+        let commandPayload = "";
+        const service = createCommandService(
+          createCommandRepository(database.db),
+          {
+            async publish(message) {
+              commandPayload = JSON.stringify(message);
+              await observer!.publishAsync(
+                `fleet/v1/devices/${deviceId}/commands`,
+                commandPayload,
+                { qos: 1, retain: false },
+              );
+            },
+          },
+        );
+        const command = await service.send(deviceId, "RETURN_HOME");
+        await vi.waitFor(
+          async () =>
+            expect(
+              (
+                await database.db
+                  .select()
+                  .from(commands)
+                  .where(eq(commands.commandId, command.commandId))
+              )[0]?.status,
+            ).toBe("ACKNOWLEDGED"),
+          { timeout: 5000 },
+        );
+        await simulator.shutdown();
+        simulator = undefined;
+        const receivedBeforeRestart = received.length;
+        const ackCount = acks.length;
+        simulator = await startSimulator({
+          ...simulatorConfig,
+          telemetryIntervalMs: 200,
+        });
+        await observer.publishAsync(
+          `fleet/v1/devices/${deviceId}/commands`,
+          commandPayload,
+          { qos: 1, retain: false },
+        );
+        await vi.waitFor(() => expect(acks.length).toBeGreaterThan(ackCount), {
+          timeout: 5000,
+        });
+        await vi.waitFor(
+          () =>
+            expect(
+              received
+                .slice(receivedBeforeRestart)
+                .some(({ sequence }) => sequence >= 1),
+            ).toBe(true),
+          { timeout: 5000 },
+        );
+        expect(
+          received
+            .slice(receivedBeforeRestart)
+            .every(({ status }) => status !== "RETURNING_HOME"),
+        ).toBe(true);
       } finally {
         await simulator?.shutdown();
         await ingestor?.shutdown();
         await observer?.endAsync(true);
+        await database.db
+          .delete(commands)
+          .where(eq(commands.deviceId, deviceId));
         await database.db.delete(devices).where(eq(devices.deviceId, deviceId));
         await database.client.end();
         await failedDatabase.client.end();

@@ -4,6 +4,8 @@ export const workspaceName = "protocol";
 export {
   commandAcknowledgementMessageSchema,
   commandMessageSchema,
+  commandV2MessageSchema,
+  commandAcknowledgementV2MessageSchema,
   type CommandAcknowledgementMessage,
   type CommandMessage,
 } from "./command.js";

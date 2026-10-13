@@ -142,6 +142,45 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("starts an accepted operation without waiting for the ACK PUBACK", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "ack",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const release = client.blockNextPublish();
+    const now = new Date();
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/commands",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 2,
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          deviceId: "drone-001",
+          type: "RETURN_HOME",
+          timestamp: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30000).toISOString(),
+        }),
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    const latest = client.published
+      .filter(({ topic }) => topic.endsWith("/telemetry"))
+      .at(-1)!;
+    expect(
+      telemetryMessageSchema.parse(JSON.parse(latest.message)).payload.status,
+    ).toBe("RETURNING_HOME");
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    await simulator.shutdown();
+  });
   it("ignores receipts for discarded rows and retained receipts without deleting the remaining row", async () => {
     vi.useFakeTimers();
     const client = new FakeMqttClient();
@@ -842,11 +881,12 @@ describe("startSimulator", () => {
     const commandId = "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c";
     const command = Buffer.from(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         commandId,
         deviceId: "drone-001",
         type: "RETURN_HOME",
         timestamp: "2026-09-25T08:00:00.000Z",
+        expiresAt: "2100-01-01T00:00:00.000Z",
       }),
     );
 
@@ -887,11 +927,12 @@ describe("startSimulator", () => {
     );
     const command = Buffer.from(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
         deviceId: "drone-001",
         type: "REBOOT",
         timestamp: "2026-09-25T08:00:00.000Z",
+        expiresAt: "2100-01-01T00:00:00.000Z",
       }),
     );
 
@@ -901,7 +942,7 @@ describe("startSimulator", () => {
     expect(client.published[2]?.topic).toBe(
       "fleet/v1/devices/drone-001/command-acks",
     );
-    expect(client.endForces).toEqual([false]);
+    expect(client.endForces).toEqual([true]);
 
     client.emit("connect");
     await vi.waitFor(() => expect(client.published).toHaveLength(5));
@@ -943,11 +984,12 @@ describe("startSimulator", () => {
     );
     const command = Buffer.from(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
         deviceId: "drone-001",
         type: "REBOOT",
         timestamp: "2026-09-25T08:00:00.000Z",
+        expiresAt: "2100-01-01T00:00:00.000Z",
       }),
     );
     const topic = "fleet/v1/devices/drone-001/commands";
@@ -955,18 +997,18 @@ describe("startSimulator", () => {
     client.failNextPublish(new Error("ACK publish failed"));
     client.emitMessage(topic, command);
     await vi.waitFor(() => expect(client.published).toHaveLength(3));
-    expect(client.endForces).toEqual([]);
+    expect(client.endForces).toEqual([true]);
 
     client.emitMessage(topic, command);
     await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
-    expect(client.endForces).toEqual([false]);
+    expect(client.endForces).toEqual([true]);
 
     client.emit("connect");
     await vi.waitFor(() => expect(client.published).toHaveLength(6));
     client.emitMessage(topic, command);
     await vi.waitFor(() => expect(client.published).toHaveLength(7));
     expect(client.reconnectCount).toBe(1);
-    expect(client.endForces).toEqual([false]);
+    expect(client.endForces).toEqual([true]);
 
     await simulator.shutdown();
   });

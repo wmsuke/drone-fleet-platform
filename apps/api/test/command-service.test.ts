@@ -36,6 +36,7 @@ function dependencies() {
       ...command,
       status: "PENDING" as const,
       createdAt: command.createdAt.toISOString(),
+      expiresAt: command.expiresAt?.toISOString(),
       sentAt: null,
     })),
     markSent: vi.fn(async () => response("SENT")),
@@ -75,13 +76,15 @@ describe("createCommandService", () => {
         deviceId: "drone-001",
         type,
         createdAt,
+        expiresAt: new Date(createdAt.getTime() + 30000),
       });
       expect(publisher.publish).toHaveBeenCalledWith({
-        schemaVersion: 1,
+        schemaVersion: 2,
         commandId,
         deviceId: "drone-001",
         type,
         timestamp: createdAt.toISOString(),
+        expiresAt: new Date(createdAt.getTime() + 30000).toISOString(),
       });
       expect(repository.markSent).toHaveBeenCalledWith(commandId, sentAt);
     },

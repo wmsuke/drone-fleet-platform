@@ -47,6 +47,33 @@ function historyResponse(status: "SENT" | "ACKNOWLEDGED" = "ACKNOWLEDGED") {
 }
 
 describe("CommandHistory", () => {
+  it("shows expiration separately from acceptance and displays the operation deadline", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+                deviceId: "drone-001",
+                type: "REBOOT",
+                status: "EXPIRED",
+                createdAt: "2026-10-13T00:00:00.000Z",
+                expiresAt: "2026-10-13T00:00:30.000Z",
+                sentAt: null,
+                acknowledgementReceivedAt: null,
+                timedOutAt: null,
+              },
+            ]),
+            { status: 200 },
+          ),
+      ),
+    );
+    renderHistory();
+    expect(await screen.findByText("操作開始期限切れ")).toBeInTheDocument();
+    expect(screen.getByText("操作開始期限")).toBeInTheDocument();
+  });
   afterEach(() => {
     cleanup();
     vi.useRealTimers();

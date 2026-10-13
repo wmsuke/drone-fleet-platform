@@ -49,6 +49,9 @@ export async function startSimulatorFleet(
         await startSimulator(
           {
             deviceId,
+            commandHistoryRetentionMs: config.commandHistoryRetentionMs,
+            commandHistoryMaxRows: config.commandHistoryMaxRows,
+            commandClockTrusted: config.commandClockTrusted,
             mqttClientOptions: connectionConfig.clientOptions,
             mqttUrl: connectionConfig.url,
             simulationSeed: config.simulationSeed,

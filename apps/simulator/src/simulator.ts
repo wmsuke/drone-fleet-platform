@@ -10,7 +10,11 @@ import {
 import { connectAsync, type IClientOptions } from "mqtt";
 import { randomUUID } from "node:crypto";
 
-import { createCommandProcessor } from "./commands.js";
+import {
+  createCommandProcessor,
+  type CommandProcessor,
+  type ProcessedCommand,
+} from "./commands.js";
 import {
   DEFAULT_TELEMETRY_REPLAY_INTERVAL_MS,
   DEFAULT_TELEMETRY_RETRY_BASE_MS,
@@ -46,6 +50,9 @@ export interface RunningSimulator {
 }
 
 export interface SimulatorDeviceConfig {
+  commandHistoryRetentionMs?: number;
+  commandHistoryMaxRows?: number;
+  commandClockTrusted?: boolean;
   deviceId: string;
   mqttClientOptions?: IClientOptions;
   mqttUrl: string;
@@ -134,7 +141,6 @@ export async function startSimulator(
   const receiptsTopic = createTelemetryReceiptsTopic(config.deviceId);
   const commandsTopic = createCommandsTopic(config.deviceId);
   const commandAcksTopic = createCommandAcksTopic(config.deviceId);
-  const commandProcessor = createCommandProcessor(config.deviceId);
   const sessionId = randomUUID();
   const retryBaseMs =
     config.telemetryRetryBaseMs ?? DEFAULT_TELEMETRY_RETRY_BASE_MS;
@@ -169,6 +175,18 @@ export async function startSimulator(
     qos: 1,
     retain: true,
   });
+  let commandProcessor: CommandProcessor;
+  try {
+    commandProcessor = createCommandProcessor(config.deviceId, {
+      path: config.telemetryBufferPath,
+      retentionMs: config.commandHistoryRetentionMs,
+      maxRows: config.commandHistoryMaxRows,
+      clockTrusted: config.commandClockTrusted,
+    });
+  } catch (error) {
+    buffer.close();
+    throw error;
+  }
   let client: SimulatorMqttClient;
   try {
     client = await connectClient(config.mqttUrl, {
@@ -181,6 +199,7 @@ export async function startSimulator(
     });
   } catch (error) {
     buffer.close();
+    commandProcessor.close();
     throw error;
   }
 
@@ -212,6 +231,92 @@ export async function startSimulator(
   let initialConnectionHandled = false;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
   let commandQueue = Promise.resolve();
+  let commandAckTimer: NodeJS.Timeout | undefined;
+  let commandAckFailures = 0;
+  let flushingAcks: Promise<void> | undefined;
+  let abortAck: (() => void) | undefined;
+
+  const flushCommandAcks = (): Promise<void> => {
+    if (flushingAcks !== undefined) return flushingAcks;
+    if (shuttingDown || !client.connected) return Promise.resolve();
+    flushingAcks = (async () => {
+      for (const ack of commandProcessor.pendingAcknowledgements()) {
+        if (shuttingDown || !client.connected) break;
+        let timer: NodeJS.Timeout | undefined;
+        try {
+          await Promise.race([
+            client.publishAsync(commandAcksTopic, JSON.stringify(ack), {
+              qos: 1,
+              retain: false,
+            }),
+            new Promise<never>((_resolve, reject) => {
+              abortAck = () => reject(new Error("ACK publication interrupted"));
+              timer = setTimeout(
+                () => reject(new Error("ACK PUBACK timed out")),
+                publishTimeoutMs,
+              );
+            }),
+          ]);
+          commandProcessor.confirmAcknowledgement(ack);
+          commandAckFailures = 0;
+        } catch (error) {
+          commandAckFailures += 1;
+          console.error("コマンドACKの送信に失敗しました", error);
+          break;
+        } finally {
+          abortAck = undefined;
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      }
+    })().finally(() => {
+      flushingAcks = undefined;
+      if (
+        !shuttingDown &&
+        client.connected &&
+        commandProcessor.pendingAcknowledgements().length > 0 &&
+        commandAckTimer === undefined
+      ) {
+        commandAckTimer = setTimeout(
+          () => {
+            commandAckTimer = undefined;
+            void flushCommandAcks();
+          },
+          Math.max(
+            replayIntervalMs,
+            retryDelayMs(commandAckFailures, retryBaseMs, retryMaxMs),
+          ),
+        );
+      }
+    });
+    return flushingAcks;
+  };
+
+  const executeCommand = async (processed: ProcessedCommand): Promise<void> => {
+    if (shuttingDown) return;
+    const started =
+      processed.action === null
+        ? processed
+        : commandProcessor.begin(
+            processed.acknowledgement.commandId,
+            new Date().toISOString(),
+          );
+    if (started === null) return;
+    // ACKのPUBACKを待たずに操作する。ACKは独立して永続再送する。
+    void flushCommandAcks();
+    if (started.action === "RETURN_HOME") flightStatus = "RETURNING_HOME";
+    else if (started.action === "REBOOT") {
+      clearTelemetryTimer();
+      manualReconnect = true;
+      await client.endAsync(true);
+    }
+    if (started.action !== null)
+      commandProcessor.markProcessed(started.acknowledgement.commandId);
+    if (started.action === "REBOOT" && !shuttingDown) {
+      client.options.will = createWill();
+      client.reconnect();
+      manualReconnect = false;
+    }
+  };
 
   const clearTelemetryTimer = (): void => {
     if (telemetryTimer !== undefined) {
@@ -454,6 +559,7 @@ export async function startSimulator(
   const publishOnlineAndStartTelemetry = async (): Promise<void> => {
     await client.subscribeAsync(commandsTopic, { qos: 1 });
     await client.subscribeAsync(receiptsTopic, { qos: 1 });
+    void flushCommandAcks();
     const online = createOnlineMessage(
       config.deviceId,
       new Date().toISOString(),
@@ -494,6 +600,7 @@ export async function startSimulator(
     scheduleReconnect();
   });
   client.on("close", () => {
+    abortAck?.();
     abortPendingPublish?.();
     clearReplayTimer();
     if (!manualReconnect) scheduleReconnect();
@@ -545,29 +652,7 @@ export async function startSimulator(
           return;
         }
 
-        await client.publishAsync(
-          commandAcksTopic,
-          JSON.stringify(processed.acknowledgement),
-          { qos: 1, retain: false },
-        );
-
-        if (processed.action === "RETURN_HOME") {
-          flightStatus = "RETURNING_HOME";
-        } else if (processed.action === "REBOOT") {
-          clearTelemetryTimer();
-          manualReconnect = true;
-          await client.endAsync(false);
-        }
-
-        if (processed.action !== null) {
-          commandProcessor.markProcessed(processed.acknowledgement.commandId);
-        }
-
-        if (processed.action === "REBOOT" && !shuttingDown) {
-          client.options.will = createWill();
-          client.reconnect();
-          manualReconnect = false;
-        }
+        await executeCommand(processed);
       })
       .catch((error: unknown) => {
         console.error("コマンドの処理に失敗しました", error);
@@ -586,12 +671,27 @@ export async function startSimulator(
 
   try {
     await publishOnlineAndStartTelemetry();
+    if (config.commandClockTrusted !== false)
+      for (const recovered of commandProcessor.recover(
+        new Date().toISOString(),
+      ))
+        await executeCommand(recovered);
     initialConnectionHandled = true;
   } catch (error) {
+    shuttingDown = true;
+    clearTelemetryTimer();
+    clearReplayTimer();
+    clearReconnectTimer();
+    if (commandAckTimer !== undefined) clearTimeout(commandAckTimer);
+    abortAck?.();
+    abortPendingPublish?.();
+    await commandQueue;
+    await flushingAcks;
     try {
       await client.endAsync(true);
     } finally {
       buffer.close();
+      commandProcessor.close();
     }
     throw error;
   }
@@ -617,11 +717,15 @@ export async function startSimulator(
       }
 
       shuttingDown = true;
+      if (commandAckTimer !== undefined) clearTimeout(commandAckTimer);
+      abortAck?.();
       clearTelemetryTimer();
       clearReplayTimer();
       clearReconnectTimer();
       abortPendingPublish?.();
       await Promise.allSettled([...inFlightTelemetry]);
+      await commandQueue;
+      await flushingAcks;
 
       try {
         if (client.connected) {
@@ -642,6 +746,7 @@ export async function startSimulator(
         }
       } finally {
         buffer.close();
+        commandProcessor.close();
       }
 
       console.log(`${config.deviceId}のMQTT接続を終了しました`);

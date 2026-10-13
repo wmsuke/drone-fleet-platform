@@ -4,7 +4,7 @@ import {
   parseMqttTopic,
   type CommandAcknowledgementMessage,
 } from "@drone-fleet/protocol";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, isNull, isNotNull, or, sql } from "drizzle-orm";
 
 import type { IngestionLogger } from "./ingestion.js";
 
@@ -25,14 +25,34 @@ export function createCommandAcknowledgementRepository(
       const updated = await database
         .update(commands)
         .set({
-          status: "ACKNOWLEDGED",
-          acknowledgementReceivedAt: receivedAt,
+          ...(message.status === "REJECTED_EXPIRED"
+            ? { status: "EXPIRED" as const, expiredAt: receivedAt }
+            : {
+                status: sql`case when ${commands.status} = 'EXPIRED' then 'EXPIRED'::command_status else 'ACKNOWLEDGED'::command_status end`,
+                acknowledgementReceivedAt: sql`coalesce(${commands.acknowledgementReceivedAt}, ${receivedAt.toISOString()}::timestamptz)`,
+              }),
         })
         .where(
           and(
             eq(commands.commandId, message.commandId),
             eq(commands.deviceId, message.deviceId),
-            ne(commands.status, "ACKNOWLEDGED"),
+            ne(
+              commands.status,
+              message.status === "REJECTED_EXPIRED"
+                ? "EXPIRED"
+                : "ACKNOWLEDGED",
+            ),
+            ...(message.status === "ACKNOWLEDGED"
+              ? [
+                  or(
+                    ne(commands.status, "EXPIRED"),
+                    isNull(commands.acknowledgementReceivedAt),
+                  ),
+                ]
+              : []),
+            message.schemaVersion === 2
+              ? isNotNull(commands.expiresAt)
+              : isNull(commands.expiresAt),
           ),
         )
         .returning({ commandId: commands.commandId });
@@ -47,6 +67,9 @@ export function createCommandAcknowledgementRepository(
           and(
             eq(commands.commandId, message.commandId),
             eq(commands.deviceId, message.deviceId),
+            message.schemaVersion === 2
+              ? isNotNull(commands.expiresAt)
+              : isNull(commands.expiresAt),
           ),
         )
         .limit(1);

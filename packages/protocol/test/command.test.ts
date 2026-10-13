@@ -26,6 +26,24 @@ const validAcknowledgement = {
 } as const;
 
 describe("commandMessageSchema", () => {
+  it("accepts a v2 deadline and rejects missing, equal or earlier deadlines", () => {
+    const command = {
+      ...validCommand,
+      schemaVersion: 2,
+      expiresAt: "2026-09-25T08:00:30.000Z",
+    };
+    expect(commandMessageSchema.safeParse(command).success).toBe(true);
+    for (const expiresAt of [
+      undefined,
+      command.timestamp,
+      "2026-09-25T07:59:59.999Z",
+      "invalid",
+    ]) {
+      expect(
+        commandMessageSchema.safeParse({ ...command, expiresAt }).success,
+      ).toBe(false);
+    }
+  });
   it.each(["RETURN_HOME", "REBOOT"] as const)(
     "accepts a %s command",
     (type) => {
@@ -77,6 +95,28 @@ describe("commandMessageSchema", () => {
 });
 
 describe("commandAcknowledgementMessageSchema", () => {
+  it("distinguishes expiration from receipt without inventing an execution completion ACK", () => {
+    expect(
+      commandAcknowledgementMessageSchema.safeParse({
+        ...validAcknowledgement,
+        schemaVersion: 2,
+        status: "REJECTED_EXPIRED",
+      }).success,
+    ).toBe(true);
+    expect(
+      commandAcknowledgementMessageSchema.safeParse({
+        ...validAcknowledgement,
+        status: "REJECTED_EXPIRED",
+      }).success,
+    ).toBe(false);
+    expect(
+      commandAcknowledgementMessageSchema.safeParse({
+        ...validAcknowledgement,
+        schemaVersion: 2,
+        status: "COMPLETED",
+      }).success,
+    ).toBe(false);
+  });
   it("accepts an acknowledgement", () => {
     const acknowledgement: CommandAcknowledgementMessage =
       commandAcknowledgementMessageSchema.parse(validAcknowledgement);
@@ -105,7 +145,7 @@ describe("commandAcknowledgementMessageSchema", () => {
     ["deviceId type", { ...validAcknowledgement, deviceId: 1 }],
     ["status", { ...validAcknowledgement, status: "COMPLETED" }],
     ["status type", { ...validAcknowledgement, status: 1 }],
-    ["schemaVersion", { ...validAcknowledgement, schemaVersion: 2 }],
+    ["schemaVersion", { ...validAcknowledgement, schemaVersion: 3 }],
     ["timestamp type", { ...validAcknowledgement, timestamp: 1 }],
     [
       "timestamp offset",

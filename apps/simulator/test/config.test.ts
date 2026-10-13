@@ -7,8 +7,30 @@ import {
 } from "../src/config.js";
 
 describe("loadSimulatorConfig", () => {
+  it("reads command history limits and can refuse operation with an untrusted clock", () => {
+    expect(
+      loadSimulatorConfig({
+        COMMAND_HISTORY_RETENTION_MS: "1000",
+        COMMAND_HISTORY_MAX_ROWS: "2",
+        COMMAND_CLOCK_TRUSTED: "false",
+      }),
+    ).toMatchObject({
+      commandHistoryRetentionMs: 1000,
+      commandHistoryMaxRows: 2,
+      commandClockTrusted: false,
+    });
+    for (const environment of [
+      { COMMAND_HISTORY_RETENTION_MS: "0" },
+      { COMMAND_HISTORY_MAX_ROWS: "0" },
+      { COMMAND_CLOCK_TRUSTED: "unknown" },
+    ])
+      expect(() => loadSimulatorConfig(environment)).toThrow();
+  });
   it("uses local defaults", () => {
     expect(loadSimulatorConfig({})).toEqual({
+      commandHistoryRetentionMs: 604800000,
+      commandHistoryMaxRows: 10000,
+      commandClockTrusted: true,
       deviceIdPrefix: "drone",
       droneCount: 10,
       mqttTransport: {
@@ -38,6 +60,9 @@ describe("loadSimulatorConfig", () => {
         TELEMETRY_INTERVAL_MS: "1000",
       }),
     ).toEqual({
+      commandHistoryRetentionMs: 604800000,
+      commandHistoryMaxRows: 10000,
+      commandClockTrusted: true,
       deviceIdPrefix: "test-drone",
       droneCount: 3,
       mqttTransport: {

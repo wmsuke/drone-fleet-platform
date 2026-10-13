@@ -61,6 +61,7 @@ describe("database schema", () => {
       "ACKNOWLEDGED",
       "FAILED",
       "TIMED_OUT",
+      "EXPIRED",
     ]);
   });
 });
