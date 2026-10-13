@@ -92,6 +92,7 @@ jobs:
         run: |
           pnpm db:test:integration
           pnpm telemetry:test:integration
+          pnpm api:test:integration
 
   load-report-e2e:
     name: Load report integration

@@ -1,6 +1,6 @@
 # ADR 0005: 通信断時の配送保証と復旧境界
 
-- 状態: 採用（telemetryの永続バッファ・再送・重複排除・保存確認receiptは実装済み。command/ACKのv2化とoutboxは未実装）
+- 状態: 採用（telemetryの保存確認とcommand/ACK v2・simulatorの永続履歴は実装済み。API outboxは#114で扱う）
 - 決定日: 2026-10-06
 - 対象: #108、後続の#109〜#116
 
@@ -42,7 +42,7 @@ simulatorはcommandを受けると、`commandId`、deviceId、payload、受信�
 
 受領済みでも操作開始前には期限を再確認する。試行開始前に停止した場合も、再起動後に期限を確認する。`now >= expiresAt`なら操作せず、SQLiteの履歴と再送待ちACKを`REJECTED_EXPIRED`へ更新し、受領済みの事実を履歴に残したまま期限切れを通知する。期限内なら操作の直前に期限を確認し、試行開始をSQLiteへ永続化する。試行開始を記録した後に期限を過ぎても、開始済みの操作を期限だけで取り消さない。試行開始後に停止した場合は、期限に関係なく操作が行われたか判定できないため自動で再実行せず、結果を`UNCERTAIN`として端末の履歴とログに記録する。重複受信時は最新の保存済みACKを再送し、操作を繰り返さない。`UNCERTAIN`でも受領済みなら受領ACKを再送し、操作結果の不確定さをACKの意味に混ぜない。ACK自体もSQLiteに残し、QoS 1のPUBACKを得るまで再送する。操作はACKのPUBACKを待たない。ただしPUBACKはingestorのDB更新を保証しないため、APIの表示が`TIMED_OUT`のまま残る場合がある。
 
-移行時はsimulatorとingestorをv1/v2対応にしてからAPIの送信をv2へ切り替える。互換期間中のv1 command/ACKは従来の扱いで処理するが、v1 commandには実行可能期限がないため本ADRの期限保証の対象外とする。切替前のv1 commandが終端状態になるかACK待ち時間を過ぎるまでv1 ACKを受け付け、v2 commandに対するv1 ACKは状態更新に使わない。切替後はv1 commandの新規受領を拒否し、v1 ACKの残存を計測して受信対応を廃止する。
+今回の#113ではcommand受付を停止し、DB migrationとingestor・simulator・APIを揃えてv2へ一括切替する。期限なしcommandを新しい端末で実行しないため、simulatorにv1実行互換モードは設けない。protocolは旧v1の読み取りを残し、ingestorは既存v1行のv1 ACKだけを受け付ける。v1 ACKでv2行、v2 ACKでv1行を更新しない。ローリング更新の互換期間が必要になった場合は別途設計する。
 
 処理済みcommand履歴は期限から7日間保持し、機体ごとに10,000件を上限とする。上限到達時は期限切れの古い履歴から消す。期限内の履歴を消さなければ収まらない場合は新規commandの実行を拒否して異常を記録する。履歴を削除した後の再受信でも、`expiresAt`を過ぎたcommandは実行しない。期限判定には同期済みの端末UTC時刻が必要であり、時刻が信用できない場合は操作を拒否して異常を記録する。
 
@@ -59,7 +59,7 @@ APIの状態遷移は次のとおりとする。`FAILED`と`TIMED_OUT`も配送�
 | `SENT`                                                       | ACKなしで再送上限に到達                                | `SENT`のままACK待ち期限まで待つ            |
 | `TIMED_OUT` / `FAILED`                                       | 遅れて有効な受領ACKを受信                              | `ACKNOWLEDGED`（期限超過・失敗履歴は保持） |
 
-`REJECTED_EXPIRED`は受領前・受領後のどちらでも「操作を開始しなかった」を示す。APIは期限切れ通知後の古い`ACKNOWLEDGED` ACKで`EXPIRED`を戻さず、受領済みかどうかは履歴で追跡する。`EXPIRED`とv2 ACKの`REJECTED_EXPIRED`は#113で`packages/protocol`、PostgreSQL、API表示へ追加する。`UNCERTAIN`は端末側の操作履歴に残し、否定ACKにはしない。既存の`TIMED_OUT`は「ACKを確認できない」状態のままとし、期限切れや実行失敗と同一視しない。
+`REJECTED_EXPIRED`は受領前・受領後のどちらでも、この受信・復旧で期限のため操作を開始しなかったことを示す。過去の履歴が期限後の容量制限で削除された場合、過去に一度も実行されなかった証明にはならない。APIはEXPIREDを後着ACKで戻さず、受領済みの事実だけを履歴へ補う。#113でEXPIRED、v2 ACK、端末SQLiteのUNCERTAINと再送待ちACKを実装した。UNCERTAINは操作完了のACKではない。詳細は[コマンドの期限と永続化](../command-durability.md)を参照する。
 
 ### 保証範囲と失われる条件
 

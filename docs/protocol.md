@@ -58,7 +58,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 | 項目 | 内容 |
 |---|---|
-| `schemaVersion` | telemetryの新規送信は整数の`2`。移行中の旧telemetryと他のメッセージは`1` |
+| `schemaVersion` | telemetryとcommand/ACKの新規送信は`2`。旧v1、status、telemetry-receiptsは`1` |
 | `deviceId` | 対象デバイスのID |
 | `timestamp` | メッセージ作成時刻。UTCのISO 8601形式 |
 
@@ -129,7 +129,7 @@ sequenceは起動時に0から始め、送信ごとに1増やす。MQTTの再接
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "deviceId": "drone-001",
   "timestamp": "2026-09-25T08:00:00.000Z",
   "payload": {
@@ -175,7 +175,8 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
   "commandId": "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
   "deviceId": "drone-001",
   "type": "RETURN_HOME",
-  "timestamp": "2026-09-25T08:00:00.000Z"
+  "timestamp": "2026-09-25T08:00:00.000Z",
+  "expiresAt": "2026-09-25T08:00:30.000Z"
 }
 ```
 
@@ -183,13 +184,14 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
 |---|---|
 | `commandId` | APIが発行するUUID |
 | `type` | `RETURN_HOME` または `REBOOT` |
+| `expiresAt` | v2で必須。timestampより後のUTC時刻。APIの既定は30秒後 |
 
 `packages/protocol`はZodの`commandMessageSchema`と、スキーマから推論した`CommandMessage`型を公開する。
 
 ### シミュレータの動作
 
 - `RETURN_HOME`：ACKを送信し、飛行状態をRETURNING_HOMEへ変更する。
-- `REBOOT`：ACKを送信した後に正常切断し、模擬的な再起動を行う。再接続後はONLINEを通知する。
+- `REBOOT`：受領と操作開始を永続化し、ACKのPUBACKを待たずに模擬的な切断・再接続を行う。再接続後はONLINEを通知する。
 
 飛行や再起動の完了通知はPhase 1に含めない。
 
@@ -197,13 +199,13 @@ LWTのtimestampは接続時に作成した値であり、実際の切断時刻�
 
 同じcommandIdを再受信した場合は、操作を繰り返さずACKを再送する。
 
-Phase 1の処理済みcommandIdはメモリで保持する。再起動後も重複実行を防ぐための永続化はPhase 3で扱う。
+simulatorはcommandId・本文・受領・操作試行・結果・再送待ちACKをSQLiteへ保存する。同じIDで内容が違う場合は拒否する。開始記録後に停止した場合は結果不明とし、自動再実行しない。保持期間・容量・時計の前提と停止境界は[コマンドの期限と永続化](command-durability.md)を参照する。
 
 ## ACK
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "commandId": "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
   "deviceId": "drone-001",
   "status": "ACKNOWLEDGED",
@@ -211,7 +213,7 @@ Phase 1の処理済みcommandIdはメモリで保持する。再起動後も重�
 }
 ```
 
-ACKは、有効なコマンドを受け付けたことを示す。操作の成功や完了を意味しない。
+`ACKNOWLEDGED`は有効なコマンドを受け付けたことを示し、操作の成功や完了を意味しない。v2の`REJECTED_EXPIRED`は期限のため操作を開始しなかったことを示す。端末の結果不明`UNCERTAIN`は履歴・ログにだけ残し、完了ACKとして返さない。
 
 `packages/protocol`はZodの`commandAcknowledgementMessageSchema`と、受領確認であることを明示した`CommandAcknowledgementMessage`型を公開する。コマンドとACKは`commandId`と`deviceId`で対応付ける。
 
@@ -228,6 +230,7 @@ ACKは、有効なコマンドを受け付けたことを示す。操作の成�
 | `ACKNOWLEDGED` | デバイスから受領確認が届いた |
 | `FAILED` | 送信処理でエラーを検出した |
 | `TIMED_OUT` | ACK待ちの期限を過ぎた |
+| `EXPIRED` | 端末から操作開始期限切れを受信した |
 
 正常系はPENDING → SENT → ACKNOWLEDGEDとする。
 
@@ -256,18 +259,18 @@ Phase 1では自動再送を行わない。FAILEDやTIMED_OUTは、デバイス�
 - テレメトリの欠損や重複を完全には防がない。
 - 通信断中のデータを保存・再送しない。
 - コマンドの実行完了は追跡しない。
-- コマンドの重複実行防止はプロセスの稼働中に限る。
+- コマンド履歴の永続領域・期限判定の時計・容量の前提が失われる場合は、重複防止の保証範囲外となる。
 - DB保存とMQTT送信の間の障害に対する自動復旧は行わない。
 - ローカルMosquitto構成は開発用の匿名接続であり、外部公開しない。
 - AWS IoT Core構成ではX.509証明書で個体認証し、IoT Policyでtopicを制限する。アプリケーション側でもtopicと本文のdeviceId照合を継続する。
 
 ## Phase 3で追加する通信
 
-[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryのv2化、DB重複排除、QoS 1購読、保存確認receipt経路は実装済みである。command/ACKのv2化は未実装であり、上記のcommand状態定義は現在の実装を示す。
+[ADR 0005](adr/0005-delivery-and-recovery.md)で実装方針を決めた。telemetryのv2化・保存確認、command/ACKのv2化とsimulatorの永続履歴は実装済みである。API outboxは#114で扱う。
 
 - telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進めた。topicは変えず、`deviceId + sessionId + sequence`を1件の識別子とする。DBでの一意制約と重複排除は#112で実装済みである。
 - telemetryのpublishとingestorのsubscribeをQoS 1にした。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
-- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進める。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
+- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進めた。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
 
-旧`schemaVersion=1`のtelemetryは移行中も受け付けるが、永続的な重複排除と保存確認の対象にはしない。command/ACKは受信側を先にv1/v2対応にしてからAPIをv2送信へ切り替える。互換期間中のv1 command/ACKは従来の扱いとし、実行可能期限の保証対象外とする。切替後はv1 commandの新規受領を拒否する。切替前のv1 commandについては終端状態またはACK待ち時間までv1 ACKを受け付けるが、v2 commandの状態をv1 ACKで更新しない。詳細な保存期間、容量上限、欠損条件はADRに記載する。
+旧telemetry v1は受け付けるが、保存確認と永続重複排除の対象にしない。commandの新規送信・実行はv2へ切り替える。新しいsimulatorはv1 commandを実行しない。ingestorは既存v1行のv1 ACKを受け付けるが、v1/v2のACKを別versionの行へ反映しない。更新はcommand受付を止めたうえでサービスを揃えて行う。詳細は[コマンドの期限と永続化](command-durability.md)を参照する。

@@ -1,5 +1,4 @@
 import {
-  commandAcknowledgementMessageSchema,
   commandMessageSchema,
   createCommandsTopic,
   type CommandAcknowledgementMessage,
@@ -18,11 +17,21 @@ export interface CommandProcessor {
     timestamp: string,
   ): ProcessedCommand | null;
   markProcessed(commandId: string): void;
+  begin(commandId: string, timestamp: string): ProcessedCommand | null;
+  recover(timestamp: string): ProcessedCommand[];
+  pendingAcknowledgements(): CommandAcknowledgementMessage[];
+  confirmAcknowledgement(ack: CommandAcknowledgementMessage): void;
+  close(): void;
 }
 
-export function createCommandProcessor(deviceId: string): CommandProcessor {
+import { CommandStore, type CommandStoreOptions } from "./command-store.js";
+
+export function createCommandProcessor(
+  deviceId: string,
+  options: CommandStoreOptions = {},
+): CommandProcessor {
   const commandsTopic = createCommandsTopic(deviceId);
-  const processedCommandIds = new Set<string>();
+  const store = new CommandStore(deviceId, options);
 
   return {
     process(topic, payload, timestamp) {
@@ -43,21 +52,15 @@ export function createCommandProcessor(deviceId: string): CommandProcessor {
       }
 
       const command = parsed.data;
-      return {
-        acknowledgement: commandAcknowledgementMessageSchema.parse({
-          schemaVersion: 1,
-          commandId: command.commandId,
-          deviceId,
-          status: "ACKNOWLEDGED",
-          timestamp,
-        }),
-        action: processedCommandIds.has(command.commandId)
-          ? null
-          : command.type,
-      };
+      return store.receive(command, timestamp);
     },
     markProcessed(commandId) {
-      processedCommandIds.add(commandId);
+      store.complete(commandId, new Date().toISOString());
     },
+    begin: (id, timestamp) => store.begin(id, timestamp),
+    recover: (timestamp) => store.recover(timestamp),
+    pendingAcknowledgements: () => store.pendingAcknowledgements(),
+    confirmAcknowledgement: (ack) => store.confirmAcknowledgement(ack),
+    close: () => store.close(),
   };
 }

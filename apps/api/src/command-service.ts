@@ -40,22 +40,25 @@ export function createCommandService(
     async send(deviceId, type) {
       const createdAt = now();
       const commandId = generateId();
+      const expiresAt = new Date(createdAt.getTime() + 30_000);
       const pending = await repository.createPending({
         commandId,
         deviceId,
         type,
         createdAt,
+        expiresAt,
       });
       if (pending === null) {
         throw new DeviceNotFoundError();
       }
       try {
         await publisher.publish({
-          schemaVersion: 1,
+          schemaVersion: 2,
           commandId,
           deviceId,
           type,
           timestamp: createdAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
         });
       } catch {
         const failed = await repository.markFailed(commandId);

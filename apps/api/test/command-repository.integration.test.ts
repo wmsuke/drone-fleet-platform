@@ -17,6 +17,25 @@ const migrationsFolder = fileURLToPath(
 const database = runIntegration ? createDatabase() : undefined;
 
 integration("command repository", () => {
+  it("exposes expiry and cannot change EXPIRED back to SENT or FAILED", async () => {
+    if (database === undefined) throw new Error("database required");
+    await registerDevice();
+    const repository = createCommandRepository(database.db);
+    const expiresAt = new Date("2026-10-13T00:00:30Z");
+    const pending = await repository.createPending({
+      ...pendingCommand(),
+      expiresAt,
+    });
+    expect(pending?.expiresAt).toBe(expiresAt.toISOString());
+    await database.db
+      .update(commands)
+      .set({ status: "EXPIRED", expiredAt: expiresAt })
+      .where(eq(commands.commandId, commandId));
+    expect((await repository.markSent(commandId, expiresAt)).status).toBe(
+      "EXPIRED",
+    );
+    expect((await repository.markFailed(commandId)).status).toBe("EXPIRED");
+  });
   beforeAll(async () => {
     if (database !== undefined) {
       await migrate(database.db, { migrationsFolder });

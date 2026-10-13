@@ -8,6 +8,7 @@ export interface PendingCommand {
   deviceId: string;
   type: CommandResponse["type"];
   createdAt: Date;
+  expiresAt?: Date;
 }
 
 export interface CommandRepository {
@@ -53,6 +54,7 @@ export function createCommandRepository(database: Database): CommandRepository {
           ...command,
           status: "PENDING",
           createdAt: command.createdAt.toISOString(),
+          expiresAt: command.expiresAt?.toISOString(),
           sentAt: null,
         };
       });
@@ -110,6 +112,9 @@ function toCommandResponse(
     type: command.type,
     status: command.status,
     createdAt: command.createdAt.toISOString(),
+    ...(command.expiresAt === null
+      ? {}
+      : { expiresAt: command.expiresAt.toISOString() }),
     sentAt: command.sentAt?.toISOString() ?? null,
   };
 }
@@ -119,6 +124,9 @@ function toCommandHistoryItem(
 ): CommandHistoryItem {
   return {
     ...toCommandResponse(command),
+    ...(command.expiredAt === null
+      ? {}
+      : { expiredAt: command.expiredAt.toISOString() }),
     acknowledgementReceivedAt:
       command.acknowledgementReceivedAt?.toISOString() ?? null,
     timedOutAt: command.timedOutAt?.toISOString() ?? null,

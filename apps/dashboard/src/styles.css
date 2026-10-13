@@ -500,7 +500,8 @@ a {
 }
 
 .command-status-FAILED,
-.command-status-TIMED_OUT {
+.command-status-TIMED_OUT,
+.command-status-EXPIRED {
   color: #7a2d25;
   background: #fff0ed;
 }

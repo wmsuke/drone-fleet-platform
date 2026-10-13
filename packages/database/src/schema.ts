@@ -36,6 +36,7 @@ export const commandStatusEnum = pgEnum("command_status", [
   "ACKNOWLEDGED",
   "FAILED",
   "TIMED_OUT",
+  "EXPIRED",
 ]);
 
 export const devices = pgTable(
@@ -131,6 +132,8 @@ export const commands = pgTable(
       .references(() => devices.deviceId, { onDelete: "restrict" }),
     type: commandTypeEnum("type").notNull(),
     status: commandStatusEnum("status").notNull().default("PENDING"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    expiredAt: timestamp("expired_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

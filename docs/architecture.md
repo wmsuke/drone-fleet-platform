@@ -214,7 +214,7 @@ Phase 0でTypeScriptの共通設定を実装した。各workspaceは`@drone-flee
 
 ACKはコマンドの受領を示す。帰還や再起動の完了とは区別する。
 
-DB保存とMQTT送信は単一のトランザクションにはならない。ACKが送信結果の更新より先に届いてもACKNOWLEDGEDを維持し、TIMED_OUT後に届いたACKはタイムアウト時刻を残したままACKNOWLEDGEDへ更新する。
+DB保存とMQTT送信は単一のtransactionにはならない。APIはv2 commandと30秒の操作開始期限をDBへ記録する。simulatorは受領・開始・結果とACKをSQLiteへ記録し、再起動後も重複操作を防ぐ。受領ACKは完了ではない。期限切れ通知はEXPIREDへ反映し、後着の受領ACKは履歴だけを補いEXPIREDを戻さない。API outboxは#114で扱う。[コマンドの期限と永続化](command-durability.md)に停止境界と設定を記す。
 
 ## Phase 1で保存するデータ
 

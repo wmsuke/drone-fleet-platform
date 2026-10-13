@@ -21,6 +21,7 @@ const statusLabels: Record<CommandStatus, string> = {
   ACKNOWLEDGED: "ACK受信済み",
   FAILED: "送信失敗",
   TIMED_OUT: "ACK待ちタイムアウト",
+  EXPIRED: "操作開始期限切れ",
 };
 
 function formatTimestamp(value: string | null): string {
@@ -43,6 +44,26 @@ function CommandHistoryRow({ command }: { command: CommandHistoryItem }) {
         </span>
       </div>
       <dl className="command-history-details">
+        {command.expiredAt !== undefined && (
+          <div>
+            <dt>期限切れ通知時刻</dt>
+            <dd>
+              <time dateTime={command.expiredAt}>
+                {formatTimestamp(command.expiredAt)}
+              </time>
+            </dd>
+          </div>
+        )}
+        {command.expiresAt !== undefined && (
+          <div>
+            <dt>操作開始期限</dt>
+            <dd>
+              <time dateTime={command.expiresAt}>
+                {formatTimestamp(command.expiresAt)}
+              </time>
+            </dd>
+          </div>
+        )}
         <div>
           <dt>作成時刻</dt>
           <dd>

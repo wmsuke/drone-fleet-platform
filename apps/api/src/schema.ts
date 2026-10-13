@@ -43,12 +43,21 @@ export const commandResponseSchema = z.object({
   commandId: z.uuid(),
   deviceId: deviceIdSchema,
   type: z.enum(["RETURN_HOME", "REBOOT"]),
-  status: z.enum(["PENDING", "SENT", "ACKNOWLEDGED", "FAILED", "TIMED_OUT"]),
+  status: z.enum([
+    "PENDING",
+    "SENT",
+    "ACKNOWLEDGED",
+    "FAILED",
+    "TIMED_OUT",
+    "EXPIRED",
+  ]),
+  expiresAt: z.iso.datetime().optional(),
   createdAt: z.iso.datetime(),
   sentAt: z.iso.datetime().nullable(),
 });
 
 export const commandHistoryItemSchema = commandResponseSchema.extend({
+  expiredAt: z.iso.datetime().optional(),
   acknowledgementReceivedAt: z.iso.datetime().nullable(),
   timedOutAt: z.iso.datetime().nullable(),
 });

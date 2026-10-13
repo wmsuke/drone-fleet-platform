@@ -41,7 +41,8 @@ export type CommandStatus =
   | "SENT"
   | "ACKNOWLEDGED"
   | "FAILED"
-  | "TIMED_OUT";
+  | "TIMED_OUT"
+  | "EXPIRED";
 
 export interface CommandResponse {
   commandId: string;
@@ -50,9 +51,11 @@ export interface CommandResponse {
   status: CommandStatus;
   createdAt: string;
   sentAt: string | null;
+  expiresAt?: string;
 }
 
 export interface CommandHistoryItem extends CommandResponse {
+  expiredAt?: string;
   acknowledgementReceivedAt: string | null;
   timedOutAt: string | null;
 }
@@ -216,8 +219,12 @@ function isCommandResponse(input: unknown): input is CommandResponse {
       command.status === "SENT" ||
       command.status === "ACKNOWLEDGED" ||
       command.status === "FAILED" ||
-      command.status === "TIMED_OUT") &&
+      command.status === "TIMED_OUT" ||
+      command.status === "EXPIRED") &&
     typeof command.createdAt === "string" &&
+    (command.expiresAt === undefined ||
+      (typeof command.expiresAt === "string" &&
+        Number.isFinite(Date.parse(command.expiresAt)))) &&
     (command.sentAt === null || typeof command.sentAt === "string")
   );
 }
@@ -228,6 +235,9 @@ function isCommandHistoryItem(input: unknown): input is CommandHistoryItem {
   }
   const command = input as unknown as Record<string, unknown>;
   return (
+    (command.expiredAt === undefined ||
+      (typeof command.expiredAt === "string" &&
+        Number.isFinite(Date.parse(command.expiredAt)))) &&
     (command.acknowledgementReceivedAt === null ||
       typeof command.acknowledgementReceivedAt === "string") &&
     (command.timedOutAt === null || typeof command.timedOutAt === "string")

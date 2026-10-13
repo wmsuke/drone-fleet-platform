@@ -9,11 +9,12 @@ const timestamp = "2026-09-25T08:00:01.000Z";
 function commandPayload(overrides: Record<string, unknown> = {}): Buffer {
   return Buffer.from(
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       commandId,
       deviceId: "drone-001",
       type: "RETURN_HOME",
       timestamp: "2026-09-25T08:00:00.000Z",
+      expiresAt: "2026-09-25T08:00:30.000Z",
       ...overrides,
     }),
   );
@@ -33,7 +34,7 @@ describe("createCommandProcessor", () => {
     expect(
       commandAcknowledgementMessageSchema.parse(result?.acknowledgement),
     ).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       commandId,
       deviceId: "drone-001",
       status: "ACKNOWLEDGED",
@@ -46,6 +47,7 @@ describe("createCommandProcessor", () => {
     const topic = "fleet/v1/devices/drone-001/commands";
 
     const first = processor.process(topic, commandPayload(), timestamp);
+    processor.begin(commandId, timestamp);
     processor.markProcessed(commandId);
     const duplicate = processor.process(topic, commandPayload(), timestamp);
 

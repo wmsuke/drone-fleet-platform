@@ -15,6 +15,9 @@ export type SimulatorMqttTransportConfig =
   | AwsIotTransportConfig;
 
 export interface SimulatorConfig {
+  commandHistoryRetentionMs?: number;
+  commandHistoryMaxRows?: number;
+  commandClockTrusted?: boolean;
   deviceIdPrefix: string;
   droneCount: number;
   mqttTransport: SimulatorMqttTransportConfig;
@@ -196,6 +199,24 @@ export function loadSimulatorConfig(
   }
 
   return {
+    commandHistoryRetentionMs: parseInteger(
+      environment.COMMAND_HISTORY_RETENTION_MS ?? "604800000",
+      "COMMAND_HISTORY_RETENTION_MS",
+      1,
+      Number.MAX_SAFE_INTEGER,
+    ),
+    commandHistoryMaxRows: parseInteger(
+      environment.COMMAND_HISTORY_MAX_ROWS ?? "10000",
+      "COMMAND_HISTORY_MAX_ROWS",
+      1,
+      Number.MAX_SAFE_INTEGER,
+    ),
+    commandClockTrusted: (() => {
+      const value = environment.COMMAND_CLOCK_TRUSTED ?? "true";
+      if (value !== "true" && value !== "false")
+        throw new TypeError("COMMAND_CLOCK_TRUSTED must be true or false");
+      return value === "true";
+    })(),
     deviceIdPrefix,
     droneCount,
     mqttTransport: loadMqttTransport(environment),
