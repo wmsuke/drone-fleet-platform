@@ -1,6 +1,6 @@
 # commandの実行結果通知
 
-#152で、受領ACKと別の実行状態をSQLite・PostgreSQLへ保存し、同じcommand-acks topicでACK v3として通知する経路を追加した。commandはv2のまま。現在のHTTP履歴・ダッシュボードの配送/受領表示は維持し、集約・結果APIは#140、操作画面は#141で扱う。
+#152で、受領ACKと別の実行状態をSQLite・PostgreSQLへ保存し、同じcommand-acks topicでACK v3として通知する経路を追加した。commandはv2のまま。#140で[グループ操作の集約API](fleet-operations-api.md)を追加した。単一機体のHTTP履歴・ダッシュボードの配送/受領表示は維持し、操作画面は#141で扱う。
 
 ## 通知と完了条件
 

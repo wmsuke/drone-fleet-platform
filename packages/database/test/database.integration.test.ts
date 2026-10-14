@@ -14,6 +14,34 @@ const migrationsFolder = fileURLToPath(new URL("../drizzle", import.meta.url));
 const database = runIntegration ? createDatabase() : undefined;
 
 integration("database migration", () => {
+  it("adds nullable outbox update time without inventing a timestamp or changing old delivery records", async () => {
+    if (!database) throw new Error("database required");
+    await database.client.begin(async (transaction) => {
+      await transaction.unsafe("CREATE SCHEMA issue140_migration_test");
+      await transaction.unsafe(
+        "SET LOCAL search_path TO issue140_migration_test",
+      );
+      await transaction.unsafe(`CREATE TABLE command_outbox AS
+        SELECT command_id, topic, payload, expires_at, created_at, attempts,
+          failures, next_attempt_at, state, published_at FROM public.command_outbox WITH NO DATA`);
+      await transaction.unsafe(`INSERT INTO command_outbox (command_id, topic, payload, state, attempts, failures)
+        VALUES ('6957ca77-f1d7-4598-863a-28faf7496f62', 'fleet/v1/devices/old-device/commands', '{"schemaVersion":2}', 'WAITING_ACK', 3, 1)`);
+      await transaction.unsafe(
+        await readFile(`${migrationsFolder}/0008_violet_ego.sql`, "utf8"),
+      );
+      const [row] = await transaction.unsafe(
+        "SELECT payload, state, attempts, failures, updated_at FROM command_outbox",
+      );
+      expect(row).toEqual({
+        payload: '{"schemaVersion":2}',
+        state: "WAITING_ACK",
+        attempts: 3,
+        failures: 1,
+        updated_at: null,
+      });
+      await transaction.unsafe("DROP SCHEMA issue140_migration_test CASCADE");
+    });
+  });
   it("preserves existing v1 rows and duplicate v2 histories while enforcing the new identity", async () => {
     if (database === undefined) throw new Error("database required");
     await database.client.begin(async (transaction) => {

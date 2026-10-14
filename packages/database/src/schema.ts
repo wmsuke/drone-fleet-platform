@@ -214,6 +214,7 @@ export const commandOutbox = pgTable(
       withTimezone: true,
       mode: "date",
     }),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }),
   },
   (table) => [
     index("command_outbox_due_idx").on(table.state, table.nextAttemptAt),
