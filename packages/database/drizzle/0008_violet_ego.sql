@@ -1,0 +1,1 @@
+ALTER TABLE "command_outbox" ADD COLUMN "updated_at" timestamp with time zone;

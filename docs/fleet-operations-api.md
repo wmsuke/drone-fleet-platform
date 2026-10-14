@@ -1,6 +1,6 @@
-# グループ操作の受付API
+# グループ操作の受付・集約API
 
-#139でgroupの現在の構成を固定し、対象ごとのcommand/outboxを作る受付APIを追加した。#152で[実行結果通知](command-results.md)を追加した。一覧・詳細と結果集約は#140、操作画面は#141で実装する。受領ACKを完了結果へ読み替えない。
+#139でgroupの現在の構成を固定し、対象ごとのcommand/outboxを作る受付API、#152で[実行結果通知](command-results.md)、#140で一覧・詳細と結果集約を追加した。操作画面は#141で実装する。受領ACKを完了結果へ読み替えない。
 
 ## 要求と応答
 
@@ -31,7 +31,62 @@ groupIdはUUIDで、小文字へ正規化する。typeは既存の`RETURN_HOME` 
 }
 ```
 
-`ACCEPTED`はDBへの受付成功であり、送信・受領・操作完了ではない。同じ要求の再送も元の受付結果を202で返す。現在の進行状況を示す応答ではない。対象のcommandは既存の機体別履歴APIで確認できる。operation一覧・詳細・集約APIは未実装である。
+`ACCEPTED`はDBへの受付成功であり、送信・受領・操作完了ではない。同じ要求の再送も元の受付結果を202で返す。現在の進行状況を示す応答ではない。進行状況は以下のGET APIで取得する。
+
+## 一覧・詳細
+
+`GET /fleet-operations`は`{items, total, limit, offset, evaluatedAt}`を返す。itemsはoperationの集約結果で、target一覧は含めない。totalは絞り込み後・ページ分割前のoperation数。createdAtの降順、同時刻はoperationIdの降順で並べる。
+
+| Query | 内容 |
+| --- | --- |
+| limit | 1〜100。既定20 |
+| offset | 0〜1,000,000。既定0 |
+| groupId | UUID。受付時のgroupId。削除済みgroupも検索できる |
+| type | RETURN_HOME / REBOOT |
+| status | ACCEPTED / IN_PROGRESS / COMPLETED / PARTIALLY_FAILED / FAILED |
+| from / to | UTC ISO 8601。受付createdAtの範囲、両端を含む。from > toは拒否 |
+
+`GET /fleet-operations/:operationId`は集約結果に`evaluatedAt`と`targets: {items, total, limit, offset}`を加えて返す。targetはdeviceIdのASCII順。limitは1〜100（既定100）、offsetは0〜1,000,000（既定0）。statusには下表のtarget状態、deviceIdには完全一致を指定できる。totalはtargetの絞り込み後の件数で、operation全体のtargetCount・countsは絞り込みで変わらない。
+
+```http
+GET /fleet-operations?groupId=c1eaa546-9ff8-4b7b-8f9a-b8c0739d6b55&status=IN_PROGRESS&limit=20
+GET /fleet-operations/6957ca77-f1d7-4598-863a-28faf7496f62?status=UNRESPONSIVE&limit=10&offset=0
+```
+
+集約結果はoperationId、groupId、受付時のgroupName・groupRevision、type、status、targetCount、createdAt、expiresAt、resultDeadline、updatedAtを持つ。countsは下表の全10状態をキーとする件数（0も返す）。succeededCount、unsuccessfulCount、inProgressCountの合計はtargetCountに一致する。acknowledgedCountは受領時刻を持つtargetの別指標で、状態別件数へ重ねて加えない。
+
+targetはdeviceId、commandId、表示status、commandStatus（配送・受領）、executionStatus（実行正本）、outboxState、attempts・failures、sentAt、acknowledgementReceivedAt、executionStartedAt・executionStartedReceivedAt、executionResultAt・executionResultReceivedAt、updatedAtを返す。未記録の時刻・outboxStateはnull。秘密情報、key、outboxのtopic・payloadは返さない。
+
+GETは不正なID・query・未知のquery項目・重複queryを400、存在しないoperationを404で返す。空の検索結果や範囲外offsetは200でitemsを空にし、totalは維持する。DB障害は500であり、空結果・404へ置き換えない。GETにIdempotency-Keyは不要。
+
+### 状態の評価
+
+一つのSQL statement・同一DB snapshot・同一サーバー評価時刻evaluatedAtで、command/outboxの正本、全体の件数、絞り込み後の件数、pageを読む。状態をtargetへ二重保存せず、ACK・実行結果・outboxのcommit後は次のGETへ反映する。group membership・現在の名称・接続状態・telemetryは集約に使わない。
+
+上から最初に一致する状態を使う。
+
+| 根拠 | target状態 | 分類 |
+| --- | --- | --- |
+| 実行SUCCEEDED | SUCCEEDED | 成功 |
+| 実行FAILED | EXECUTION_FAILED | 不成功・実行失敗 |
+| 実行UNCERTAIN | UNCERTAIN | 不成功・結果不明 |
+| 配送EXPIRED | EXPIRED | 不成功・開始期限切れ |
+| evaluatedAt >= resultDeadlineで終端結果なし | UNRESPONSIVE | 不成功・受領または結果未応答 |
+| 期限前の実行RUNNING | RUNNING | 進行中 |
+| 期限前の受領時刻あり | ACKNOWLEDGED | 進行中・結果待ち |
+| 配送FAILED / TIMED_OUT | DELIVERY_FAILED / UNRESPONSIVE | 不成功・送信失敗 / 受領未応答 |
+| 配送SENT | SENT | 進行中・受領待ち |
+| 配送PENDING | PENDING | 進行中・送信待ち |
+
+全targetがPENDINGなら全体はACCEPTED。それ以外で進行中があればIN_PROGRESS、全件成功ならCOMPLETED。進行中がなく成功・不成功の両方があればPARTIALLY_FAILED、成功0ならFAILED。不成功には期限切れ・結果不明も含み、全機体の物理的な操作失敗を断定しない。EXPIREDも一度も操作していない証明ではない。
+
+結果確認期限は受付から120秒で、開始期限30秒とは別。workerが遅れてもGETで未応答を評価するが、commandの正本や開始期限は変更しない。配送FAILED/TIMED_OUTの後でも、有効なRUNNING・受領ACKが保存されれば期限前は進行中へ戻る。期限ちょうど・期限後はRUNNING・受領だけでは未応答を解消しない。後着SUCCEEDED/FAILEDは期限後も反映し、UNCERTAINも確かな終端結果で解消する。衝突通知はingestorで正本へ適用しないため集約にも使わない。
+
+updatedAtはcommand作成・送信・受領・期限判定・有効な実行通知のサーバー受信時刻、およびoutboxの配送試行更新時刻の最大値。未応答の期限評価ではresultDeadlineも候補に含め、単にGETした時刻や端末時刻・将来のnextAttemptAtは使わない。operationは全targetの最大値を返す。
+
+集約は現在の評価であり、後着結果でFAILED/PARTIALLY_FAILEDからCOMPLETEDに変わり得る。GETは書き込みをせず、初回確認終了時刻や過去の集約状態変更checkpointはまだ保存しない。これらの履歴・audit evaluatorは#144の範囲であり、commandの保存済み実行イベント履歴とは別である。
+
+page間の別リクエストは別snapshot・別評価時刻である。状態変化や新規受付によりoffsetの対象がずれる場合は先頭から更新する。全履歴をまたぐ大規模な性能保証やcursor、集約キャッシュは追加していない。
 
 ## 対象と保存境界
 
@@ -71,3 +126,18 @@ rollbackしたkeyは消費しない。応答を失ったときは同じkeyで再
 新規keyで3回実行した。時間はrepository呼び出しからtransaction commitを含む応答生成まで。query数はDrizzle loggerによる実測で、lock、照合、group取得、membership取得、4つのINSERTを数える。postgres.jsのBEGIN / COMMIT、接続準備、fixture・cleanupはquery数に含めない。HTTP転送、MQTT配送、受領、実行完了、1,000台負荷を測ったものではない。
 
 再現には専用PostgreSQLの`POSTGRES_*`と`DATABASE_INTEGRATION=true`を設定して`pnpm api:test:integration`を実行する。実測値を表示する場合は`pnpm exec vitest run --no-file-parallelism --silent=false apps/api/test/fleet-operation-repository.integration.test.ts --reporter=verbose`を使う。テストでは同時再要求、要求不一致、構成変更競合、group削除後の再要求、途中保存失敗・全件rollback、上限と既存単一device受付も確認する。migrationは`pnpm db:test:integration`で既存経路も検証する。
+
+### #140の集約検証
+
+2026-10-14、同じmacOS / Apple M2 / Node.js 24.21.0 / pnpm 10.28.1 / OrbStack環境の専用PostgreSQL 17（localhost:55440）で実施した。詳細APIのrepository呼び出しを測定し、返却pageは最大10台とした。
+
+| 保存対象数 | 返却target数 | 取得時間（ms） | Drizzle query数 |
+| --- | ---: | ---: | ---: |
+| 1 | 1 | 5.728 | 1 |
+| 100 | 10 | 4.997 | 1 |
+
+集計はpageだけでなく全targetを対象とし、一覧も1 queryだった。query数はDrizzle loggerで測定した。fixture作成・HTTP転送・MQTT配送・連続負荷は含めず、この単発値を性能保証としない。大規模な履歴件数や1,000台は未検証である。
+
+`DATABASE_INTEGRATION=true pnpm api:test:integration`で10状態の優先順位・件数、一部/全件不成功、期限前後の後着証拠、UNCERTAIN解消、期限拒否・終端不一致、実outbox更新、未commitの状態を混ぜない読み取り、group変更・論理削除後のsnapshot、物理削除制約、pagination・絞り込み、実repositoryを使うAPIを検証する。計測の再現は`pnpm exec vitest run --no-file-parallelism --silent=false apps/api/test/fleet-operation-results.integration.test.ts --reporter=verbose`を使う。
+
+更新時はAPI/outboxを停止してmigrationを適用してから再開する。`0008_violet_ego.sql`でoutbox.updated_atをnullableとして追加し、既存行の本文・状態・試行回数を変えず、過去の未記録時刻を捏造しない。旧行ではcommandの既存時刻・published_atを使用し、以後のworker更新からupdated_atを記録する。MQTT topic・protocol・IoT Policyの変更や実AWSでの検証は行っていない。

@@ -113,12 +113,12 @@ export function createCommandOutbox(
               : "TIMED_OUT";
           await transaction(async (tx) => {
             await tx`UPDATE commands SET status=${state}::command_status, expired_at=CASE WHEN ${state}='EXPIRED' THEN coalesce(expired_at,${at.toISOString()}) ELSE expired_at END, timed_out_at=CASE WHEN ${state}='TIMED_OUT' THEN coalesce(timed_out_at,${at.toISOString()}) ELSE timed_out_at END WHERE command_id=${candidate.command_id} AND status IN ('PENDING','SENT')`;
-            await tx`UPDATE command_outbox o SET state=c.status::text FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id}`;
+            await tx`UPDATE command_outbox o SET state=c.status::text, updated_at=${at.toISOString()} FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id}`;
           });
           continue;
         }
         if (row.attempts >= options.maxAttempts) {
-          await sql`UPDATE command_outbox SET next_attempt_at=expires_at, state='WAITING_ACK' WHERE command_id=${candidate.command_id}`;
+          await sql`UPDATE command_outbox SET next_attempt_at=expires_at, state='WAITING_ACK', updated_at=${at.toISOString()} WHERE command_id=${candidate.command_id}`;
           continue;
         }
         const delay = retryDelay(row.attempts + 1, options, random);
@@ -127,7 +127,7 @@ export function createCommandOutbox(
         );
         // 試行を送信前にcommitする。クラッシュで送信済みの可能性を消さない。
         const claimed =
-          await sql`UPDATE command_outbox o SET attempts=attempts+1, next_attempt_at=${next.toISOString()} FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id} AND c.status IN ('PENDING','SENT') AND o.expires_at > ${now().toISOString()} RETURNING o.command_id`;
+          await sql`UPDATE command_outbox o SET attempts=attempts+1, next_attempt_at=${next.toISOString()}, updated_at=${at.toISOString()} FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id} AND c.status IN ('PENDING','SENT') AND o.expires_at > ${now().toISOString()} RETURNING o.command_id`;
         if (claimed.length === 0) continue;
         let success = false;
         try {
@@ -151,7 +151,7 @@ export function createCommandOutbox(
           const nextAfterAttempt = new Date(
             Math.min(row.expires_at.getTime(), now().getTime() + delay),
           ).toISOString();
-          await tx`UPDATE command_outbox o SET state=CASE WHEN c.status IN ('ACKNOWLEDGED','EXPIRED','FAILED','TIMED_OUT') THEN c.status::text WHEN o.attempts >= ${options.maxAttempts} THEN 'WAITING_ACK' ELSE 'PENDING' END, next_attempt_at=CASE WHEN o.attempts >= ${options.maxAttempts} THEN o.expires_at ELSE ${nextAfterAttempt}::timestamptz END FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id}`;
+          await tx`UPDATE command_outbox o SET state=CASE WHEN c.status IN ('ACKNOWLEDGED','EXPIRED','FAILED','TIMED_OUT') THEN c.status::text WHEN o.attempts >= ${options.maxAttempts} THEN 'WAITING_ACK' ELSE 'PENDING' END, next_attempt_at=CASE WHEN o.attempts >= ${options.maxAttempts} THEN o.expires_at ELSE ${nextAfterAttempt}::timestamptz END, updated_at=${now().toISOString()} FROM commands c WHERE o.command_id=c.command_id AND o.command_id=${candidate.command_id}`;
         });
       } finally {
         try {

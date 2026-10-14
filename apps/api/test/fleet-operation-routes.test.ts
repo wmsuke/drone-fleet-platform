@@ -24,7 +24,7 @@ afterEach(async () => {
 function setup() {
   const create = vi.fn(async () => response);
   const app = Fastify();
-  registerFleetOperationRoutes(app, { create });
+  registerFleetOperationRoutes(app, { create, list: vi.fn(), find: vi.fn() });
   apps.push(app);
   return { app, create };
 }

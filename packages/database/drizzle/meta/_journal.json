@@ -57,6 +57,13 @@
       "when": 1791944562303,
       "tag": "0007_flashy_marvel_apes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791955247876,
+      "tag": "0008_violet_ego",
+      "breakpoints": true
     }
   ]
 }

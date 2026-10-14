@@ -17,7 +17,12 @@ import {
 import type {
   FleetOperationRequest,
   FleetOperationResponse,
+  OperationListQuery,
+  OperationListResponse,
+  OperationTargetQuery,
+  OperationDetailResponse,
 } from "./fleet-operation-schema.js";
+import { createFleetOperationQueries } from "./fleet-operation-query.js";
 
 export class FleetOperationError extends Error {
   constructor(
@@ -28,6 +33,11 @@ export class FleetOperationError extends Error {
   }
 }
 export interface FleetOperationRepository {
+  list(query: OperationListQuery): Promise<OperationListResponse>;
+  find(
+    operationId: string,
+    query: OperationTargetQuery,
+  ): Promise<OperationDetailResponse | null>;
   create(
     request: FleetOperationRequest,
     key: string,
@@ -61,6 +71,7 @@ export function createFleetOperationRepository(
   db: Database,
   options: {
     maxTargets: number;
+    clock?: () => Date;
     onAccepted?: (metrics: {
       targetCount: number;
       durationMs: number;
@@ -75,6 +86,7 @@ export function createFleetOperationRepository(
   )
     throw new TypeError("maxTargets must be between 1 and 1000");
   return {
+    ...createFleetOperationQueries(db, options.clock ?? (() => new Date())),
     async create(request, key) {
       const start = performance.now();
       let replayed = false;
