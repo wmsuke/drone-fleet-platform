@@ -17,6 +17,7 @@ import {
   type SimulatorMqttClient,
 } from "../src/simulator.js";
 import { TelemetryBuffer } from "../src/telemetry-buffer.js";
+import { CommandStore } from "../src/command-store.js";
 
 interface PublishedMessage {
   topic: string;
@@ -142,6 +143,264 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("queues a startup REBOOT until initial ONLINE is confirmed", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient(),
+      release = client.blockNextPublish();
+    const starting = startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "startup",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    await vi.waitFor(() => expect(client.published).toHaveLength(1));
+    const now = new Date();
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/commands",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 2,
+          deviceId: "drone-001",
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          type: "REBOOT",
+          timestamp: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30000).toISOString(),
+        }),
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(client.reconnectCount).toBe(0);
+    release();
+    const simulator = await starting;
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+  it("completes a persisted receipt-only REBOOT after startup recovery", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient(),
+      settings = bufferSettings(),
+      now = new Date();
+    const store = new CommandStore("drone-001", {
+      path: settings.telemetryBufferPath,
+    });
+    store.receive(
+      {
+        schemaVersion: 2,
+        deviceId: "drone-001",
+        commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+        type: "REBOOT",
+        timestamp: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 30000).toISOString(),
+      },
+      now.toISOString(),
+    );
+    store.close();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "recovery-reboot",
+        telemetryIntervalMs: 5000,
+        ...settings,
+      },
+      async () => client,
+    );
+    expect(client.reconnectCount).toBe(1);
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+  it("does not use a stale connection's ONLINE PUBACK as reboot completion", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "generation",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const publish = client.publishAsync.bind(client);
+    const releases: Array<() => void> = [];
+    vi.spyOn(client, "publishAsync").mockImplementation(
+      async (topic, message, options) => {
+        if (
+          topic.endsWith("/status") &&
+          JSON.parse(message).payload.status === "ONLINE"
+        )
+          await new Promise<void>((resolve) => {
+            releases.push(resolve);
+          });
+        return publish(topic, message, options);
+      },
+    );
+    client.emit("connect");
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const now = new Date();
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/commands",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 2,
+          deviceId: "drone-001",
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          type: "REBOOT",
+          timestamp: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30000).toISOString(),
+        }),
+      ),
+    );
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+    client.emit("connect");
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    releases[0]!();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(false);
+    releases[1]!();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+  it("does not declare reboot success before ONLINE publication is confirmed", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "reboot-proof",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const publish = client.publishAsync.bind(client);
+    let release!: () => void;
+    const onlineBlocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(client, "publishAsync").mockImplementation(
+      async (topic, message, options) => {
+        if (
+          topic.endsWith("/status") &&
+          JSON.parse(message).payload.status === "ONLINE"
+        )
+          await onlineBlocked;
+        return publish(topic, message, options);
+      },
+    );
+    const now = new Date();
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/commands",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 2,
+          deviceId: "drone-001",
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          type: "REBOOT",
+          timestamp: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30000).toISOString(),
+        }),
+      ),
+    );
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(false);
+    release();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+  it("reports a conflicting active operation as FAILED instead of interrupting the earlier one", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "busy",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    const now = new Date();
+    const send = (id: string, type: "RETURN_HOME" | "REBOOT") =>
+      client.emitMessage(
+        "fleet/v1/devices/drone-001/commands",
+        Buffer.from(
+          JSON.stringify({
+            schemaVersion: 2,
+            deviceId: "drone-001",
+            commandId: id,
+            type,
+            timestamp: now.toISOString(),
+            expiresAt: new Date(now.getTime() + 30000).toISOString(),
+          }),
+        ),
+      );
+    send("5c15de4f-6957-4f4f-b3cf-8cb9e733d63c", "RETURN_HOME");
+    await vi.advanceTimersByTimeAsync(100);
+    send("6c15de4f-6957-4f4f-b3cf-8cb9e733d63c", "REBOOT");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "FAILED",
+      ),
+    ).toBe(true);
+    expect(client.reconnectCount).toBe(0);
+    await simulator.shutdown();
+  });
   it("starts an accepted operation without waiting for the ACK PUBACK", async () => {
     vi.useFakeTimers();
     const client = new FakeMqttClient();
@@ -891,7 +1150,15 @@ describe("startSimulator", () => {
     );
 
     client.emitMessage("fleet/v1/devices/drone-001/commands", command);
-    await vi.waitFor(() => expect(client.published).toHaveLength(3));
+    await vi.waitFor(() =>
+      expect(
+        client.published.some(
+          (item) =>
+            item.topic.endsWith("/command-acks") &&
+            JSON.parse(item.message).status === "RUNNING",
+        ),
+      ).toBe(true),
+    );
 
     const acknowledgement = commandAcknowledgementMessageSchema.parse(
       JSON.parse(client.published[2]?.message ?? ""),
@@ -901,13 +1168,50 @@ describe("startSimulator", () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     const telemetry = telemetryMessageSchema.parse(
-      JSON.parse(client.published[3]?.message ?? ""),
+      JSON.parse(
+        client.published
+          .filter((item) => item.topic.endsWith("/telemetry"))
+          .at(-1)?.message ?? "",
+      ),
     );
     expect(telemetry.payload.status).toBe("RETURNING_HOME");
 
     client.emitMessage("fleet/v1/devices/drone-001/commands", command);
-    await vi.waitFor(() => expect(client.published).toHaveLength(5));
+    await vi.waitFor(() =>
+      expect(
+        client.published.filter(
+          (item) =>
+            item.topic.endsWith("/command-acks") &&
+            JSON.parse(item.message).status === "ACKNOWLEDGED",
+        ),
+      ).toHaveLength(2),
+    );
     expect(client.endForces).toEqual([]);
+
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    const atHome = telemetryMessageSchema.parse(
+      JSON.parse(
+        client.published
+          .filter((item) => item.topic.endsWith("/telemetry"))
+          .at(-1)!.message,
+      ),
+    );
+    expect(atHome.payload.status).toBe("IDLE");
+    expect(atHome.payload.altitude).toBe(0);
 
     await simulator.shutdown();
   });
@@ -944,10 +1248,28 @@ describe("startSimulator", () => {
     );
     expect(client.endForces).toEqual([true]);
 
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(false);
     client.emit("connect");
-    await vi.waitFor(() => expect(client.published).toHaveLength(5));
+    await vi.waitFor(() =>
+      expect(
+        client.published.some(
+          (item) =>
+            item.topic.endsWith("/command-acks") &&
+            JSON.parse(item.message).status === "SUCCEEDED",
+        ),
+      ).toBe(true),
+    );
     const online = connectionStatusMessageSchema.parse(
-      JSON.parse(client.published[3]?.message ?? ""),
+      JSON.parse(
+        client.published.filter((item) => item.topic.endsWith("/status")).at(-1)
+          ?.message ?? "",
+      ),
     );
     expect(online.payload).toEqual({ status: "ONLINE", reason: "CONNECTED" });
     expect(client.subscriptions).toHaveLength(4);
@@ -955,7 +1277,11 @@ describe("startSimulator", () => {
       JSON.parse(client.published[1]?.message ?? ""),
     );
     const reconnectTelemetry = telemetryMessageSchema.parse(
-      JSON.parse(client.published[4]?.message ?? ""),
+      JSON.parse(
+        client.published
+          .filter((item) => item.topic.endsWith("/telemetry"))
+          .at(-1)?.message ?? "",
+      ),
     );
     if (
       initialTelemetry.schemaVersion !== 2 ||
@@ -1004,9 +1330,27 @@ describe("startSimulator", () => {
     expect(client.endForces).toEqual([true]);
 
     client.emit("connect");
-    await vi.waitFor(() => expect(client.published).toHaveLength(6));
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.waitFor(() =>
+      expect(
+        client.published.some(
+          (item) =>
+            item.topic.endsWith("/command-acks") &&
+            JSON.parse(item.message).status === "SUCCEEDED",
+        ),
+      ).toBe(true),
+    );
     client.emitMessage(topic, command);
-    await vi.waitFor(() => expect(client.published).toHaveLength(7));
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.waitFor(() =>
+      expect(
+        client.published.filter(
+          (item) =>
+            item.topic.endsWith("/command-acks") &&
+            JSON.parse(item.message).status === "SUCCEEDED",
+        ),
+      ).toHaveLength(2),
+    );
     expect(client.reconnectCount).toBe(1);
     expect(client.endForces).toEqual([true]);
 

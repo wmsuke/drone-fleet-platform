@@ -56,11 +56,11 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ## 共通項目
 
-Phase 4では実行結果を受領ACKと分けるため、同じcommand-acks topic上のACK v3を後続の#152で追加する。利用者承認により#139の受付APIとは別Issue・別PRへ分割した。現在は未実装であり、以下のv1/v2仕様と型・検証を変更したものではない。結果通知の責務と互換性、成功条件は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
+#152で実行結果を受領ACKと分け、同じcommand-acks topic上のACK v3を追加した。command v2、受領・期限拒否ACK v1/v2の互換性は維持する。結果通知の責務と互換性、成功条件は[commandの実行結果通知](command-results.md)と[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
 
 | 項目 | 内容 |
 |---|---|
-| `schemaVersion` | telemetryとcommand/ACKの新規送信は`2`。旧v1、status、telemetry-receiptsは`1` |
+| `schemaVersion` | telemetry・command・simulatorの受領ACKは`2`、実行結果通知は`3`。旧v1、status、telemetry-receiptsは`1` |
 | `deviceId` | 対象デバイスのID |
 | `timestamp` | メッセージ作成時刻。UTCのISO 8601形式 |
 
@@ -215,11 +215,35 @@ simulatorはcommandId・本文・受領・操作試行・結果・再送待ちAC
 }
 ```
 
-`ACKNOWLEDGED`は有効なコマンドを受け付けたことを示し、操作の成功や完了を意味しない。v2の`REJECTED_EXPIRED`は期限のため操作を開始しなかったことを示す。端末の結果不明`UNCERTAIN`は履歴・ログにだけ残し、完了ACKとして返さない。
+`ACKNOWLEDGED`は有効なコマンドを受け付けたことを示し、操作の成功や完了を意味しない。v2/v3の`REJECTED_EXPIRED`は期限のため操作を開始しなかったことを示す。simulatorは受領・期限拒否をv2、実行結果をv3で通知する。
 
-`packages/protocol`はZodの`commandAcknowledgementMessageSchema`と、受領確認であることを明示した`CommandAcknowledgementMessage`型を公開する。コマンドとACKは`commandId`と`deviceId`で対応付ける。
+`packages/protocol`はZodの`commandAcknowledgementMessageSchema`と`CommandAcknowledgementMessage`型を公開する。v3ではこの型に受領通知と実行結果の両方を含むため、statusで区別する。コマンドと通知は`commandId`と`deviceId`で対応付ける。
 
 受信側は、commandIdとdeviceIdが保存済みのコマンドに一致することを確認する。不明なコマンドへのACKは状態更新に使わず、ログに残す。
+
+## 実行結果通知
+
+同じcommand-acks topicへQoS 1・retainなしで送る。v3の受領・期限拒否にはstartedAtを付けない。実行状態にはstartedAtを必須とし、timestampはstartedAt以降でなければならない。
+
+```json
+{
+  "schemaVersion": 3,
+  "commandId": "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+  "deviceId": "drone-001",
+  "status": "SUCCEEDED",
+  "startedAt": "2026-10-14T00:00:01.000Z",
+  "timestamp": "2026-10-14T00:00:11.000Z"
+}
+```
+
+| status | 意味 |
+| --- | --- |
+| RUNNING | 操作開始を永続化した |
+| SUCCEEDED | 定義した完了条件を満たした結果を永続化した |
+| FAILED | 実行失敗の結果を永続化した |
+| UNCERTAIN | 開始後停止などで結果を判定できず、自動再実行しない |
+
+ingestorは作成時刻以上・開始期限未満のstartedAtを検証し、機体時刻とサーバー受信時刻を別に保存する。配送状態と実行状態は別項目とし、SUCCEEDEDだけから受領ACKを補完しない。後着・衝突・再送と保証境界は[commandの実行結果通知](command-results.md)に定める。
 
 ## コマンドの管理状態
 
@@ -260,7 +284,7 @@ Phase 3ではAPI outboxから期限内に同じcommandIdを再送する。FAILED
 
 - v2 telemetryはSQLite commitからDB保存receiptまで保持し、同じ識別子・同じ本文を再送する。容量・永続領域・通信とDBとreceipt経路の復旧条件付きであり、exactly-once配送ではない。
 - SQLite commit前、容量超過、ディスク故障・volume消失、停止中の未生成サンプルは保持できない。旧v1 telemetryはreceipt・永続的な重複排除の対象外である。
-- コマンドの実行完了は追跡しない。
+- 実行通知はDBに保存するが、PUBACKはDB保存確認ではない。結果が失われた場合は未報告や進行中のまま残り得る。集約・結果APIと画面は#140〜#141で扱う。
 - コマンド履歴の永続領域・期限判定の時計・容量の前提が失われる場合は、重複防止の保証範囲外となる。
 - APIの202はcommand/outboxの受付であり、送信確認でも受領ACKでもない。outboxは期限・試行上限内で再送する。別のHTTP POSTで作られた新しいcommandIdの重複操作は防がない。
 - ローカルMosquitto構成は開発用の匿名接続であり、外部公開しない。
@@ -272,7 +296,7 @@ Phase 3ではAPI outboxから期限内に同じcommandIdを再送する。FAILED
 
 - telemetryにUUID v4の`sessionId`を加えて`schemaVersion=2`へ進めた。topicは変えず、`deviceId + sessionId + sequence`を1件の識別子とする。DBでの一意制約と重複排除は#112で実装済みである。
 - telemetryのpublishとingestorのsubscribeをQoS 1にした。`fleet/v1/devices/{deviceId}/telemetry-receipts`を追加し、ingestorがPostgreSQLへ保存した後にQoS 1・retainなしで送信する。simulatorはQoS 1で受領通知を購読し、一致する保存確認を受けてからSQLiteの行を削除する。MQTTのPUBACKだけでは削除しない。
-- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進めた。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。操作結果不明の`UNCERTAIN`は端末側の記録に限り、ACKには含めない。command/ACKのtopicは変えない。
+- commandに必須の`expiresAt`を追加して`schemaVersion=2`へ進めた。`expiresAt`は操作開始の期限であり、期限内に受領しても操作開始前または再起動後に期限切れなら実行しない。ACKも`schemaVersion=2`へ進め、受領を示す`ACKNOWLEDGED`と、受領前・受領後を問わず期限切れで操作を開始しなかったことを示す`REJECTED_EXPIRED`を定義する。受領ACKは操作完了を意味しない。APIは受領後の期限切れ通知で`ACKNOWLEDGED`から`EXPIRED`へ更新し、受領済みの事実を履歴に残す。遅れて届いた受領ACKで`ACKNOWLEDGED`へ戻さない。Phase 3のv2ではUNCERTAINを端末にだけ残したが、#152でv3の実行通知として追加した。command/ACKのtopicは変えない。
 - APIはcommandとoutboxを同じDB transactionで保存し、期限内に同じcommandIdを再送する。端末は処理済みcommandIdとACKを永続化し、重複した操作を避ける。
 
 設定値、保持できない条件、時計とディスクの前提は[復旧デモと運用制約](recovery-demo.md)にまとめた。未確認telemetryの時間保持期限はなく、commandの操作開始期限30秒とは別である。DBの重複排除情報はtelemetry行の存続期間保持し、端末のcommand履歴は期限から7日・10000件を上限に次の受信時に掃除する。容量によって期限切れ履歴を早く消す場合があり、履歴を消した後も期限切れcommandは実行しない。

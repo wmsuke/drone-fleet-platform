@@ -9,6 +9,7 @@ export {
   commandStatusEnum,
   commands,
   commandOutbox,
+  commandExecutionEvents,
   commandTypeEnum,
   connectionStatusEnum,
   devices,

@@ -2,6 +2,8 @@
 
 ## 通信と状態
 
+#152で受領ACKと別の実行結果通知を追加した。commandはv2、simulatorの受領・期限拒否ACKはv2のまま、実行結果はv3で送る。PostgreSQLの実行状態、停止・再送と完了条件は[commandの実行結果通知](command-results.md)を参照する。
+
 APIは`schemaVersion=2`のcommandを送り、作成時刻から30秒後の`expiresAt`をPostgreSQLとメッセージへ記録する。期限は受領や完了の締切ではなく、操作開始の締切である。`now >= expiresAt`なら操作しない。topicは従来のcommands / command-acksを使い、localとAWSの処理を共通にする。
 
 v2 ACKの`ACKNOWLEDGED`は受領を示し、実行完了を示さない。`REJECTED_EXPIRED`は、この受信または復旧時に期限のため操作を開始しなかったことを示す。APIは後者を`EXPIRED`として表示する。受領済みでも開始前に期限へ達した場合は期限切れに更新する。後から受領ACKが来ても`EXPIRED`を戻さず、受領ACK受信時刻だけを補う。送信結果の更新も`EXPIRED`や`ACKNOWLEDGED`を上書きしない。

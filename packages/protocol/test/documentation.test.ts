@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   commandV2MessageSchema,
   commandAcknowledgementV2MessageSchema,
+  commandAcknowledgementV3MessageSchema,
   connectionStatusMessageSchema,
   telemetryV2MessageSchema,
 } from "../src/index.js";
@@ -19,6 +20,7 @@ describe("通信仕様の掲載JSON", () => {
     ["接続状態", connectionStatusMessageSchema, 1],
     ["コマンド", commandV2MessageSchema, 2],
     ["ACK", commandAcknowledgementV2MessageSchema, 2],
+    ["実行結果通知", commandAcknowledgementV3MessageSchema, 3],
   ] as const)("%sの例が実装schemaと一致する", (title, schema, version) => {
     const section = document
       .split(/^## /m)

@@ -1,14 +1,22 @@
-import { commands, type Database } from "@drone-fleet/database";
+import {
+  commands,
+  commandExecutionEvents,
+  type Database,
+} from "@drone-fleet/database";
 import {
   commandAcknowledgementMessageSchema,
   parseMqttTopic,
   type CommandAcknowledgementMessage,
 } from "@drone-fleet/protocol";
-import { and, eq, ne, isNull, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, isNotNull } from "drizzle-orm";
 
 import type { IngestionLogger } from "./ingestion.js";
 
-export type AcknowledgementResult = "updated" | "duplicate" | "not_found";
+export type AcknowledgementResult =
+  | "updated"
+  | "duplicate"
+  | "not_found"
+  | "conflict";
 
 export interface CommandAcknowledgementRepository {
   acknowledge(
@@ -22,58 +30,129 @@ export function createCommandAcknowledgementRepository(
 ): CommandAcknowledgementRepository {
   return {
     async acknowledge(message, receivedAt) {
-      const updated = await database
-        .update(commands)
-        .set({
-          ...(message.status === "REJECTED_EXPIRED"
-            ? { status: "EXPIRED" as const, expiredAt: receivedAt }
-            : {
-                status: sql`case when ${commands.status} = 'EXPIRED' then 'EXPIRED'::command_status else 'ACKNOWLEDGED'::command_status end`,
-                acknowledgementReceivedAt: sql`coalesce(${commands.acknowledgementReceivedAt}, ${receivedAt.toISOString()}::timestamptz)`,
-              }),
-        })
-        .where(
-          and(
-            eq(commands.commandId, message.commandId),
-            eq(commands.deviceId, message.deviceId),
-            ne(
-              commands.status,
-              message.status === "REJECTED_EXPIRED"
-                ? "EXPIRED"
-                : "ACKNOWLEDGED",
+      return database.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(commands)
+          .where(
+            and(
+              eq(commands.commandId, message.commandId),
+              eq(commands.deviceId, message.deviceId),
+              message.schemaVersion >= 2
+                ? isNotNull(commands.expiresAt)
+                : isNull(commands.expiresAt),
             ),
-            ...(message.status === "ACKNOWLEDGED"
-              ? [
-                  or(
-                    ne(commands.status, "EXPIRED"),
-                    isNull(commands.acknowledgementReceivedAt),
-                  ),
-                ]
-              : []),
-            message.schemaVersion === 2
-              ? isNotNull(commands.expiresAt)
-              : isNull(commands.expiresAt),
-          ),
+          )
+          .for("update");
+        if (!row) return "not_found";
+        const execution = !["ACKNOWLEDGED", "REJECTED_EXPIRED"].includes(
+          message.status,
+        );
+        if (execution || message.status === "REJECTED_EXPIRED") {
+          const startedAt =
+            message.schemaVersion === 3 && message.startedAt
+              ? new Date(message.startedAt)
+              : null;
+          const deviceTimestamp = new Date(message.timestamp);
+          const [existing] = await tx
+            .select()
+            .from(commandExecutionEvents)
+            .where(
+              and(
+                eq(commandExecutionEvents.commandId, row.commandId),
+                eq(commandExecutionEvents.status, message.status),
+                eq(commandExecutionEvents.deviceTimestamp, deviceTimestamp),
+                startedAt
+                  ? eq(commandExecutionEvents.startedAt, startedAt)
+                  : isNull(commandExecutionEvents.startedAt),
+              ),
+            );
+          if (existing)
+            return existing.disposition === "conflict"
+              ? "conflict"
+              : "duplicate";
+          let disposition: "applied" | "ignored" | "conflict" = "applied";
+          if (execution) {
+            if (
+              !startedAt ||
+              !row.expiresAt ||
+              startedAt < row.createdAt ||
+              startedAt >= row.expiresAt ||
+              row.status === "EXPIRED" ||
+              (row.executionStartedAt &&
+                row.executionStartedAt.getTime() !== startedAt.getTime())
+            )
+              disposition = "conflict";
+            else if (["SUCCEEDED", "FAILED"].includes(row.executionStatus)) {
+              disposition = [
+                "RUNNING",
+                "UNCERTAIN",
+                row.executionStatus,
+              ].includes(message.status)
+                ? "ignored"
+                : "conflict";
+            } else if (
+              row.executionStatus === "UNCERTAIN" &&
+              ["RUNNING", "UNCERTAIN"].includes(message.status)
+            )
+              disposition = "ignored";
+            else if (
+              row.executionStatus === "RUNNING" &&
+              message.status === "RUNNING"
+            )
+              disposition = "ignored";
+          } else if (row.executionStatus !== "NOT_REPORTED")
+            disposition = "conflict";
+          else if (row.status === "EXPIRED") disposition = "ignored";
+          await tx.insert(commandExecutionEvents).values({
+            commandId: row.commandId,
+            deviceId: row.deviceId,
+            status: message.status,
+            startedAt,
+            deviceTimestamp,
+            receivedAt,
+            disposition,
+          });
+          if (disposition === "conflict") return "conflict";
+          if (disposition === "ignored") return "duplicate";
+          if (execution) {
+            await tx
+              .update(commands)
+              .set({
+                executionStatus: message.status,
+                executionStartedAt: row.executionStartedAt ?? startedAt,
+                executionStartedReceivedAt:
+                  row.executionStartedReceivedAt ?? receivedAt,
+                ...(message.status === "RUNNING"
+                  ? {}
+                  : {
+                      executionResultAt: deviceTimestamp,
+                      executionResultReceivedAt: receivedAt,
+                    }),
+              })
+              .where(eq(commands.commandId, row.commandId));
+          } else
+            await tx
+              .update(commands)
+              .set({ status: "EXPIRED", expiredAt: receivedAt })
+              .where(eq(commands.commandId, row.commandId));
+          return "updated";
+        }
+        if (
+          row.acknowledgementReceivedAt !== null &&
+          ["ACKNOWLEDGED", "EXPIRED"].includes(row.status)
         )
-        .returning({ commandId: commands.commandId });
-      if (updated.length > 0) {
+          return "duplicate";
+        await tx
+          .update(commands)
+          .set({
+            status: row.status === "EXPIRED" ? "EXPIRED" : "ACKNOWLEDGED",
+            acknowledgementReceivedAt:
+              row.acknowledgementReceivedAt ?? receivedAt,
+          })
+          .where(eq(commands.commandId, row.commandId));
         return "updated";
-      }
-
-      const existing = await database
-        .select({ commandId: commands.commandId })
-        .from(commands)
-        .where(
-          and(
-            eq(commands.commandId, message.commandId),
-            eq(commands.deviceId, message.deviceId),
-            message.schemaVersion === 2
-              ? isNotNull(commands.expiresAt)
-              : isNull(commands.expiresAt),
-          ),
-        )
-        .limit(1);
-      return existing.length > 0 ? "duplicate" : "not_found";
+      });
     },
   };
 }
@@ -113,6 +192,15 @@ export async function ingestAcknowledgement(
 
   try {
     const result = await repository.acknowledge(parsed.data, receivedAt);
+    if (result === "conflict") {
+      logger.warn("コマンド通知が保存済み状態と衝突しました", {
+        commandId: parsed.data.commandId,
+        deviceId: parsed.data.deviceId,
+        status: parsed.data.status,
+        topic,
+      });
+      return false;
+    }
     if (result === "not_found") {
       logger.warn("対応するコマンドがないACKを受信しました", {
         commandId: parsed.data.commandId,

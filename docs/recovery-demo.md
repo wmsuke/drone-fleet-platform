@@ -136,7 +136,7 @@ telemetryの保持期間を時間で設定する機能はない。未確認行�
 - プロセス停止: SQLite commit前の生成途中サンプルと停止中の時間のサンプルは保持しない。既にcommitした未確認行は再起動後も対象にする。
 - 時計ずれ: 期限は端末UTC時刻に依存する。時刻が遅いと本来の期限後に開始し得る。OSの同期状態や再起動をまたぐずれは自動判定しない。同期を確認できなければ`COMMAND_CLOCK_TRUSTED=false`にする。
 - commandの期限・試行上限: API受付だけでは配送・操作を保証しない。未試行の期限切れはEXPIRED、試行後の結果不明はTIMED_OUT、PUBACKなしで上限ならFAILEDになる。有効な後着ACKの扱いは[ADR 0005](adr/0005-delivery-and-recovery.md)に従う。
-- 操作開始後の停止: SQLiteにSTARTEDがあり結果がなければUNCERTAINとして自動再実行しない。APIのACKNOWLEDGEDは受領であって操作成功ではなく、UNCERTAINは端末SQLiteとログで追う。
+- 操作開始後の停止: SQLiteにSTARTEDがあり結果がなければUNCERTAINとして自動再実行しない。APIのACKNOWLEDGEDは受領であって操作成功ではない。#152でUNCERTAINを含む実行結果通知をDBへ保存する経路を追加した。v0.3.0当時は端末SQLiteとログのみだった。現在の保証境界は[commandの実行結果通知](command-results.md)を参照する。
 - HTTPの応答欠落: command保存後に202を受け取れない場合もある。再度POSTすると別commandIdが作られるため、履歴を確認せず新しい操作を送らない。HTTP受付のidempotency keyは未実装である。
 
 SQLiteの`.sqlite`だけを動作中にコピーしない。SQLite対応のbackup手順、または正常停止後のvolume全体の保存など、WALも含めた整合性を確保する。PostgreSQLとSQLiteは別々の永続領域であり、一方の削除・復元だけで状態が一致するとは限らない。
