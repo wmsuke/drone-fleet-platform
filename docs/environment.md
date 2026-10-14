@@ -66,6 +66,7 @@ cp .env.example .env
 | `COMMAND_OUTBOX_POLL_MS` | API outboxの確認間隔 |
 | `COMMAND_OUTBOX_RETRY_BASE_MS` / `COMMAND_OUTBOX_RETRY_MAX_MS` | API outboxの指数バックオフ |
 | `COMMAND_OUTBOX_MAX_ATTEMPTS` | API outboxの最大試行回数 |
+| `FLEET_OPERATION_MAX_TARGETS` | グループ操作の対象数上限。既定100、1〜1000（性能保証ではない） |
 | `AWS_IOT_TELEMETRY_INGESTOR_CLIENT_ID` | telemetry-ingestor用IoT Policyと一致する固定clientId |
 | `AWS_IOT_TELEMETRY_INGESTOR_CERTIFICATE_PATH` | telemetry-ingestor専用クライアント証明書のパス |
 | `AWS_IOT_TELEMETRY_INGESTOR_PRIVATE_KEY_PATH` | telemetry-ingestor専用秘密鍵のパス |
