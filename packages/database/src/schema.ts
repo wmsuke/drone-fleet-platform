@@ -248,6 +248,85 @@ export const groupMemberships = pgTable(
   ],
 );
 
+export const fleetOperations = pgTable(
+  "fleet_operations",
+  {
+    operationId: uuid("operation_id").primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.groupId, { onDelete: "restrict" }),
+    groupName: varchar("group_name", { length: 100 }).notNull(),
+    groupRevision: integer("group_revision").notNull(),
+    type: commandTypeEnum("type").notNull(),
+    idempotencyScope: varchar("idempotency_scope", { length: 128 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    actorKind: text("actor_kind").notNull().default("anonymous"),
+    targetCount: integer("target_count").notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    resultDeadline: timestamp("result_deadline", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("fleet_operations_idempotency_idx").on(
+      table.idempotencyScope,
+      table.idempotencyKey,
+    ),
+    index("fleet_operations_group_created_idx").on(
+      table.groupId,
+      table.createdAt.desc(),
+      table.operationId,
+    ),
+    check(
+      "fleet_operations_counts_positive",
+      sql`${table.targetCount} > 0 AND ${table.groupRevision} > 0`,
+    ),
+    check(
+      "fleet_operations_deadlines",
+      sql`${table.createdAt} < ${table.expiresAt} AND ${table.expiresAt} < ${table.resultDeadline}`,
+    ),
+    check(
+      "fleet_operations_key_valid",
+      sql`${table.idempotencyKey} ~ '^[A-Za-z0-9_-]{1,128}$'`,
+    ),
+    check(
+      "fleet_operations_actor_anonymous",
+      sql`${table.actorKind} = 'anonymous'`,
+    ),
+  ],
+);
+
+export const fleetOperationTargets = pgTable(
+  "fleet_operation_targets",
+  {
+    operationId: uuid("operation_id")
+      .notNull()
+      .references(() => fleetOperations.operationId, { onDelete: "restrict" }),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "restrict" }),
+    commandId: uuid("command_id")
+      .notNull()
+      .references(() => commands.commandId, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.operationId, table.deviceId] }),
+    uniqueIndex("fleet_operation_targets_command_idx").on(table.commandId),
+    index("fleet_operation_targets_device_idx").on(
+      table.deviceId,
+      table.operationId,
+    ),
+  ],
+);
+
 export type Device = typeof devices.$inferSelect;
 export type NewDevice = typeof devices.$inferInsert;
 export type Telemetry = typeof telemetry.$inferSelect;

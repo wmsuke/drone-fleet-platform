@@ -1,4 +1,6 @@
 import cors from "@fastify/cors";
+import { registerFleetOperationRoutes } from "./fleet-operation-routes.js";
+import type { FleetOperationRepository } from "./fleet-operation-repository.js";
 import { registerGroupRoutes } from "./group-routes.js";
 import type { GroupRepository } from "./group-repository.js";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -26,9 +28,12 @@ export function buildApi(
     dashboardOrigin?: string | null;
     outboxStatus?: () => Promise<unknown>;
     groupRepository?: GroupRepository;
+    fleetOperationRepository?: FleetOperationRepository;
   } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (options.fleetOperationRepository)
+    registerFleetOperationRoutes(app, options.fleetOperationRepository);
   if (options.groupRepository)
     registerGroupRoutes(app, options.groupRepository);
   if (options.outboxStatus)

@@ -1,6 +1,6 @@
 # ADR 0006: 複数機体操作の集約状態と運用記録
 
-- 状態: 採用（#137でgroup管理のDB・API、#138で管理画面を実装済み。operation、実行結果通知、alert、auditは未実装）
+- 状態: 採用（#137でgroup管理のDB・API、#138で管理画面、#139でoperation受付を実装済み。実行結果通知、集約、alert、auditは未実装）
 - 決定日: 2026-10-13
 - 対象: #135、#136、後続の#137〜#148
 
@@ -14,7 +14,7 @@ Phase 4では既存の機体別commandを使い、対象の固定、受付の冪
 
 ### エンティティと責務
 
-以下はPhase 4のモデルである。#137で`groups`と`group_memberships`を実装した。それ以外の追加モデルは未実装である。group管理APIの現状と削除・履歴の境界は[機体グループAPI](../groups-api.md)を参照する。
+以下はPhase 4のモデルである。#137で`groups`と`group_memberships`、#139で`fleet_operations`と`fleet_operation_targets`を実装した。実行結果項目、alert、auditの追加モデルは未実装である。現状と削除・履歴の境界は[機体グループAPI](../groups-api.md)と[グループ操作の受付API](../fleet-operations-api.md)を参照する。
 
 | エンティティ                  | 関係・制約                                                                  | 責務                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -34,6 +34,8 @@ APIの受付transactionでgroup行をロックし、削除状態、membership、
 
 operation、全target、対象ごとの異なるcommandId、outbox、成功auditを同じtransactionで保存し、commit後に202とoperationId・対象数を返す。1件でも作成できなければ全件rollbackする。存在しないgroupは404、空・削除済みgroupは409、不正要求・対象数上限超過は400で拒否する。対象数上限の初期値は100、設定で変更できるが、実測前に1,000台対応をうたわない。
 
+#139ではoperation・target・command・outboxの同時commitを実装した。成功auditは#144で同じtransactionに組み込む予定であり、現在は監査記録の保証を提供しない。
+
 OFFLINEの機体も対象へ含め、勝手に除外しない。既存outboxが期限内に再送する。期限は受付時刻から既存の30秒を全targetへ共通に設定し、末尾のtargetだけ延長しない。全件受付の原子性は、全機体で同時に操作することや全件成功を保証しない。commit後のmembership変更・機体の接続変化は対象を変更しない。
 
 ### APIの二重受付防止
@@ -42,17 +44,17 @@ OFFLINEの機体も対象へ含め、勝手に除外しない。既存outboxが�
 
 正規化した要求はgroupIdとcommand type（将来追加する意味のある入力も含む）で比較する。同じscope・key・要求なら既存operationIdを返し、membership、期限、commandを作り直さない。元の受付結果を202で返し、現在の進行状況は詳細APIで取得する。同じkeyで要求が違う場合は409。既存keyの確認は現在のgroup存在・構成検証より先に行い、group削除後も受付済み要求を照合できるようにする。
 
-同時要求はDB一意制約で競合を解決し、負けたtransactionをrollbackして既存要求を比較する。応答前にAPIが停止してもcommit済みなら同じoperationへ復帰する。rollbackした要求はkeyを消費しない。operationとkeyの対応は履歴とともに保持し、TTLで自動解放しない。keyは秘密情報ではないが、履歴の推測を避けるためUUIDなどの十分な乱数を推奨する。
+同時要求は同じscope/keyのtransaction advisory lockで直列化して既存要求を比較し、DB一意制約でも二重受付を防ぐ。先行要求のcommit後に後続要求が同じ受付結果を取得できるよう、PostgreSQL既定のREAD COMMITTEDで使う。hash衝突は待機を増やすだけであり、要求の同一性は保存値で比較する。応答前にAPIが停止してもcommit済みなら同じoperationへ復帰する。rollbackした要求はkeyを消費しない。operationとkeyの対応は履歴とともに保持し、TTLで自動解放しない。keyは秘密情報ではないが、履歴の推測を避けるためUUIDなどの十分な乱数を推奨する。
 
 ### 受領と実行結果を分離する
 
 既存`commands.status`の配送・受領状態は維持する。Phase 4では別項目`executionStatus`に`NOT_REPORTED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`UNCERTAIN`を追加し、開始・結果の機体時刻とサーバー受信時刻を別に保存する。全targetに受付時点で結果確認期限を設定する。初期値は受付から120秒で、操作開始期限30秒とは別であり、開始許可を延長しない。
 
-実行結果の通知は#139の前提作業として`packages/protocol`、simulator、ingestorを揃えて追加する。既存command-acks topic・QoS 1・retainなしを使い、ACK v3で受領、期限拒否に加えて`RUNNING`、`SUCCEEDED`、`FAILED`、`UNCERTAIN`を明示する。command v2と既存ACK v1/v2の読み取りは維持する。v2 ACKを完了通知へ読み替えず、未対応端末は結果未報告として扱う。新しいtopicやgroup共有topic、IoT Policyの権限拡張は不要とする。必須項目・検証・version互換の実装は#139で通信仕様に反映し、結果通知がないまま#140で成功集約を実装しない。
+2026-10-14の利用者承認により、#139は受付に限定し、実行結果通知を#152の別PRへ分割した。#152で`packages/protocol`、simulator、ingestorを揃えて追加する。既存command-acks topic・QoS 1・retainなしを使い、ACK v3で受領、期限拒否に加えて`RUNNING`、`SUCCEEDED`、`FAILED`、`UNCERTAIN`を明示する。command v2と既存ACK v1/v2の読み取りは維持する。v2 ACKを完了通知へ読み替えず、未対応端末は結果未報告として扱う。新しいtopicやgroup共有topic、IoT Policyの権限拡張は不要とする。必須項目・検証・version互換の実装は#152で通信仕様に反映し、結果通知がないまま#140で成功集約を実装しない。
 
 simulatorは結果と通知待ちをSQLiteへ永続化してから送る。再配送では同じcommandIdの保存済み最新結果を通知し、操作を繰り返さない。開始後停止は従来どおり`UNCERTAIN`とする。PUBACKはDB反映の証明ではなく、通知喪失時は結果未応答になり得る。結果確認期限による不明状態を残し、exactly-onceや結果通知の必達を保証しない。
 
-`RETURN_HOME`の成功はsimulatorが帰還処理を終えて`IDLE`へ移ること、`REBOOT`の成功は予定した再起動処理とMQTT再接続・ONLINE通知の送信確認が終わることとする。単なる`RETURNING_HOME`への変更、受領ACK、telemetryや接続の変化だけから成功を推測しない。既存simulatorの動作をこの成功条件まで拡張する作業も#139で扱う。実機の着陸や物理的な安全を証明する定義ではない。
+`RETURN_HOME`の成功はsimulatorが帰還処理を終えて`IDLE`へ移ること、`REBOOT`の成功は予定した再起動処理とMQTT再接続・ONLINE通知の送信確認が終わることとする。単なる`RETURNING_HOME`への変更、受領ACK、telemetryや接続の変化だけから成功を推測しない。既存simulatorの動作をこの成功条件まで拡張する作業も#152で扱う。実機の着陸や物理的な安全を証明する定義ではない。
 
 ingestorはdeviceId・commandId・schemaを検証し、知らないcommandや別機体の通知は拒否する。結果を受領より優先し、後着の受領・送信更新で実行結果を戻さない。重複する同一結果はno-op、異なる終端結果は衝突として記録し自動上書きしない。`UNCERTAIN`は確定結果ではなく自動再実行を禁止する状態とし、後着の確かな成功・失敗で解消できる。期限拒否と矛盾する実行結果も衝突として残す。
 
@@ -164,14 +166,15 @@ metadataには変更前後のgroup名・membership差分、command type、対象
 
 ## 後続Issueと検証
 
-| Issue      | この判断を実装・検証する範囲                                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| #137〜#138 | groupとmembership、変更ロック・revision・論理削除、画面                                                                            |
-| #139       | 原子的な受付、対象上限、同時idempotency要求、構成変更との競合。ACK v3、simulatorの完了条件・永続結果通知、ingestorの正本保存を含む |
-| #140〜#141 | target・全体の状態表、期限境界・遅着・結果衝突・件数整合、N+1回避と画面表示                                                        |
-| #142〜#143 | alert閾値・hysteresis・欠測・旧session再送・重複・再起動・確認と解除の分離                                                         |
-| #144〜#145 | auditの同時commit、rollback、拒否記録失敗、重複通知、DB更新拒否と検索・画面                                                        |
-| #146〜#148 | 100台を起点に受付時間・query数・DB負荷・結果到達時間を実測し、E2Eと文書へ反映                                                      |
+| Issue      | この判断を実装・検証する範囲                                                   |
+| ---------- | ------------------------------------------------------------------------------ |
+| #137〜#138 | groupとmembership、変更ロック・revision・論理削除、画面                        |
+| #139       | 原子的な受付、対象上限、同時idempotency要求、構成変更との競合、100台の受付計測 |
+| #152       | ACK v3、simulatorの完了条件・永続結果通知、ingestorの正本保存。#140の着手条件  |
+| #140〜#141 | target・全体の状態表、期限境界・遅着・結果衝突・件数整合、N+1回避と画面表示    |
+| #142〜#143 | alert閾値・hysteresis・欠測・旧session再送・重複・再起動・確認と解除の分離     |
+| #144〜#145 | auditの同時commit、rollback、拒否記録失敗、重複通知、DB更新拒否と検索・画面    |
+| #146〜#148 | 100台を起点に受付時間・query数・DB負荷・結果到達時間を実測し、E2Eと文書へ反映  |
 
 このIssueでは設計文書のみ変更する。新しいschema、ACK、API、alert、auditが動作するとは記載しない。後続Issueでは単一機体API、v1/v2の既存履歴、local/AWS経路への回帰も検証する。AWSでの検証は#64の費用・短時間試験の境界を守り、継続負荷はローカルで行う。
 

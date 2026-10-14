@@ -1,6 +1,10 @@
 import { createDatabase } from "@drone-fleet/database";
 
 import { buildApi } from "./app.js";
+import {
+  createFleetOperationRepository,
+  loadFleetOperationOptions,
+} from "./fleet-operation-repository.js";
 import { createGroupRepository } from "./group-repository.js";
 import { createCommandOutbox, loadOutboxOptions } from "./command-outbox.js";
 import { createOutboxPublisher } from "./outbox-publisher.js";
@@ -14,6 +18,7 @@ import { createShutdown } from "./shutdown.js";
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const outboxOptions = loadOutboxOptions();
+  const fleetOptions = loadFleetOperationOptions();
   const { client, db } = createDatabase();
   let connection;
   try {
@@ -32,6 +37,10 @@ async function main(): Promise<void> {
     dashboardOrigin: config.dashboardOrigin,
     outboxStatus: outbox.status,
     groupRepository: createGroupRepository(db),
+    fleetOperationRepository: createFleetOperationRepository(db, {
+      ...fleetOptions,
+      onAccepted: (metrics) => console.info("fleet operation受付", metrics),
+    }),
   });
 
   outbox.start();

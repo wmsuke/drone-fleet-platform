@@ -14,6 +14,8 @@ export {
   devices,
   groups,
   groupMemberships,
+  fleetOperations,
+  fleetOperationTargets,
   flightStatusEnum,
   telemetry,
   type Command,

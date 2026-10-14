@@ -56,7 +56,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ## 共通項目
 
-Phase 4では実行結果を受領ACKと分けるため、同じcommand-acks topic上のACK v3を後続の#139で追加する設計とした。現在は未実装であり、以下のv1/v2仕様と型・検証を変更したものではない。結果通知の責務と互換性、成功条件は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
+Phase 4では実行結果を受領ACKと分けるため、同じcommand-acks topic上のACK v3を後続の#152で追加する。利用者承認により#139の受付APIとは別Issue・別PRへ分割した。現在は未実装であり、以下のv1/v2仕様と型・検証を変更したものではない。結果通知の責務と互換性、成功条件は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
 
 | 項目 | 内容 |
 |---|---|
