@@ -17,6 +17,7 @@ import {
   type SimulatorMqttClient,
 } from "../src/simulator.js";
 import { TelemetryBuffer } from "../src/telemetry-buffer.js";
+import { CommandStore } from "../src/command-store.js";
 
 interface PublishedMessage {
   topic: string;
@@ -142,6 +143,93 @@ afterEach(() => {
 });
 
 describe("startSimulator", () => {
+  it("queues a startup REBOOT until initial ONLINE is confirmed", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient(),
+      release = client.blockNextPublish();
+    const starting = startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "startup",
+        telemetryIntervalMs: 5000,
+        ...bufferSettings(),
+      },
+      async () => client,
+    );
+    await vi.waitFor(() => expect(client.published).toHaveLength(1));
+    const now = new Date();
+    client.emitMessage(
+      "fleet/v1/devices/drone-001/commands",
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 2,
+          deviceId: "drone-001",
+          commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+          type: "REBOOT",
+          timestamp: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 30000).toISOString(),
+        }),
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(client.reconnectCount).toBe(0);
+    release();
+    const simulator = await starting;
+    await vi.waitFor(() => expect(client.reconnectCount).toBe(1));
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
+  it("completes a persisted receipt-only REBOOT after startup recovery", async () => {
+    vi.useFakeTimers();
+    const client = new FakeMqttClient(),
+      settings = bufferSettings(),
+      now = new Date();
+    const store = new CommandStore("drone-001", {
+      path: settings.telemetryBufferPath,
+    });
+    store.receive(
+      {
+        schemaVersion: 2,
+        deviceId: "drone-001",
+        commandId: "5c15de4f-6957-4f4f-b3cf-8cb9e733d63c",
+        type: "REBOOT",
+        timestamp: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 30000).toISOString(),
+      },
+      now.toISOString(),
+    );
+    store.close();
+    const simulator = await startSimulator(
+      {
+        deviceId: "drone-001",
+        mqttUrl: "mqtt://localhost",
+        simulationSeed: "recovery-reboot",
+        telemetryIntervalMs: 5000,
+        ...settings,
+      },
+      async () => client,
+    );
+    expect(client.reconnectCount).toBe(1);
+    client.emit("connect");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(
+      client.published.some(
+        (item) =>
+          item.topic.endsWith("/command-acks") &&
+          JSON.parse(item.message).status === "SUCCEEDED",
+      ),
+    ).toBe(true);
+    await simulator.shutdown();
+  });
   it("does not use a stale connection's ONLINE PUBACK as reboot completion", async () => {
     vi.useFakeTimers();
     const client = new FakeMqttClient();

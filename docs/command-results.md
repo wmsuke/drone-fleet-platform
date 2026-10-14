@@ -15,6 +15,8 @@ simulatorの受領・期限拒否ACKは引き続きv2で送る。ingestorはv1/v
 
 ## SQLiteと送信
 
+新規受信commandは初期接続・購読・ONLINE送信の開始処理が完了してから処理する。初期化失敗時は待機中の操作を開始しない。保存済みRECEIVEDの復旧では、再接続イベントの受付を有効にしてから操作を開始し、REBOOTの新しい接続でONLINE確認を行う。
+
 command_historyへ実行通知JSON、送信待ちフラグと世代を追加する。STARTEDとRUNNING通知、終端状態と最新通知はそれぞれ同じSQLite transactionでcommitする。操作は受領ACKのPUBACKを待たない。receiptと実行通知は別の送信待ちで、同じtopicへQoS 1・retainなしで送る。最新状態だけを送るため、すぐに終端へ進んだ場合はRUNNINGが届かないこともある。
 
 再起動時にSTARTEDが残っていればUNCERTAIN通知を永続化し、自動再実行しない。端末の再起動後も既存の受領・実行通知を再送できる。同じcommandの再配送では保存済みの受領と最新実行結果を再通知し、操作を繰り返さない。PUBACKでは本文と送信世代の両方が一致した待ちだけを解除する。新しい結果だけでなく、同じ本文の再配送要求も古いPUBACKで解除しない。

@@ -229,6 +229,10 @@ export async function startSimulator(
   let shuttingDown = false;
   let bufferError: Error | undefined;
   let initialConnectionHandled = false;
+  let releaseStartup!: () => void;
+  const startupReady = new Promise<void>((resolve) => {
+    releaseStartup = resolve;
+  });
   let connectionGeneration = 0;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
   let commandQueue = Promise.resolve();
@@ -768,6 +772,8 @@ export async function startSimulator(
     }
     commandQueue = commandQueue
       .then(async () => {
+        await startupReady;
+        if (shuttingDown) return;
         const processed = commandProcessor.process(
           topic,
           payload,
@@ -797,14 +803,16 @@ export async function startSimulator(
 
   try {
     await publishOnlineAndStartTelemetry();
+    initialConnectionHandled = true;
     if (config.commandClockTrusted !== false)
       for (const recovered of commandProcessor.recover(
         new Date().toISOString(),
       ))
         await executeCommand(recovered);
-    initialConnectionHandled = true;
+    releaseStartup();
   } catch (error) {
     shuttingDown = true;
+    releaseStartup();
     clearTelemetryTimer();
     clearReplayTimer();
     clearReconnectTimer();
