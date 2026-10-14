@@ -229,11 +229,39 @@ export async function startSimulator(
   let shuttingDown = false;
   let bufferError: Error | undefined;
   let initialConnectionHandled = false;
+  let connectionGeneration = 0;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
   let commandQueue = Promise.resolve();
   let commandAckTimer: NodeJS.Timeout | undefined;
   let commandAckFailures = 0;
   let flushingAcks: Promise<void> | undefined;
+  let activeCommand:
+    | {
+        commandId: string;
+        type: "RETURN_HOME" | "REBOOT";
+        startedGeneration: number;
+        reconnectRequested: boolean;
+      }
+    | undefined;
+  let returnTimer: NodeJS.Timeout | undefined;
+  const returnDurationMs = 10_000;
+  const home = createTelemetryMessage(
+    config.deviceId,
+    sessionId,
+    0,
+    new Date().toISOString(),
+    undefined,
+    config.simulationSeed,
+  ).payload;
+  let returnPath:
+    | {
+        startedAt: number;
+        latitude: number;
+        longitude: number;
+        altitude: number;
+      }
+    | undefined;
+  let returnedHome = false;
   let abortAck: (() => void) | undefined;
 
   const flushCommandAcks = (): Promise<void> => {
@@ -303,18 +331,77 @@ export async function startSimulator(
     if (started === null) return;
     // ACKのPUBACKを待たずに操作する。ACKは独立して永続再送する。
     void flushCommandAcks();
-    if (started.action === "RETURN_HOME") flightStatus = "RETURNING_HOME";
-    else if (started.action === "REBOOT") {
-      clearTelemetryTimer();
-      manualReconnect = true;
-      await client.endAsync(true);
+    if (started.action === null) return;
+    const commandId = started.acknowledgement.commandId;
+    if (activeCommand) {
+      commandProcessor.finish(commandId, new Date().toISOString(), "FAILED");
+      void flushCommandAcks();
+      return;
     }
-    if (started.action !== null)
-      commandProcessor.markProcessed(started.acknowledgement.commandId);
-    if (started.action === "REBOOT" && !shuttingDown) {
-      client.options.will = createWill();
-      client.reconnect();
+    activeCommand = {
+      commandId,
+      type: started.action,
+      startedGeneration: connectionGeneration,
+      reconnectRequested: false,
+    };
+    try {
+      if (started.action === "RETURN_HOME") {
+        flightStatus = "RETURNING_HOME";
+        const position = createTelemetryMessage(
+          config.deviceId,
+          sessionId,
+          sequence,
+          new Date().toISOString(),
+          flightStatus,
+          config.simulationSeed,
+        ).payload;
+        if (returnedHome)
+          Object.assign(position, {
+            latitude: home.latitude,
+            longitude: home.longitude,
+            altitude: 0,
+          });
+        returnPath = {
+          startedAt: Date.now(),
+          latitude: position.latitude,
+          longitude: position.longitude,
+          altitude: position.altitude,
+        };
+        returnTimer = setTimeout(() => {
+          returnTimer = undefined;
+          if (shuttingDown) return;
+          flightStatus = "IDLE";
+          returnedHome = true;
+          returnPath = undefined;
+          try {
+            commandProcessor.finish(
+              commandId,
+              new Date().toISOString(),
+              "SUCCEEDED",
+            );
+          } catch (error) {
+            console.error("帰還結果の保存に失敗しました", error);
+          }
+          activeCommand = undefined;
+          void flushCommandAcks();
+        }, returnDurationMs);
+      } else {
+        clearTelemetryTimer();
+        manualReconnect = true;
+        await client.endAsync(true);
+        if (!shuttingDown) {
+          client.options.will = createWill();
+          activeCommand.reconnectRequested = true;
+          client.reconnect();
+          manualReconnect = false;
+        }
+      }
+    } catch (error) {
       manualReconnect = false;
+      commandProcessor.finish(commandId, new Date().toISOString(), "UNCERTAIN");
+      activeCommand = undefined;
+      void flushCommandAcks();
+      throw error;
     }
   };
 
@@ -525,6 +612,27 @@ export async function startSimulator(
       flightStatus,
       config.simulationSeed,
     );
+    if (returnedHome && !returnPath)
+      Object.assign(telemetry.payload, {
+        latitude: home.latitude,
+        longitude: home.longitude,
+        altitude: 0,
+      });
+    if (returnPath) {
+      const progress = Math.min(
+        1,
+        Math.max(0, (Date.now() - returnPath.startedAt) / returnDurationMs),
+      );
+      Object.assign(telemetry.payload, {
+        latitude:
+          returnPath.latitude +
+          (home.latitude - returnPath.latitude) * progress,
+        longitude:
+          returnPath.longitude +
+          (home.longitude - returnPath.longitude) * progress,
+        altitude: returnPath.altitude * (1 - progress),
+      });
+    }
     try {
       const result = buffer.append(telemetry);
       sequence += 1;
@@ -557,6 +665,7 @@ export async function startSimulator(
   };
 
   const publishOnlineAndStartTelemetry = async (): Promise<void> => {
+    const generation = connectionGeneration;
     await client.subscribeAsync(commandsTopic, { qos: 1 });
     await client.subscribeAsync(receiptsTopic, { qos: 1 });
     void flushCommandAcks();
@@ -568,6 +677,22 @@ export async function startSimulator(
       qos: 1,
       retain: true,
     });
+    if (
+      activeCommand?.type === "REBOOT" &&
+      activeCommand.reconnectRequested &&
+      generation > activeCommand.startedGeneration &&
+      generation === connectionGeneration &&
+      !shuttingDown &&
+      client.connected
+    ) {
+      commandProcessor.finish(
+        activeCommand.commandId,
+        new Date().toISOString(),
+        "SUCCEEDED",
+      );
+      activeCommand = undefined;
+      void flushCommandAcks();
+    }
     backlogRecoveryActive = pendingStats.count > 0;
     await trackTelemetry();
     scheduleReplay(0);
@@ -659,6 +784,7 @@ export async function startSimulator(
       });
   });
   client.on("connect", () => {
+    connectionGeneration++;
     clearReconnectTimer();
     reconnectFailures = 0;
     clearReplayTimer();
@@ -683,6 +809,7 @@ export async function startSimulator(
     clearReplayTimer();
     clearReconnectTimer();
     if (commandAckTimer !== undefined) clearTimeout(commandAckTimer);
+    if (returnTimer !== undefined) clearTimeout(returnTimer);
     abortAck?.();
     abortPendingPublish?.();
     await commandQueue;
@@ -717,6 +844,7 @@ export async function startSimulator(
       }
 
       shuttingDown = true;
+      if (returnTimer !== undefined) clearTimeout(returnTimer);
       if (commandAckTimer !== undefined) clearTimeout(commandAckTimer);
       abortAck?.();
       clearTelemetryTimer();

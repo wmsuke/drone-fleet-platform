@@ -47,7 +47,7 @@ describe("database schema", () => {
     ]);
     expect(telemetryConfig.indexes[0]?.config.unique).toBe(true);
     expect(commandConfig.foreignKeys).toHaveLength(1);
-    expect(commandConfig.checks).toHaveLength(1);
+    expect(commandConfig.checks).toHaveLength(3);
     expect(commandConfig.indexes.map(({ config }) => config.name)).toEqual([
       "commands_device_created_at_idx",
       "commands_status_created_at_idx",

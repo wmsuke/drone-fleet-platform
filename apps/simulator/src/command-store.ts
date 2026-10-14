@@ -21,7 +21,16 @@ export interface StoredCommand {
 interface Row {
   command_json: string;
   ack_json: string;
-  state: "RECEIVED" | "STARTED" | "COMPLETED" | "EXPIRED" | "UNCERTAIN";
+  state:
+    | "RECEIVED"
+    | "STARTED"
+    | "COMPLETED"
+    | "FAILED"
+    | "EXPIRED"
+    | "UNCERTAIN";
+  started_at?: string | null;
+  execution_json?: string | null;
+  ack_revision?: number;
 }
 
 export class CommandStore {
@@ -29,6 +38,11 @@ export class CommandStore {
   private readonly maxRows: number;
   private readonly retentionMs: number;
   private lastTime = -Infinity;
+  // 世代はwire payloadへ含めず、送信待ちから取得した通知オブジェクトに対応付ける。
+  private readonly publications = new WeakMap<
+    CommandAcknowledgementMessage,
+    { execution: boolean; revision: number }
+  >();
   constructor(
     private readonly deviceId: string,
     private readonly options: CommandStoreOptions = {},
@@ -57,15 +71,39 @@ export class CommandStore {
           ack_json TEXT NOT NULL, ack_pending INTEGER NOT NULL DEFAULT 1,
           PRIMARY KEY (device_id, command_id)
         );`);
-      const uncertain = this.db
+      const columns = this.db
+        .prepare("PRAGMA table_info(command_history)")
+        .all() as Array<{ name: string }>;
+      if (!columns.some((column) => column.name === "execution_json"))
+        this.db.exec(
+          "ALTER TABLE command_history ADD COLUMN execution_json TEXT",
+        );
+      if (!columns.some((column) => column.name === "execution_pending"))
+        this.db.exec(
+          "ALTER TABLE command_history ADD COLUMN execution_pending INTEGER NOT NULL DEFAULT 0",
+        );
+      for (const column of ["ack_revision", "execution_revision"])
+        if (!columns.some((item) => item.name === column))
+          this.db.exec(
+            `ALTER TABLE command_history ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 0`,
+          );
+      const interrupted = this.db
         .prepare(
-          "UPDATE command_history SET state='UNCERTAIN' WHERE device_id=? AND state='STARTED'",
+          "SELECT command_id, started_at FROM command_history WHERE device_id=? AND state='STARTED'",
         )
-        .run(deviceId).changes;
-      if (uncertain > 0)
+        .all(deviceId) as Array<{ command_id: string; started_at: string }>;
+      for (const row of interrupted)
+        this.finish(
+          row.command_id,
+          new Date(
+            Math.max(Date.now(), Date.parse(row.started_at)),
+          ).toISOString(),
+          "UNCERTAIN",
+        );
+      if (interrupted.length > 0)
         console.warn(
           "停止前に開始したコマンドの結果が不明です。自動再実行しません",
-          { deviceId, count: uncertain, state: "UNCERTAIN" },
+          { deviceId, count: interrupted.length, state: "UNCERTAIN" },
         );
     } catch (error) {
       this.db.close();
@@ -86,16 +124,21 @@ export class CommandStore {
   private find(id: string): Row | undefined {
     return this.db
       .prepare(
-        "SELECT command_json, ack_json, state FROM command_history WHERE device_id=? AND command_id=?",
+        "SELECT command_json, ack_json, state, started_at, execution_json, ack_revision FROM command_history WHERE device_id=? AND command_id=?",
       )
       .get(this.deviceId, id.toLowerCase()) as unknown as Row | undefined;
   }
   private result(row: Row): StoredCommand {
     const command = commandMessageSchema.parse(JSON.parse(row.command_json));
+    const ack = commandAcknowledgementMessageSchema.parse(
+      JSON.parse(row.ack_json),
+    );
+    this.publications.set(ack, {
+      execution: false,
+      revision: row.ack_revision ?? 0,
+    });
     return {
-      acknowledgement: commandAcknowledgementMessageSchema.parse(
-        JSON.parse(row.ack_json),
-      ),
+      acknowledgement: ack,
       action: row.state === "RECEIVED" ? command.type : null,
     };
   }
@@ -116,11 +159,14 @@ export class CommandStore {
           throw new Error("commandId content conflict");
         this.db
           .prepare(
-            "UPDATE command_history SET ack_pending=1 WHERE device_id=? AND command_id=?",
+            "UPDATE command_history SET ack_pending=1, ack_revision=ack_revision+1, execution_pending=CASE WHEN execution_json IS NULL THEN 0 ELSE 1 END, execution_revision=execution_revision+1 WHERE device_id=? AND command_id=?",
           )
           .run(this.deviceId, normalized.commandId);
         this.db.exec("COMMIT");
-        return this.result(existing);
+        return this.result({
+          ...existing,
+          ack_revision: (existing.ack_revision ?? 0) + 1,
+        });
       }
       this.db
         .prepare(
@@ -169,6 +215,7 @@ export class CommandStore {
           JSON.stringify(commandAcknowledgementMessageSchema.parse(ack)),
         );
       this.db.exec("COMMIT");
+      this.publications.set(ack, { execution: false, revision: 0 });
       return { acknowledgement: ack, action: expired ? null : command.type };
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -200,7 +247,7 @@ export class CommandStore {
           };
           this.db
             .prepare(
-              "UPDATE command_history SET state='EXPIRED', processed_at=?, ack_json=?, ack_pending=1 WHERE device_id=? AND command_id=?",
+              "UPDATE command_history SET state='EXPIRED', processed_at=?, ack_json=?, ack_pending=1, ack_revision=ack_revision+1 WHERE device_id=? AND command_id=?",
             )
             .run(
               timestamp,
@@ -208,12 +255,17 @@ export class CommandStore {
               this.deviceId,
               id.toLowerCase(),
             );
+          this.publications.set(result.acknowledgement, {
+            execution: false,
+            revision: (row.ack_revision ?? 0) + 1,
+          });
         } else {
           this.db
             .prepare(
               "UPDATE command_history SET state='STARTED', started_at=? WHERE device_id=? AND command_id=?",
             )
             .run(timestamp, this.deviceId, id.toLowerCase());
+          this.saveExecution(id, timestamp, timestamp, "RUNNING");
         }
       }
       this.db.exec("COMMIT");
@@ -224,17 +276,60 @@ export class CommandStore {
     }
   }
   complete(id: string, timestamp: string): void {
+    this.finish(id, timestamp, "SUCCEEDED");
+  }
+  private saveExecution(
+    id: string,
+    timestamp: string,
+    startedAt: string,
+    status: "RUNNING" | "SUCCEEDED" | "FAILED" | "UNCERTAIN",
+  ) {
+    const notification = commandAcknowledgementMessageSchema.parse({
+      schemaVersion: 3,
+      deviceId: this.deviceId,
+      commandId: id.toLowerCase(),
+      timestamp,
+      startedAt,
+      status,
+    });
     this.db
       .prepare(
-        "UPDATE command_history SET state='COMPLETED', processed_at=? WHERE device_id=? AND command_id=? AND state='STARTED'",
+        "UPDATE command_history SET execution_json=?, execution_pending=1, execution_revision=execution_revision+1 WHERE device_id=? AND command_id=?",
       )
-      .run(timestamp, this.deviceId, id.toLowerCase());
+      .run(JSON.stringify(notification), this.deviceId, id.toLowerCase());
+  }
+  finish(
+    id: string,
+    timestamp: string,
+    status: "SUCCEEDED" | "FAILED" | "UNCERTAIN",
+  ): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = this.find(id);
+      if (row?.state === "STARTED" && row.started_at) {
+        this.saveExecution(id, timestamp, row.started_at, status);
+        this.db
+          .prepare(
+            "UPDATE command_history SET state=?, processed_at=? WHERE device_id=? AND command_id=?",
+          )
+          .run(
+            status === "SUCCEEDED" ? "COMPLETED" : status,
+            status === "UNCERTAIN" ? null : timestamp,
+            this.deviceId,
+            id.toLowerCase(),
+          );
+      }
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
   recover(timestamp: string): StoredCommand[] {
     this.time(timestamp);
     const rows = this.db
       .prepare(
-        "SELECT command_json, ack_json, state FROM command_history WHERE device_id=? AND state='RECEIVED' ORDER BY received_at, command_id",
+        "SELECT command_json, ack_json, state, ack_revision FROM command_history WHERE device_id=? AND state='RECEIVED' ORDER BY received_at, command_id",
       )
       .all(this.deviceId) as unknown as Row[];
     return rows.map((row) => this.result(row));
@@ -243,22 +338,63 @@ export class CommandStore {
     return (
       this.db
         .prepare(
-          "SELECT ack_json FROM command_history WHERE device_id=? AND ack_pending=1 ORDER BY received_at, command_id",
+          "SELECT ack_json, ack_revision FROM command_history WHERE device_id=? AND ack_pending=1 ORDER BY received_at, command_id",
         )
-        .all(this.deviceId) as Array<{ ack_json: string }>
-    ).map(({ ack_json }) =>
-      commandAcknowledgementMessageSchema.parse(JSON.parse(ack_json)),
-    );
+        .all(this.deviceId) as Array<{ ack_json: string; ack_revision: number }>
+    ).map(({ ack_json, ack_revision }) => {
+      const ack = commandAcknowledgementMessageSchema.parse(
+        JSON.parse(ack_json),
+      );
+      this.publications.set(ack, { execution: false, revision: ack_revision });
+      return ack;
+    });
+  }
+  pendingExecutions(): CommandAcknowledgementMessage[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT execution_json, execution_revision FROM command_history WHERE device_id=? AND execution_pending=1 ORDER BY received_at, command_id",
+        )
+        .all(this.deviceId) as Array<{
+        execution_json: string;
+        execution_revision: number;
+      }>
+    ).map((row) => {
+      const ack = commandAcknowledgementMessageSchema.parse(
+        JSON.parse(row.execution_json),
+      );
+      this.publications.set(ack, {
+        execution: true,
+        revision: row.execution_revision,
+      });
+      return ack;
+    });
   }
   confirmAcknowledgement(ack: CommandAcknowledgementMessage): void {
+    const publication = this.publications.get(ack);
+    if (!publication) return;
+    if (publication.execution) {
+      this.db
+        .prepare(
+          "UPDATE command_history SET execution_pending=0 WHERE device_id=? AND command_id=? AND execution_json=? AND execution_revision=?",
+        )
+        .run(
+          this.deviceId,
+          ack.commandId.toLowerCase(),
+          JSON.stringify(commandAcknowledgementMessageSchema.parse(ack)),
+          publication.revision,
+        );
+      return;
+    }
     this.db
       .prepare(
-        "UPDATE command_history SET ack_pending=0 WHERE device_id=? AND command_id=? AND ack_json=?",
+        "UPDATE command_history SET ack_pending=0 WHERE device_id=? AND command_id=? AND ack_json=? AND ack_revision=?",
       )
       .run(
         this.deviceId,
         ack.commandId.toLowerCase(),
         JSON.stringify(commandAcknowledgementMessageSchema.parse(ack)),
+        publication.revision,
       );
   }
   history(): Array<

@@ -16,7 +16,9 @@ const message = {
   timestamp: "2026-09-30T02:00:01.000Z",
 } satisfies CommandAcknowledgementMessage;
 
-function dependencies(result: "updated" | "duplicate" | "not_found") {
+function dependencies(
+  result: "updated" | "duplicate" | "not_found" | "conflict",
+) {
   const repository: CommandAcknowledgementRepository = {
     acknowledge: vi.fn(async () => result),
   };
@@ -25,6 +27,19 @@ function dependencies(result: "updated" | "duplicate" | "not_found") {
 }
 
 describe("ingestAcknowledgement", () => {
+  it("records a conflict without treating it as a successful acknowledgement", async () => {
+    const { repository, logger } = dependencies("conflict");
+    expect(
+      await ingestAcknowledgement(
+        topic,
+        Buffer.from(JSON.stringify(message)),
+        new Date(),
+        repository,
+        logger,
+      ),
+    ).toBe(false);
+    expect(logger.warn).toHaveBeenCalled();
+  });
   it.each(["updated", "duplicate"] as const)(
     "safely handles a valid %s ACK",
     async (result) => {

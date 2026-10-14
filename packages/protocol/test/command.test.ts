@@ -145,7 +145,7 @@ describe("commandAcknowledgementMessageSchema", () => {
     ["deviceId type", { ...validAcknowledgement, deviceId: 1 }],
     ["status", { ...validAcknowledgement, status: "COMPLETED" }],
     ["status type", { ...validAcknowledgement, status: 1 }],
-    ["schemaVersion", { ...validAcknowledgement, schemaVersion: 3 }],
+    ["schemaVersion", { ...validAcknowledgement, schemaVersion: 4 }],
     ["timestamp type", { ...validAcknowledgement, timestamp: 1 }],
     [
       "timestamp offset",

@@ -134,6 +134,23 @@ export const commands = pgTable(
       .references(() => devices.deviceId, { onDelete: "restrict" }),
     type: commandTypeEnum("type").notNull(),
     status: commandStatusEnum("status").notNull().default("PENDING"),
+    executionStatus: text("execution_status").notNull().default("NOT_REPORTED"),
+    executionStartedAt: timestamp("execution_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    executionStartedReceivedAt: timestamp("execution_started_received_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    executionResultAt: timestamp("execution_result_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    executionResultReceivedAt: timestamp("execution_result_received_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     expiredAt: timestamp("expired_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -158,6 +175,14 @@ export const commands = pgTable(
     check(
       "commands_acknowledged_at_required",
       sql`${table.status} <> 'ACKNOWLEDGED' OR ${table.acknowledgementReceivedAt} IS NOT NULL`,
+    ),
+    check(
+      "commands_execution_status_valid",
+      sql`${table.executionStatus} IN ('NOT_REPORTED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNCERTAIN')`,
+    ),
+    check(
+      "commands_execution_times_required",
+      sql`${table.executionStatus} = 'NOT_REPORTED' OR (${table.executionStartedAt} IS NOT NULL AND ${table.executionStartedReceivedAt} IS NOT NULL AND ${table.expiresAt} IS NOT NULL AND ${table.executionStartedAt} >= ${table.createdAt} AND ${table.executionStartedAt} < ${table.expiresAt} AND (${table.executionStatus} = 'RUNNING' OR (${table.executionResultAt} IS NOT NULL AND ${table.executionResultReceivedAt} IS NOT NULL AND ${table.executionResultAt} >= ${table.executionStartedAt})))`,
     ),
   ],
 );
@@ -245,6 +270,39 @@ export const groupMemberships = pgTable(
   (table) => [
     primaryKey({ columns: [table.groupId, table.deviceId] }),
     index("group_memberships_device_idx").on(table.deviceId, table.groupId),
+  ],
+);
+
+export const commandExecutionEvents = pgTable(
+  "command_execution_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    commandId: uuid("command_id")
+      .notNull()
+      .references(() => commands.commandId, { onDelete: "cascade" }),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    status: text("status").notNull(),
+    deviceTimestamp: timestamp("device_timestamp", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    disposition: text("disposition").notNull(),
+  },
+  (table) => [
+    index("command_execution_events_command_idx").on(table.commandId, table.id),
+    check(
+      "command_execution_events_status_valid",
+      sql`${table.status} IN ('RUNNING', 'SUCCEEDED', 'FAILED', 'UNCERTAIN', 'REJECTED_EXPIRED')`,
+    ),
+    check(
+      "command_execution_events_disposition_valid",
+      sql`${table.disposition} IN ('applied', 'ignored', 'conflict')`,
+    ),
   ],
 );
 

@@ -443,6 +443,7 @@ docker compose down --volumes
 - [通信仕様](docs/protocol.md)
 - [機体グループAPI](docs/groups-api.md)
 - [グループ操作の受付API](docs/fleet-operations-api.md)
+- [commandの実行結果通知](docs/command-results.md)
 - [ロードマップ](docs/roadmap.md)
 - [環境変数と秘密情報](docs/environment.md)
 - [開発ルール](AGENTS.md)

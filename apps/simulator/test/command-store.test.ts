@@ -1,6 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { commandMessageSchema } from "@drone-fleet/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CommandStore } from "../src/command-store.js";
 
@@ -42,6 +44,91 @@ function restart(store: CommandStore) {
 }
 
 describe("durable commands", () => {
+  it("migrates old SQLite records without declaring legacy completion a new success", () => {
+    const db = new DatabaseSync(join(directory, "commands.sqlite"));
+    db.exec(
+      "CREATE TABLE command_history (device_id TEXT, command_id TEXT, command_json TEXT, expires_at INTEGER, received_at TEXT, accepted_at TEXT, state TEXT, started_at TEXT, processed_at TEXT, ack_json TEXT, ack_pending INTEGER DEFAULT 1, PRIMARY KEY(device_id, command_id))",
+    );
+    const ack = {
+      schemaVersion: 2,
+      deviceId: command.deviceId,
+      commandId: command.commandId,
+      status: "ACKNOWLEDGED",
+      timestamp: command.timestamp,
+    };
+    db.prepare(
+      "INSERT INTO command_history VALUES (?, ?, ?, ?, ?, ?, 'COMPLETED', ?, ?, ?, 1)",
+    ).run(
+      command.deviceId,
+      command.commandId,
+      JSON.stringify(commandMessageSchema.parse(command)),
+      Date.parse(command.expiresAt),
+      command.timestamp,
+      command.timestamp,
+      command.timestamp,
+      command.timestamp,
+      JSON.stringify(ack),
+    );
+    db.close();
+    const store = open();
+    expect(store.pendingExecutions()).toEqual([]);
+    expect(store.pendingAcknowledgements()).toEqual([ack]);
+    expect(
+      store.receive(command, "2026-10-13T00:00:01.000Z")?.action,
+    ).toBeNull();
+  });
+  it("does not let a PUBACK for the same payload clear a later redelivery request", () => {
+    const store = open();
+    store.receive(command, command.timestamp);
+    store.begin(command.commandId, command.timestamp);
+    store.complete(command.commandId, command.timestamp);
+    const previous = store.pendingExecutions()[0]!;
+    store.receive(command, "2026-10-13T00:00:01.000Z");
+    store.confirmAcknowledgement(previous);
+    expect(store.pendingExecutions()).toHaveLength(1);
+  });
+  it("persists independent execution notifications and ignores a stale PUBACK", () => {
+    let store = open();
+    store.receive(command, command.timestamp);
+    store.begin(command.commandId, command.timestamp);
+    const running = store.pendingExecutions()[0]!;
+    expect(running.status).toBe("RUNNING");
+    store.complete(command.commandId, "2026-10-13T00:00:10.000Z");
+    store.confirmAcknowledgement(running);
+    expect(store.pendingExecutions()[0]?.status).toBe("SUCCEEDED");
+    store = restart(store);
+    const result = store.pendingExecutions()[0]!;
+    expect(result.status).toBe("SUCCEEDED");
+    store.confirmAcknowledgement(result);
+    expect(store.pendingExecutions()).toEqual([]);
+    expect(
+      store.receive(command, "2026-10-13T00:00:11.000Z")?.action,
+    ).toBeNull();
+    expect(store.pendingExecutions()).toEqual([result]);
+  });
+  it("notifies UNCERTAIN after interruption and never resumes a started command", () => {
+    let store = open();
+    store.receive(command, command.timestamp);
+    store.begin(command.commandId, command.timestamp);
+    store = restart(store);
+    expect(store.pendingExecutions()[0]?.status).toBe("UNCERTAIN");
+    expect(store.history()[0]?.processed_at).toBeNull();
+    expect(store.recover("2026-10-13T00:00:02.000Z")).toEqual([]);
+    expect(
+      store.receive(command, "2026-10-13T00:00:02.000Z")?.action,
+    ).toBeNull();
+  });
+  it("records explicit execution failures without changing the accepted receipt", () => {
+    const store = open();
+    const received = store.receive(command, command.timestamp)!;
+    store.begin(command.commandId, command.timestamp);
+    store.finish(command.commandId, "2026-10-13T00:00:01.000Z", "FAILED");
+    expect(store.pendingExecutions()[0]?.status).toBe("FAILED");
+    expect(store.pendingAcknowledgements()).toEqual([received.acknowledgement]);
+    expect(
+      store.receive(command, "2026-10-13T00:00:02.000Z")?.action,
+    ).toBeNull();
+  });
   it("does not repeat completed actions across restart and republishes the stored acknowledgement", () => {
     let store = open();
     const received = store.receive(command, command.timestamp)!;

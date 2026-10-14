@@ -17,6 +17,11 @@ export interface CommandProcessor {
     timestamp: string,
   ): ProcessedCommand | null;
   markProcessed(commandId: string): void;
+  finish(
+    commandId: string,
+    timestamp: string,
+    status: "SUCCEEDED" | "FAILED" | "UNCERTAIN",
+  ): void;
   begin(commandId: string, timestamp: string): ProcessedCommand | null;
   recover(timestamp: string): ProcessedCommand[];
   pendingAcknowledgements(): CommandAcknowledgementMessage[];
@@ -57,9 +62,13 @@ export function createCommandProcessor(
     markProcessed(commandId) {
       store.complete(commandId, new Date().toISOString());
     },
+    finish: (id, timestamp, status) => store.finish(id, timestamp, status),
     begin: (id, timestamp) => store.begin(id, timestamp),
     recover: (timestamp) => store.recover(timestamp),
-    pendingAcknowledgements: () => store.pendingAcknowledgements(),
+    pendingAcknowledgements: () => [
+      ...store.pendingAcknowledgements(),
+      ...store.pendingExecutions(),
+    ],
     confirmAcknowledgement: (ack) => store.confirmAcknowledgement(ack),
     close: () => store.close(),
   };

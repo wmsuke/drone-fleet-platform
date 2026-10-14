@@ -6,6 +6,7 @@ export {
   commandMessageSchema,
   commandV2MessageSchema,
   commandAcknowledgementV2MessageSchema,
+  commandAcknowledgementV3MessageSchema,
   type CommandAcknowledgementMessage,
   type CommandMessage,
 } from "./command.js";
