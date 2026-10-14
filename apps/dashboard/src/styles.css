@@ -583,3 +583,28 @@ a {
     grid-template-columns: 1fr;
   }
 }
+/* グループ編集は件数にかかわらず50行ずつ表示する。 */
+.group-form {
+  margin-block: 1.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 1rem;
+}
+.group-form input {
+  display: block;
+  max-width: 100%;
+  width: 24rem;
+  padding: 0.6rem;
+}
+.group-items {
+  list-style: none;
+  padding: 0;
+}
+.group-items li {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 0.75rem 0;
+}

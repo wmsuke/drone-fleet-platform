@@ -330,7 +330,7 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 ## Phase 4の設計と実装範囲
 
-#137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。詳細は[機体グループAPI](groups-api.md)を参照する。画面、operation、alert、auditは未実装である。
+#137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。operation、alert、auditは未実装である。
 
 複数機体操作は受付transactionでgroup membershipを固定し、対象ごとの既存command/outboxを作成する。APIが受付と集約、ingestorが受領・実行結果の保存、simulatorが操作と永続結果通知を担当する。受領ACKと実行完了は別に扱う。alert evaluatorはDBの確定済み状態から異常を判定し、telemetry保存とは分離する。重要操作の成功auditは業務変更と同時commitする。
 
