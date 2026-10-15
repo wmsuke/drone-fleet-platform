@@ -1,6 +1,6 @@
 # 機体グループAPI
 
-#137でgroupとmembershipの管理、#138で管理画面を追加した。#139で[グループ操作の受付API](fleet-operations-api.md)を追加したが、その操作画面とaudit logはまだない。設計は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に従う。
+#137でgroupとmembershipの管理、#138で管理画面を追加した。#139〜#140で[グループ操作の受付・集約API](fleet-operations-api.md)、#141で[操作・結果追跡画面](fleet-operations-dashboard.md)を追加した。audit logはまだない。設計は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に従う。
 
 ## ダッシュボード
 
