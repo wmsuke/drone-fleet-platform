@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, fetchDevices, type DeviceListItem } from "./api.js";
+import { FleetOperationControls } from "./fleet-operation-controls.js";
 import {
   fetchGroup,
   fetchGroups,
@@ -284,6 +285,15 @@ function ConnectedGroups({
             />
           )}
         </>
+      )}
+      {groupId !== undefined && (
+        <FleetOperationControls
+          base={base}
+          groupId={groupId.toLowerCase()}
+          group={group}
+          devices={deviceMap}
+          disabled={busy || !detail.isSuccess || !devices.isSuccess}
+        />
       )}
       {groupId !== undefined && group && (
         <>

@@ -1,6 +1,6 @@
 # グループ操作の受付・集約API
 
-#139でgroupの現在の構成を固定し、対象ごとのcommand/outboxを作る受付API、#152で[実行結果通知](command-results.md)、#140で一覧・詳細と結果集約を追加した。操作画面は#141で実装する。受領ACKを完了結果へ読み替えない。
+#139でgroupの現在の構成を固定し、対象ごとのcommand/outboxを作る受付API、#152で[実行結果通知](command-results.md)、#140で一覧・詳細と結果集約、#141で[操作・結果追跡画面](fleet-operations-dashboard.md)を追加した。受領ACKを完了結果へ読み替えない。
 
 ## 要求と応答
 

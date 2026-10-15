@@ -608,3 +608,76 @@ a {
   border-bottom: 1px solid #cbd5e1;
   padding: 0.75rem 0;
 }
+.app-header nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.operation-panel h2 {
+  font-size: clamp(1.8rem, 5vw, 3.3rem);
+  line-height: 1.2;
+}
+.operation-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block: 1.5rem;
+}
+.operation-toolbar select,
+.operation-toolbar button {
+  font: inherit;
+  padding: 0.6rem;
+}
+.operation-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem;
+}
+.operation-counts div {
+  background: #f5f8f5;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.75rem;
+}
+.operation-counts dd {
+  margin: 0.5rem 0 0;
+  font-weight: 800;
+}
+.operation-table {
+  overflow-x: auto;
+  margin-block: 1rem;
+}
+.operation-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.operation-table caption {
+  text-align: left;
+  margin-bottom: 0.75rem;
+}
+.operation-table td,
+.operation-table th {
+  padding: 0.75rem;
+  border-bottom: 1px solid #cbd5e1;
+  vertical-align: top;
+}
+.operation-table small,
+.operation-table .operation-id {
+  display: block;
+  margin-top: 0.4rem;
+}
+.operation-id {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #176b54;
+  outline-offset: 3px;
+}
