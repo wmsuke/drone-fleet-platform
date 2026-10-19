@@ -98,6 +98,9 @@ export function DeviceDetailPage({
       </Link>
       <p className="eyebrow">Device detail</p>
       <h2 id="device-title">{deviceId}</h2>
+      <Link to={`/alerts?deviceId=${encodeURIComponent(deviceId)}`}>
+        この機体のalert
+      </Link>
 
       {apiBaseUrl === null ? (
         <div className="notice notice-error" role="alert">

@@ -625,9 +625,36 @@ a {
   margin-block: 1.5rem;
 }
 .operation-toolbar select,
+.operation-toolbar input,
 .operation-toolbar button {
   font: inherit;
   padding: 0.6rem;
+}
+.alert-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+.alert-filters input {
+  min-width: 0;
+  width: 100%;
+}
+.alert-panel h2 {
+  font-size: clamp(1.8rem, 5vw, 3.3rem);
+  line-height: 1.2;
+}
+.alert-panel dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+.alert-panel dd {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+.alert-panel dt {
+  font-weight: 700;
 }
 .operation-counts {
   display: grid;

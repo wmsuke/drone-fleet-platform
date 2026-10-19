@@ -1,5 +1,7 @@
 import cors from "@fastify/cors";
 import { registerFleetOperationRoutes } from "./fleet-operation-routes.js";
+import { registerAlertRoutes } from "./alert-routes.js";
+import type { AlertRepository } from "./alert-repository.js";
 import type { FleetOperationRepository } from "./fleet-operation-repository.js";
 import { registerGroupRoutes } from "./group-routes.js";
 import type { GroupRepository } from "./group-repository.js";
@@ -28,12 +30,15 @@ export function buildApi(
     dashboardOrigin?: string | null;
     outboxStatus?: () => Promise<unknown>;
     groupRepository?: GroupRepository;
+    alertRepository?: AlertRepository;
     fleetOperationRepository?: FleetOperationRepository;
   } = {},
 ): FastifyInstance {
   const app = Fastify();
   if (options.fleetOperationRepository)
     registerFleetOperationRoutes(app, options.fleetOperationRepository);
+  if (options.alertRepository)
+    registerAlertRoutes(app, options.alertRepository);
   if (options.groupRepository)
     registerGroupRoutes(app, options.groupRepository);
   if (options.outboxStatus)

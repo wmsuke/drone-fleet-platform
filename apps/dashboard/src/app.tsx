@@ -5,6 +5,7 @@ import { DeviceDetailPage } from "./device-detail.js";
 import { DeviceListPage } from "./device-list.js";
 import { GroupsPage } from "./groups.js";
 import { FleetOperationsPage } from "./fleet-operations.js";
+import { AlertsPage } from "./alerts.js";
 
 export interface DashboardAppProps {
   apiBaseUrl: string | null;
@@ -22,6 +23,7 @@ function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/">ダッシュボード</NavLink>
           <NavLink to="/groups">機体グループ</NavLink>
           <NavLink to="/fleet-operations">グループ操作</NavLink>
+          <NavLink to="/alerts">alert</NavLink>
         </nav>
       </header>
       <main>{children}</main>
@@ -65,6 +67,14 @@ export function DashboardApp({ apiBaseUrl }: DashboardAppProps) {
   return (
     <Layout>
       <Routes>
+        <Route
+          path="/alerts"
+          element={<AlertsPage apiBaseUrl={apiBaseUrl} />}
+        />
+        <Route
+          path="/alerts/:alertId"
+          element={<AlertsPage apiBaseUrl={apiBaseUrl} />}
+        />
         <Route
           path="/fleet-operations"
           element={<FleetOperationsPage apiBaseUrl={apiBaseUrl} />}
