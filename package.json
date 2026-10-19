@@ -10,6 +10,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "alerts:test:integration": "pnpm --filter @drone-fleet/alert-evaluator test:integration",
     "api:test:integration": "pnpm --filter @drone-fleet/api test:integration",
     "aws:iot:certificate": "node scripts/manage-aws-iot-certificate.mjs",
     "build": "pnpm -r --if-present build",

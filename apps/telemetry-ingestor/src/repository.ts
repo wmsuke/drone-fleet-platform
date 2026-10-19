@@ -46,6 +46,7 @@ function matches(row: Telemetry, message: TelemetryMessage): boolean {
 export function toNewTelemetry(
   message: TelemetryMessage,
   receivedAt: Date,
+  isRetained = false,
 ): NewTelemetry {
   return {
     deviceId: message.deviceId,
@@ -53,6 +54,7 @@ export function toNewTelemetry(
     sequence: message.sequence,
     deviceTimestamp: new Date(message.timestamp),
     receivedAt,
+    isRetained,
     battery: message.payload.battery,
     latitude: message.payload.latitude,
     longitude: message.payload.longitude,
@@ -101,7 +103,8 @@ export function createTelemetryRepository(
           .insert(telemetry)
           .values(
             [...ordered.map(([, entry]) => entry), ...legacy].map(
-              ({ message, receivedAt }) => toNewTelemetry(message, receivedAt),
+              ({ message, receivedAt, isRetained }) =>
+                toNewTelemetry(message, receivedAt, isRetained),
             ),
           )
           .onConflictDoNothing({
@@ -185,6 +188,7 @@ export function createTelemetryRepository(
                   connectionStatus: "ONLINE" as const,
                   lastReceivedAt: receivedAt,
                   updatedAt: receivedAt,
+                  connectionChangedAt: receivedAt,
                 })),
             )
             .onConflictDoUpdate({
@@ -193,6 +197,8 @@ export function createTelemetryRepository(
                 lastReceivedAt: sql`greatest(coalesce(${devices.lastReceivedAt}, excluded.last_received_at), excluded.last_received_at)`,
                 updatedAt: sql`greatest(${devices.updatedAt}, excluded.updated_at)`,
                 connectionStatus: sql`case when ${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= excluded.last_received_at then 'ONLINE'::connection_status else ${devices.connectionStatus} end`,
+                connectionChangedAt: sql`case when (${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= excluded.last_received_at) AND ${devices.connectionStatus} <> 'ONLINE' then greatest(${devices.connectionChangedAt}, excluded.last_received_at) else ${devices.connectionChangedAt} end`,
+                connectionRevision: sql`case when (${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= excluded.last_received_at) AND ${devices.connectionStatus} <> 'ONLINE' then ${devices.connectionRevision} + 1 else ${devices.connectionRevision} end`,
               },
             });
         }

@@ -444,6 +444,7 @@ docker compose down --volumes
 - [機体グループAPI](docs/groups-api.md)
 - [グループ操作の受付・集約API](docs/fleet-operations-api.md)
 - [グループ操作と結果の追跡画面](docs/fleet-operations-dashboard.md)
+- [alertの生成と解除](docs/alerts.md)
 - [commandの実行結果通知](docs/command-results.md)
 - [ロードマップ](docs/roadmap.md)
 - [環境変数と秘密情報](docs/environment.md)

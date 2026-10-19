@@ -3,8 +3,12 @@ import {
   parseMqttTopic,
   type ConnectionStatusMessage,
 } from "@drone-fleet/protocol";
-import { and, eq, isNull, lte, or } from "drizzle-orm";
-import { devices, type Database } from "@drone-fleet/database";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  devices,
+  deviceOnlineObservations,
+  type Database,
+} from "@drone-fleet/database";
 
 import {
   ensureDeviceRegistered,
@@ -32,18 +36,27 @@ export function createDeviceStatusRepository(
         return 0;
       }
       if (message.payload.status === "ONLINE") {
-        await upsertDeviceReceipt(
-          database,
-          message.deviceId,
-          receivedAt,
-          message.payload.status,
-        );
+        await database.transaction(async (tx) => {
+          await upsertDeviceReceipt(tx, message.deviceId, receivedAt, "ONLINE");
+          await tx
+            .insert(deviceOnlineObservations)
+            .values({
+              deviceId: message.deviceId,
+              deviceTimestamp: new Date(message.timestamp),
+              receivedAt,
+            })
+            .onConflictDoNothing();
+        });
         return 0;
       }
       return database.transaction(async (transaction) => {
         const transitioned = await transaction
           .update(devices)
-          .set({ connectionStatus: "OFFLINE" })
+          .set({
+            connectionStatus: "OFFLINE",
+            connectionChangedAt: sql`greatest(${devices.connectionChangedAt}, ${receivedAt.toISOString()}::timestamptz)`,
+            connectionRevision: sql`${devices.connectionRevision} + 1`,
+          })
           .where(
             and(
               eq(devices.deviceId, message.deviceId),
@@ -67,7 +80,12 @@ export function createDeviceStatusRepository(
     async markTimedOut(cutoff, updatedAt) {
       const transitioned = await database
         .update(devices)
-        .set({ connectionStatus: "OFFLINE", updatedAt })
+        .set({
+          connectionStatus: "OFFLINE",
+          updatedAt,
+          connectionChangedAt: updatedAt,
+          connectionRevision: sql`${devices.connectionRevision} + 1`,
+        })
         .where(
           and(
             eq(devices.connectionStatus, "ONLINE"),

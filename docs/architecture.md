@@ -169,6 +169,10 @@ React、Vite、TanStack Query、React Routerによる画面基盤と機体一覧
 - 帰還・再起動の操作（実装済み）
 - コマンド履歴と受領状態（実装済み）
 
+### apps/alert-evaluator
+
+#142でalertの生成・継続・解除を追加した。5秒ごとにcommit済みDBを評価する独立プロセスで、MQTT保存transactionから呼ばない。OFFLINEの遷移時刻、非retainedの観測、実行結果を使い、継続・回復・採用済み観測のcheckpointとalertを同時commitする。targetごとのロックと未解除key一意制約で重複を防ぐ。閾値、鮮度、障害分離、計測と保持の制約は[alertの生成と解除](alerts.md)を参照する。alertのHTTP API・画面とauditは未実装である。
+
 ### packages/protocol
 
 デバイスと基盤の間で共有する通信仕様を実装済みである。
@@ -330,11 +334,11 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 ## Phase 4の設計と実装範囲
 
-#137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。alert、auditは未実装である。
+#137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)を実装し、alertのHTTP API・画面とauditは後続Issueで扱う。
 
 複数機体操作は受付transactionでgroup membershipを固定し、対象ごとの既存command/outboxを作成する。APIが受付と集約、ingestorが受領・実行結果の保存、simulatorが操作と永続結果通知を担当する。受領ACKと実行完了は別に扱う。alert evaluatorはDBの確定済み状態から異常を判定し、telemetry保存とは分離する。重要操作の成功auditは業務変更と同時commitする。
 
-エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。#139で`fleet_operations`と`fleet_operation_targets`、原子的で冪等な受付APIを実装した。送信は既存outbox workerへ任せる。#152で[commandの実行結果通知](command-results.md)を追加し、SQLiteの最新結果からACK v3を送ってPostgreSQLの実行状態と履歴へ保存する。配送・受領状態は実行状態と分ける。#140で一覧・詳細を同一DB snapshotと評価時刻で集約し、全体の状態・件数とtargetのページを返す。#141でgroupからの確認付き送信と履歴・機体別結果の画面を追加し、sessionStorageの同一keyで受付不明時の再照会を行う。alert・auditは後続Issueで実装する。APIと計測は[グループ操作の受付・集約API](fleet-operations-api.md)、画面は[グループ操作と結果の追跡](fleet-operations-dashboard.md)を参照する。
+エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。#139で`fleet_operations`と`fleet_operation_targets`、原子的で冪等な受付APIを実装した。送信は既存outbox workerへ任せる。#152で[commandの実行結果通知](command-results.md)を追加し、SQLiteの最新結果からACK v3を送ってPostgreSQLの実行状態と履歴へ保存する。配送・受領状態は実行状態と分ける。#140で一覧・詳細を同一DB snapshotと評価時刻で集約し、全体の状態・件数とtargetのページを返す。#141でgroupからの確認付き送信と履歴・機体別結果の画面を追加し、sessionStorageの同一keyで受付不明時の再照会を行う。#142で独立したalert evaluatorを追加した。alertの表示・確認とauditは後続Issueで実装する。APIと計測は[グループ操作の受付・集約API](fleet-operations-api.md)、画面は[グループ操作と結果の追跡](fleet-operations-dashboard.md)を参照する。
 
 ## 関連ADR
 

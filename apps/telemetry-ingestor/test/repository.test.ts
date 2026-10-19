@@ -27,6 +27,7 @@ describe("toNewTelemetry", () => {
       sequence: 12,
       deviceTimestamp: new Date("2026-09-29T02:00:00.000Z"),
       receivedAt,
+      isRetained: false,
       battery: 80,
       latitude: 35.681236,
       longitude: 139.767125,

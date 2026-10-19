@@ -50,6 +50,13 @@ export const devices = pgTable(
     connectionStatus: connectionStatusEnum("connection_status")
       .notNull()
       .default("OFFLINE"),
+    connectionChangedAt: timestamp("connection_changed_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+    connectionRevision: integer("connection_revision").notNull().default(0),
     lastReceivedAt: timestamp("last_received_at", {
       withTimezone: true,
       mode: "date",
@@ -73,6 +80,7 @@ export const telemetry = pgTable(
       .references(() => devices.deviceId, { onDelete: "cascade" }),
     sessionId: uuid("session_id"),
     identityOwner: boolean("identity_owner").notNull().default(true),
+    isRetained: boolean("is_retained").notNull().default(true),
     sourcePayload: jsonb("source_payload").$type<Record<string, unknown>>(),
     sequence: bigint("sequence", { mode: "number" }).notNull(),
     deviceTimestamp: timestamp("device_timestamp", {
@@ -392,3 +400,101 @@ export type Telemetry = typeof telemetry.$inferSelect;
 export type NewTelemetry = typeof telemetry.$inferInsert;
 export type Command = typeof commands.$inferSelect;
 export type NewCommand = typeof commands.$inferInsert;
+
+export const deviceOnlineObservations = pgTable(
+  "device_online_observations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "cascade" }),
+    deviceTimestamp: timestamp("device_timestamp", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("online_observations_identity_idx").on(
+      t.deviceId,
+      t.deviceTimestamp,
+    ),
+    index("online_observations_received_idx").on(t.deviceId, t.receivedAt),
+  ],
+);
+
+export const alerts = pgTable(
+  "alerts",
+  {
+    alertId: uuid("alert_id").primaryKey(),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "restrict" }),
+    commandId: uuid("command_id").references(() => commands.commandId, {
+      onDelete: "restrict",
+    }),
+    deduplicationKey: text("deduplication_key").notNull(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("ACTIVE"),
+    severity: text("severity").notNull().default("warning"),
+    reason: text("reason").notNull(),
+    occurredAt: timestamp("occurred_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    lastObservedAt: timestamp("last_observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
+    acknowledgedAt: timestamp("acknowledged_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    acknowledgedActorKind: text("acknowledged_actor_kind"),
+    acknowledgedActorId: text("acknowledged_actor_id"),
+    ruleVersion: text("rule_version").notNull(),
+    parameters: jsonb("parameters").$type<Record<string, number>>().notNull(),
+    evidence: jsonb("evidence")
+      .$type<Record<string, string | number | null>>()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("alerts_active_key_idx")
+      .on(t.deduplicationKey)
+      .where(sql`${t.status} = 'ACTIVE'`),
+    uniqueIndex("alerts_command_once_idx")
+      .on(t.commandId)
+      .where(sql`${t.commandId} IS NOT NULL`),
+    index("alerts_status_occurred_idx").on(t.status, t.occurredAt),
+    check(
+      "alerts_kind_valid",
+      sql`${t.kind} IN ('OFFLINE','LOW_BATTERY','COMMAND_OUTCOME')`,
+    ),
+    check(
+      "alerts_state_valid",
+      sql`(${t.status} = 'ACTIVE' AND ${t.resolvedAt} IS NULL) OR (${t.status} = 'RESOLVED' AND ${t.resolvedAt} IS NOT NULL)`,
+    ),
+    check(
+      "alerts_times_valid",
+      sql`${t.lastObservedAt} >= ${t.occurredAt} AND (${t.resolvedAt} IS NULL OR ${t.resolvedAt} >= ${t.occurredAt})`,
+    ),
+    check("alerts_severity_valid", sql`${t.severity} = 'warning'`),
+    check(
+      "alerts_command_kind",
+      sql`(${t.kind} = 'COMMAND_OUTCOME') = (${t.commandId} IS NOT NULL)`,
+    ),
+  ],
+);
+export const alertEvaluationStates = pgTable("alert_evaluation_states", {
+  targetKey: text("target_key").primaryKey(),
+  state: jsonb("state").$type<Record<string, unknown>>().notNull(),
+  evaluatedAt: timestamp("evaluated_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+  ruleVersion: text("rule_version").notNull(),
+});

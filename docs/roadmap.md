@@ -160,7 +160,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 グループ単位の操作と、コマンド・異常の追跡を追加する。
 
-親Issueは#135。#136で[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に対象スナップショット、冪等な受付、受領と実行結果の分離、全体状態、alert、auditの記録方針を定めた。#137で[機体グループAPI](groups-api.md)とDB、#138でgroup管理画面、#139で受付API、#152で[commandの実行結果通知](command-results.md)、#140で[グループ操作の集約API](fleet-operations-api.md)、#141で[複数機体の操作・結果追跡画面](fleet-operations-dashboard.md)を追加した。alert・auditは未実装である。既存の受領ACKを完了と扱わない。
+親Issueは#135。#136で[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に対象スナップショット、冪等な受付、受領と実行結果の分離、全体状態、alert、auditの記録方針を定めた。#137で[機体グループAPI](groups-api.md)とDB、#138でgroup管理画面、#139で受付API、#152で[commandの実行結果通知](command-results.md)、#140で[グループ操作の集約API](fleet-operations-api.md)、#141で[複数機体の操作・結果追跡画面](fleet-operations-dashboard.md)、#142で[alertの生成・解除](alerts.md)を追加した。alertの表示・確認とauditは未実装である。既存の受領ACKを完了と扱わない。
 
 実装順はgroup管理（#137〜#138）、複数機体操作・結果通知・集約・画面（#139〜#141）、alert（#142〜#143）、audit（#144〜#145）、負荷検証・E2E・文書（#146〜#148）とする。認証未実装時のactorは未認証として記録する。commit後のキャンセル、失敗対象の自動再実行、排他スケジューラ、全機体同時実行、管理者改ざんへの耐性はPhase 4の対象外とする。
 
