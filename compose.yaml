@@ -75,6 +75,28 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
 
+  alert-evaluator:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "apps/alert-evaluator/dist/index.js"]
+    environment:
+      <<: *database-environment
+      ALERT_EVALUATION_INTERVAL_MS: ${ALERT_EVALUATION_INTERVAL_MS:-5000}
+      ALERT_OFFLINE_HOLD_MS: ${ALERT_OFFLINE_HOLD_MS:-60000}
+      ALERT_RECOVERY_HOLD_MS: ${ALERT_RECOVERY_HOLD_MS:-30000}
+      ALERT_BATTERY_HOLD_MS: ${ALERT_BATTERY_HOLD_MS:-30000}
+      ALERT_LOW_BATTERY: ${ALERT_LOW_BATTERY:-20}
+      ALERT_RECOVERED_BATTERY: ${ALERT_RECOVERED_BATTERY:-25}
+      ALERT_OBSERVATION_GAP_MS: ${ALERT_OBSERVATION_GAP_MS:-15000}
+      ALERT_COMMAND_RESULT_MS: ${ALERT_COMMAND_RESULT_MS:-120000}
+      TELEMETRY_INTERVAL_MS: ${TELEMETRY_INTERVAL_MS:-5000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 15s
+
   api:
     build:
       context: .

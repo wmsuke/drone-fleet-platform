@@ -7,6 +7,9 @@ export {
 } from "./connection.js";
 export {
   commandStatusEnum,
+  alerts,
+  alertEvaluationStates,
+  deviceOnlineObservations,
   commands,
   commandOutbox,
   commandExecutionEvents,

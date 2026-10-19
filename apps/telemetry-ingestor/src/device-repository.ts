@@ -26,6 +26,8 @@ export async function upsertDeviceReceipt(
       ? {}
       : {
           connectionStatus: sql`case when ${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= ${receivedAtIso}::timestamptz then ${connectionStatus}::connection_status else ${devices.connectionStatus} end`,
+          connectionChangedAt: sql`case when (${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= ${receivedAtIso}::timestamptz) AND ${devices.connectionStatus} <> ${connectionStatus}::connection_status then greatest(${devices.connectionChangedAt}, ${receivedAtIso}::timestamptz) else ${devices.connectionChangedAt} end`,
+          connectionRevision: sql`case when (${devices.lastReceivedAt} is null or ${devices.lastReceivedAt} <= ${receivedAtIso}::timestamptz) AND ${devices.connectionStatus} <> ${connectionStatus}::connection_status then ${devices.connectionRevision} + 1 else ${devices.connectionRevision} end`,
         };
 
   await database
@@ -35,6 +37,7 @@ export async function upsertDeviceReceipt(
       connectionStatus: connectionStatus ?? "OFFLINE",
       lastReceivedAt: receivedAt,
       updatedAt: receivedAt,
+      connectionChangedAt: receivedAt,
     })
     .onConflictDoUpdate({
       target: devices.deviceId,
