@@ -57,7 +57,14 @@ export function registerAuditHooks(app: FastifyInstance, db: Database) {
       await appendAudit(db, {
         action,
         targetKind,
-        targetId: groupId ?? alertId ?? deviceId,
+        targetId:
+          targetKind === "group"
+            ? groupId
+            : targetKind === "alert"
+              ? alertId
+              : targetKind === "device"
+                ? deviceId
+                : null,
         groupId,
         alertId,
         requestId: request.id,
