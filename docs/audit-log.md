@@ -1,6 +1,6 @@
 # 操作と状態変更のaudit log
 
-#144でappend-onlyな`audit_logs`と、重要な操作・状態遷移の記録を追加した。検索APIと画面は#145で扱う。auditを業務状態の正本や、本人確認の証拠にはしない。
+#144でappend-onlyな`audit_logs`と、重要な操作・状態遷移の記録を追加した。#145で[検索APIと閲覧画面](audit-log-search.md)を追加した。auditを業務状態の正本や、本人確認の証拠にはしない。
 
 ## 保存項目
 
@@ -67,7 +67,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON audit_logs FROM fleet_runtime;
 
 書き込みサービス（API、ingestor、evaluator）を停止し、migrationを適用して揃えて再開する。過去の操作をauditへ補完しない。通常のCompose起動では既存のmigrate完了後に各サービスが起動する。
 
-検索UIは未実装。DB管理者はUUIDをパラメータにして次のように追跡できる。metadataを含む結果を外部共有する前に内容を確認する。
+通常の追跡には[検索APIと閲覧画面](audit-log-search.md)を使う。DB管理者はUUIDをパラメータにして次のようにも追跡できる。直接SQLはAPIの公開項目制限を通らないため、metadataを含む結果を外部共有する前に内容を確認する。
 
 ```sql
 SELECT event_id, occurred_at, actor_kind, actor_id, action, result,

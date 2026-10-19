@@ -341,6 +341,11 @@ function Detail({ base, id }: { base: string; id: string }) {
           {ack.isSuccess && <p role="status">確認状態を保存しました。</p>}
           <h3>関連情報</h3>
           <p>
+            <Link to={`/audit-logs?alertId=${item.alertId}`}>
+              このalertの監査ログ
+            </Link>
+          </p>
+          <p>
             <Link to={`/devices/${encodeURIComponent(item.deviceId)}`}>
               機体 {item.deviceId}
             </Link>

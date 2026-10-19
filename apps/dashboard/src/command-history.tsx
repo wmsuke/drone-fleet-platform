@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import {
   ApiError,
@@ -43,6 +44,11 @@ function CommandHistoryRow({ command }: { command: CommandHistoryItem }) {
           {statusLabels[command.status]}
         </span>
       </div>
+      <p>
+        <Link to={`/audit-logs?commandId=${command.commandId}`}>
+          監査ログ {command.commandId}
+        </Link>
+      </p>
       <dl className="command-history-details">
         {command.expiredAt !== undefined && (
           <div>

@@ -44,7 +44,23 @@ export const auditLogs = pgTable(
       .default({}),
   },
   (t) => [
-    index("audit_logs_occurred_idx").on(t.occurredAt.desc(), t.eventId),
+    index("audit_logs_occurred_idx").on(t.occurredAt.desc(), t.eventId.desc()),
+    index("audit_logs_actor_time_idx").on(
+      t.actorKind,
+      t.actorId,
+      t.occurredAt.desc(),
+      t.eventId.desc(),
+    ),
+    index("audit_logs_action_time_idx").on(
+      t.action,
+      t.occurredAt.desc(),
+      t.eventId.desc(),
+    ),
+    index("audit_logs_result_time_idx").on(
+      t.result,
+      t.occurredAt.desc(),
+      t.eventId.desc(),
+    ),
     index("audit_logs_request_idx").on(t.requestId),
     index("audit_logs_operation_idx").on(t.operationId, t.occurredAt),
     index("audit_logs_command_idx").on(t.commandId, t.occurredAt),

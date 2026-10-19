@@ -1,6 +1,8 @@
 import cors from "@fastify/cors";
 import type { Database } from "@drone-fleet/database";
 import { registerAuditHooks } from "./audit.js";
+import { registerAuditQueryRoutes } from "./audit-query-routes.js";
+import type { AuditQueryRepository } from "./audit-query-repository.js";
 import { registerFleetOperationRoutes } from "./fleet-operation-routes.js";
 import { registerAlertRoutes } from "./alert-routes.js";
 import type { AlertRepository } from "./alert-repository.js";
@@ -33,12 +35,15 @@ export function buildApi(
     outboxStatus?: () => Promise<unknown>;
     groupRepository?: GroupRepository;
     auditDatabase?: Database;
+    auditQueryRepository?: AuditQueryRepository;
     alertRepository?: AlertRepository;
     fleetOperationRepository?: FleetOperationRepository;
   } = {},
 ): FastifyInstance {
   const app = Fastify();
   if (options.auditDatabase) registerAuditHooks(app, options.auditDatabase);
+  if (options.auditQueryRepository)
+    registerAuditQueryRoutes(app, options.auditQueryRepository);
   if (options.fleetOperationRepository)
     registerFleetOperationRoutes(app, options.fleetOperationRepository);
   if (options.alertRepository)

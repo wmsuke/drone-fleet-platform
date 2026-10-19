@@ -151,6 +151,13 @@ function ConnectedOperations({
       {operationId && (
         <Link to={`/alerts?operationId=${operationId}`}>この操作のalert</Link>
       )}
+      {operationId && (
+        <p>
+          <Link to={`/audit-logs?operationId=${operationId}`}>
+            この操作の監査ログ
+          </Link>
+        </p>
+      )}
       <p>
         5秒ごとに更新する。受領は実行完了ではありません。未応答・結果不明は物理的な失敗の断定ではなく、後着結果で表示が変わる場合があります。
       </p>
