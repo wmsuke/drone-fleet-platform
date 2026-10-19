@@ -209,6 +209,13 @@ function ConnectedGroups({
       {groupId && (
         <Link to={`/alerts?groupId=${groupId}`}>このグループのalert</Link>
       )}
+      {groupId && (
+        <p>
+          <Link to={`/audit-logs?groupId=${groupId}`}>
+            このグループの監査ログ
+          </Link>
+        </p>
+      )}
       <p>
         構成を5秒ごとに更新する。所属変更は既に受け付けた操作の対象を変更しない。
       </p>

@@ -12,6 +12,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CommandHistory } from "../src/command-history.js";
+import { MemoryRouter } from "react-router-dom";
 
 function renderHistory() {
   const queryClient = new QueryClient({
@@ -19,10 +20,12 @@ function renderHistory() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CommandHistory
-        apiBaseUrl="http://api.example.test"
-        deviceId="drone-001"
-      />
+      <MemoryRouter>
+        <CommandHistory
+          apiBaseUrl="http://api.example.test"
+          deviceId="drone-001"
+        />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

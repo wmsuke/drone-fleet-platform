@@ -171,7 +171,7 @@ React、Vite、TanStack Query、React Routerによる画面基盤と機体一覧
 
 ### apps/alert-evaluator
 
-#142でalertの生成・継続・解除を追加した。5秒ごとにcommit済みDBを評価する独立プロセスで、MQTT保存transactionから呼ばない。OFFLINEの遷移時刻、非retainedの観測、実行結果を使い、継続・回復・採用済み観測のcheckpointとalertを同時commitする。targetごとのロックと未解除key一意制約で重複を防ぐ。閾値、鮮度、障害分離、計測と保持の制約は[alertの生成と解除](alerts.md)を参照する。#143でAPIに一覧・詳細・確認操作、dashboardに対応画面を追加した。確認は自動解除から独立し、認証未実装のactorはanonymousとする。#144で[audit log](audit-log.md)とoperationの集約状態監査workerを追加した。検索APIと画面は未実装である。
+#142でalertの生成・継続・解除を追加した。5秒ごとにcommit済みDBを評価する独立プロセスで、MQTT保存transactionから呼ばない。OFFLINEの遷移時刻、非retainedの観測、実行結果を使い、継続・回復・採用済み観測のcheckpointとalertを同時commitする。targetごとのロックと未解除key一意制約で重複を防ぐ。閾値、鮮度、障害分離、計測と保持の制約は[alertの生成と解除](alerts.md)を参照する。#143でAPIに一覧・詳細・確認操作、dashboardに対応画面を追加した。確認は自動解除から独立し、認証未実装のactorはanonymousとする。#144で[audit log](audit-log.md)とoperationの集約状態監査workerを追加した。#145で[検索APIと閲覧画面](audit-log-search.md)を追加した。
 
 ### packages/protocol
 

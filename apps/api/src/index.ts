@@ -7,6 +7,7 @@ import {
 } from "./fleet-operation-repository.js";
 import { createGroupRepository } from "./group-repository.js";
 import { createAlertRepository } from "./alert-repository.js";
+import { createAuditQueryRepository } from "./audit-query-repository.js";
 import { createCommandOutbox, loadOutboxOptions } from "./command-outbox.js";
 import { createOutboxPublisher } from "./outbox-publisher.js";
 import { createCommandRepository } from "./command-repository.js";
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
   );
   const app = buildApi(createDeviceRepository(db), commandService, {
     auditDatabase: db,
+    auditQueryRepository: createAuditQueryRepository(db),
     dashboardOrigin: config.dashboardOrigin,
     outboxStatus: outbox.status,
     groupRepository: createGroupRepository(db),
