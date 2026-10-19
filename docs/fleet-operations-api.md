@@ -84,7 +84,7 @@ GETは不正なID・query・未知のquery項目・重複queryを400、存在し
 
 updatedAtはcommand作成・送信・受領・期限判定・有効な実行通知のサーバー受信時刻、およびoutboxの配送試行更新時刻の最大値。未応答の期限評価ではresultDeadlineも候補に含め、単にGETした時刻や端末時刻・将来のnextAttemptAtは使わない。operationは全targetの最大値を返す。
 
-集約は現在の評価であり、後着結果でFAILED/PARTIALLY_FAILEDからCOMPLETEDに変わり得る。GETは書き込みをせず、初回確認終了時刻や過去の集約状態変更checkpointはまだ保存しない。これらの履歴・audit evaluatorは#144の範囲であり、commandの保存済み実行イベント履歴とは別である。
+集約は現在の評価であり、後着結果でFAILED/PARTIALLY_FAILEDからCOMPLETEDに変わり得る。GETは書き込みをしない。#144で独立したaudit workerが集約状態の変更とcheckpointを記録し、初めて終端表示を観測した時刻を保持する。周期間の中間状態をすべて記録する保証ではない。詳細は[audit log](audit-log.md)を参照する。
 
 page間の別リクエストは別snapshot・別評価時刻である。状態変化や新規受付によりoffsetの対象がずれる場合は先頭から更新する。全履歴をまたぐ大規模な性能保証やcursor、集約キャッシュは追加していない。
 
@@ -111,7 +111,7 @@ rollbackしたkeyは消費しない。応答を失ったときは同じkeyで再
 | 409 | 空group、削除済みgroup、同じkeyの要求不一致 |
 | 500 | DB保存などの予期しない失敗。commitが不明なら同じkeyで照合する |
 
-`FLEET_OPERATION_MAX_TARGETS`は既定100、設定範囲1〜1000。上限+1件までmembershipを取得して超過を判定する。1000は設定上限であり性能保証ではない。起動時に不正設定を拒否する。成功時のログにtargetCount、transaction完了までのdurationMs、replayedを出す。認証情報・要求本文・keyは計測ログに出さない。audit logとの同時commitは#144で追加する予定で、現時点で監査記録の保証はない。
+`FLEET_OPERATION_MAX_TARGETS`は既定100、設定範囲1〜1000。上限+1件までmembershipを取得して超過を判定する。1000は設定上限であり性能保証ではない。起動時に不正設定を拒否する。成功時のログにtargetCount、transaction完了までのdurationMs、replayedを出す。認証情報・要求本文・keyは計測ログに出さない。#144で受付auditと各command audit、集約checkpointを同時commitする。冪等再要求はoperation.replayedとして元IDを記録する。
 
 ## 検証と実測
 
@@ -123,7 +123,7 @@ rollbackしたkeyは消費しない。応答を失ったときは同じkeyで再
 | 2 | 100 | 20.505 | 8 |
 | 3 | 100 | 24.808 | 8 |
 
-新規keyで3回実行した。時間はrepository呼び出しからtransaction commitを含む応答生成まで。query数はDrizzle loggerによる実測で、lock、照合、group取得、membership取得、4つのINSERTを数える。postgres.jsのBEGIN / COMMIT、接続準備、fixture・cleanupはquery数に含めない。HTTP転送、MQTT配送、受領、実行完了、1,000台負荷を測ったものではない。
+新規keyで3回実行した。時間はrepository呼び出しからtransaction commitを含む応答生成まで。query数はDrizzle loggerによる実測で、lock、照合、group取得、membership取得、4つのINSERTを数える。postgres.jsのBEGIN / COMMIT、接続準備、fixture・cleanupはquery数に含めない。HTTP転送、MQTT配送、受領、実行完了、1,000台負荷を測ったものではない。#144以後はauditの一括INSERT 2件と集約checkpoint 1件が加わり、問い合わせは対象数によらず固定11件になる。この表はaudit追加前の実測値である。
 
 再現には専用PostgreSQLの`POSTGRES_*`と`DATABASE_INTEGRATION=true`を設定して`pnpm api:test:integration`を実行する。実測値を表示する場合は`pnpm exec vitest run --no-file-parallelism --silent=false apps/api/test/fleet-operation-repository.integration.test.ts --reporter=verbose`を使う。テストでは同時再要求、要求不一致、構成変更競合、group削除後の再要求、途中保存失敗・全件rollback、上限と既存単一device受付も確認する。migrationは`pnpm db:test:integration`で既存経路も検証する。
 

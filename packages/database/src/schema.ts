@@ -19,6 +19,56 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    actorKind: text("actor_kind").notNull(),
+    actorId: text("actor_id"),
+    action: text("action").notNull(),
+    targetKind: text("target_kind").notNull(),
+    targetId: varchar("target_id", { length: 128 }),
+    result: text("result").notNull(),
+    requestId: uuid("request_id"),
+    groupId: uuid("group_id"),
+    operationId: uuid("operation_id"),
+    commandId: uuid("command_id"),
+    alertId: uuid("alert_id"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, string | number | boolean | null>>()
+      .notNull()
+      .default({}),
+  },
+  (t) => [
+    index("audit_logs_occurred_idx").on(t.occurredAt.desc(), t.eventId),
+    index("audit_logs_request_idx").on(t.requestId),
+    index("audit_logs_operation_idx").on(t.operationId, t.occurredAt),
+    index("audit_logs_command_idx").on(t.commandId, t.occurredAt),
+    index("audit_logs_target_idx").on(t.targetKind, t.targetId, t.occurredAt),
+    check(
+      "audit_logs_actor_valid",
+      sql`(${t.actorKind}='anonymous' AND ${t.actorId} IS NULL) OR (${t.actorKind}='system' AND ${t.actorId} IS NOT NULL AND ${t.actorId} IN ('telemetry-ingestor','alert-evaluator','operation-evaluator'))`,
+    ),
+    check(
+      "audit_logs_result_valid",
+      sql`${t.result} IN ('SUCCEEDED','REJECTED','FAILED')`,
+    ),
+    check(
+      "audit_logs_target_valid",
+      sql`${t.targetKind} IN ('group','device','command','operation','alert')`,
+    ),
+    check(
+      "audit_logs_metadata_bounded",
+      sql`jsonb_typeof(${t.metadata})='object' AND octet_length(${t.metadata}::text)<=8192`,
+    ),
+    check("audit_logs_version_valid", sql`${t.schemaVersion}=1`),
+  ],
+);
+
 export const connectionStatusEnum = pgEnum("connection_status", [
   "ONLINE",
   "OFFLINE",
@@ -395,6 +445,29 @@ export const fleetOperationTargets = pgTable(
 );
 
 export type Device = typeof devices.$inferSelect;
+export const operationAuditStates = pgTable(
+  "operation_audit_states",
+  {
+    operationId: uuid("operation_id")
+      .primaryKey()
+      .references(() => fleetOperations.operationId, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    evaluatedAt: timestamp("evaluated_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    firstFinishedAt: timestamp("first_finished_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => [
+    check(
+      "operation_audit_states_status_valid",
+      sql`${t.status} IN ('ACCEPTED','IN_PROGRESS','COMPLETED','PARTIALLY_FAILED','FAILED')`,
+    ),
+  ],
+);
 export type NewDevice = typeof devices.$inferInsert;
 export type Telemetry = typeof telemetry.$inferSelect;
 export type NewTelemetry = typeof telemetry.$inferInsert;

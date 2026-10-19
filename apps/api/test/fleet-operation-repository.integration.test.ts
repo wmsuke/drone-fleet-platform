@@ -310,7 +310,8 @@ describe.skipIf(!enabled)("fleet operation acceptance", () => {
         durationMs: Number((performance.now() - start).toFixed(3)),
         queryCount,
       });
-      expect(queryCount).toBe(8);
+      // 既存8件にoperation audit、command auditの一括INSERT、checkpointを加える。
+      expect(queryCount).toBe(11);
       expect(accepted.targetCount).toBe(100);
     }
     console.info("issue139 benchmark", JSON.stringify(measurements));

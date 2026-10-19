@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { auditContext } from "@drone-fleet/database";
 import { z } from "zod";
 import {
   FleetOperationError,
@@ -56,8 +57,11 @@ export function registerFleetOperationRoutes(
           ),
         );
     } catch (error) {
-      if (error instanceof FleetOperationError)
+      if (error instanceof FleetOperationError) {
+        const context = auditContext.getStore();
+        if (context) context.rejectionReason = error.reason;
         return reply.code(error.status).send({ error: error.message });
+      }
       throw error;
     }
   });

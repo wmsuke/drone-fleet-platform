@@ -4,6 +4,7 @@ import {
   devices,
   groups,
   groupMemberships,
+  appendAudit,
   type Database,
 } from "@drone-fleet/database";
 import type { CreateGroup, Group, UpdateGroup } from "./group-schema.js";
@@ -72,13 +73,14 @@ async function find(db: Reader, groupId: string): Promise<Group> {
   if (!group) throw new GroupRepositoryError(404, "groupが見つかりません");
   return group;
 }
-async function lock(tx: Transaction, groupId: string): Promise<void> {
+async function lock(tx: Transaction, groupId: string) {
   const [group] = await tx
-    .select({ groupId: groups.groupId })
+    .select()
     .from(groups)
     .where(and(eq(groups.groupId, groupId), isNull(groups.deletedAt)))
     .for("update");
   if (!group) throw new GroupRepositoryError(404, "groupが見つかりません");
+  return group;
 }
 async function advance(
   tx: Transaction,
@@ -102,12 +104,32 @@ export function createGroupRepository(db: Database): GroupRepository {
       db.transaction(async (tx) => {
         const groupId = randomUUID();
         await tx.insert(groups).values({ groupId, ...input });
+        await appendAudit(tx, {
+          action: "group.created",
+          targetKind: "group",
+          targetId: groupId,
+          groupId,
+          metadata: { afterName: input.name },
+        });
         return find(tx, groupId);
       }),
     update: (id, input) =>
       db.transaction(async (tx) => {
-        await lock(tx, id);
+        const before = await lock(tx, id);
         await advance(tx, id, input);
+        await appendAudit(tx, {
+          action: "group.updated",
+          targetKind: "group",
+          targetId: id,
+          groupId: id,
+          metadata: {
+            beforeName: before.name,
+            afterName: input.name ?? before.name,
+            descriptionChanged:
+              input.description !== undefined &&
+              input.description !== before.description,
+          },
+        });
         return find(tx, id);
       }),
     remove: (id) =>
@@ -122,6 +144,12 @@ export function createGroupRepository(db: Database): GroupRepository {
             revision: sql`${groups.revision} + 1`,
           })
           .where(eq(groups.groupId, id));
+        await appendAudit(tx, {
+          action: "group.deleted",
+          targetKind: "group",
+          targetId: id,
+          groupId: id,
+        });
       }),
     addMember: (id, deviceId) =>
       db.transaction(async (tx) => {
@@ -141,6 +169,13 @@ export function createGroupRepository(db: Database): GroupRepository {
         if (!inserted.length)
           throw new GroupRepositoryError(409, "deviceは登録済みです");
         await advance(tx, id);
+        await appendAudit(tx, {
+          action: "membership.added",
+          targetKind: "group",
+          targetId: id,
+          groupId: id,
+          metadata: { memberDeviceId: deviceId },
+        });
         return find(tx, id);
       }),
     removeMember: (id, deviceId) =>
@@ -158,6 +193,13 @@ export function createGroupRepository(db: Database): GroupRepository {
         if (!removed.length)
           throw new GroupRepositoryError(404, "membershipが見つかりません");
         await advance(tx, id);
+        await appendAudit(tx, {
+          action: "membership.removed",
+          targetKind: "group",
+          targetId: id,
+          groupId: id,
+          metadata: { memberDeviceId: deviceId },
+        });
         return find(tx, id);
       }),
   };
