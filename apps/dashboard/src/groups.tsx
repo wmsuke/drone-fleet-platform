@@ -206,6 +206,9 @@ function ConnectedGroups({
           ? "機体グループ"
           : (group?.name ?? "グループ詳細")}
       </h2>
+      {groupId && (
+        <Link to={`/alerts?groupId=${groupId}`}>このグループのalert</Link>
+      )}
       <p>
         構成を5秒ごとに更新する。所属変更は既に受け付けた操作の対象を変更しない。
       </p>

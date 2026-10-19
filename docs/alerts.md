@@ -1,6 +1,6 @@
 # alertの生成と解除
 
-#142で長時間OFFLINE、低battery、command不成功を評価する`apps/alert-evaluator`を追加した。MQTTを購読せず、commit済みのPostgreSQLの事実だけを読む。HTTP API・画面・手動確認は#143、audit logとの同時記録は#144で追加する。現時点では監査記録の保証や外部通知を提供しない。
+#142で長時間OFFLINE、低battery、command不成功を評価する`apps/alert-evaluator`を追加した。MQTTを購読せず、commit済みのPostgreSQLの事実だけを読む。#143で一覧・詳細API、画面と確認操作を追加した。audit logとの同時記録は#144で追加する。現時点では監査記録の保証や外部通知を提供しない。
 
 ## 初期条件
 
@@ -31,7 +31,22 @@ commandの判定は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)のt
 
 ## 保存と失敗境界
 
-alertsはalertId、deviceId、必要なcommandId、kind、status、severity、reason、発生・最終観測・解除時刻、ruleVersion、判定に適用したparametersと限定したevidenceを持つ。ACTIVEとRESOLVEDを分け、acknowledgedAt・actor項目は確認情報として別に持つ。確認を付ける処理はまだ実装しない。
+alertsはalertId、deviceId、必要なcommandId、kind、status、severity、reason、発生・最終観測・解除時刻、ruleVersion、判定に適用したparametersと限定したevidenceを持つ。ACTIVEとRESOLVEDを分け、acknowledgedAt・actor項目は確認情報として別に持つ。
+
+## 一覧・詳細・確認APIと画面
+
+- `GET /alerts`は`{ items, total, limit, offset }`を返す。`status=ACTIVE|RESOLVED`、`severity=warning`、`kind=OFFLINE|LOW_BATTERY|COMMAND_OUTCOME`、`acknowledged=true|false`、`deviceId`、`groupId`、`operationId`、`from`、`to`で絞り込む。条件はAND、期間は発生時刻の両端を含み、UTCのISO 8601で指定する。
+- `limit`は1〜100（既定20）、`offset`は0〜1,000,000（既定0）。発生時刻降順、同値はalertId降順。件数・ページ・関連情報は同一DB snapshotで読む。ページ間は独立したsnapshotなので、継続中の新規発生でoffsetの位置は変わり得る。
+- `GET /alerts/:alertId`は詳細を返す。保存した根拠・設定に加え、`relatedGroups: [{ groupId, name }]`と`operationId`を含む。機体状態alertのgroupは現在の未削除groupの所属、command alertのgroupは操作開始時のsnapshotに基づく。所属変更・名称変更・削除でcommandの過去の関連を置き換えない。単一commandにgroup操作の関連はない。削除済みgroupへのリンクは404になり得るが、alertには開始時の名称とIDが残る。
+- `POST /alerts/:alertId/acknowledge`はbodyなし（または空object）で最初の確認時刻をDB時計から保存し、詳細を返す。繰り返し・同時要求でも最初の確認時刻を保つ。任意のactor指定は拒否する。不存在は404、不正なID・条件・bodyは400。
+
+確認操作はstatus・根拠・解除時刻を変えない。確認後もACTIVEのまま残る場合があり、自動解除は確認状態を消さない。認証未実装のため`acknowledgedActorKind=anonymous`、`acknowledgedActorId=null`であり、実在の運用者を識別・証明する記録ではない。画面にも「匿名（本人性未確認）」と制約を表示する。公開インターネットへ認証なしで公開しない。権限制御と成功auditの同時記録は未実装。
+
+dashboardの`/alerts`で件数、severity、発生時刻、解除状態と確認状態を表示する。20件ずつページングし、条件はURLに保持する。詳細は`/alerts/:alertId`。機体・group・操作の詳細から絞り込んだalertへ、alertから関連する詳細へ移動できる。一覧・詳細は5秒ごとに更新し、更新失敗時は前回の結果であることを明示する。空一覧、初回取得失敗、確認保存失敗と再試行を区別する。見出しへのfocus、ラベル付き条件入力、表caption・列見出し、キーボードで操作できるページ送りを設ける。
+
+`pnpm check`でAPI入力とUIのページング・空一覧・失敗・定期更新・確認状態の分離を検証する。`DATABASE_INTEGRATION=true pnpm api:test:integration`では実PostgreSQLで35件のページングと条件、過去の操作group、並行確認、解除後の確認記録保持を確認する。
+
+2026-10-19、専用Compose（仮想機体3台、架空alert 25件）と実ブラウザで、20件＋5件のページング、Enterキーでの操作、遷移後の見出しfocus、匿名での確認保存を確認した。確認しても「発生中」のまま残ることを[画面例](dashboard-alert-detail.jpg)に示す。スクリーンリーダー実機や全ブラウザの網羅検証ではない。
 
 未解除keyの部分一意indexとtargetごとのtransaction advisory lockで二重作成を防ぐ。device/commandの正本を読み取りロックし、alertとcheckpointを同じtransactionでcommitする。失敗時は両方rollbackし、次回再走査する。既にcommitしたtelemetry・ACKはrollbackしない。観測属性の記録は元の受信transactionに含むが、alert判定・生成をそのtransactionから呼ばない。
 
@@ -70,4 +85,4 @@ alerts、ONLINE観測、評価checkpointに自動削除は設けない。観測�
 
 2026-10-19、Node.js 24.21.0 / pnpm 10.28.1 / OrbStack / PostgreSQL 17でalert結合15件、既存telemetry結合24件、API結合52件、DB移行3件を確認した。専用ComposeのNode.js 22では、確認用に周期100ms・OFFLINE継続1000msへ短縮して独立workerを起動し、生成と再起動後の同一alertId・発生時刻の保持、failed=0の周期ログを確認した。defaultの時間境界は偽時計を使う単体・DB結合テストで評価しており、短縮した起動確認を60秒の実時間計測とは扱わない。
 
-温度、位置、物理的な飛行安全、容量予測、メール等の外部通知、自動command、alert画面・手動確認API、auditは対象外。AWSの実通信・100台のalert性能は未検証であり、ローカルでの検証をAWS運用の保証としない。
+温度、位置、物理的な飛行安全、容量予測、メール等の外部通知、自動command、auditは対象外。AWSの実通信・100台のalert性能は未検証であり、ローカルでの検証をAWS運用の保証としない。
