@@ -9,6 +9,8 @@ import {
   telemetry,
   fleetOperations,
   fleetOperationTargets,
+  appendAudit,
+  commandAuditLinks,
   type Database,
 } from "@drone-fleet/database";
 import { RULE_VERSION, type AlertPolicy } from "./config.js";
@@ -57,8 +59,9 @@ async function apply(
   if (current?.status === "RESOLVED") return;
   if (!current) {
     if (decision.action !== "raise") return;
+    const alertId = randomUUID();
     await tx.insert(alerts).values({
-      alertId: randomUUID(),
+      alertId,
       deviceId,
       commandId,
       deduplicationKey: key,
@@ -69,6 +72,15 @@ async function apply(
       ruleVersion: RULE_VERSION,
       parameters: { ...policy },
       evidence: decision.evidence,
+    });
+    await appendAudit(tx, {
+      action: "alert.raised",
+      targetKind: "alert",
+      targetId: alertId,
+      alertId,
+      system: "alert-evaluator",
+      ...(commandId ? await commandAuditLinks(tx, commandId) : {}),
+      metadata: { afterStatus: "ACTIVE", reason: decision.reason },
     });
     counts.created++;
     return;
@@ -99,6 +111,19 @@ async function apply(
         ruleVersion: RULE_VERSION,
       })
       .where(eq(alerts.alertId, current.alertId));
+    await appendAudit(tx, {
+      action: "alert.resolved",
+      targetKind: "alert",
+      targetId: current.alertId,
+      alertId: current.alertId,
+      system: "alert-evaluator",
+      ...(commandId ? await commandAuditLinks(tx, commandId) : {}),
+      metadata: {
+        beforeStatus: "ACTIVE",
+        afterStatus: "RESOLVED",
+        reason: decision.reason,
+      },
+    });
     counts.resolved++;
     return;
   }
@@ -120,6 +145,16 @@ async function apply(
     })
     .where(eq(alerts.alertId, current.alertId));
   counts.updated++;
+  if (current.reason !== decision.reason)
+    await appendAudit(tx, {
+      action: "alert.reason_changed",
+      targetKind: "alert",
+      targetId: current.alertId,
+      alertId: current.alertId,
+      system: "alert-evaluator",
+      ...(commandId ? await commandAuditLinks(tx, commandId) : {}),
+      metadata: { beforeReason: current.reason, reason: decision.reason },
+    });
 }
 export function createAlertRepository(db: Database, policy: AlertPolicy) {
   const fingerprint = JSON.stringify(policy);

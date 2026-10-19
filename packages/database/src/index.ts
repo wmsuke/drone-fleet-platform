@@ -7,6 +7,8 @@ export {
 } from "./connection.js";
 export {
   commandStatusEnum,
+  auditLogs,
+  operationAuditStates,
   alerts,
   alertEvaluationStates,
   deviceOnlineObservations,
@@ -29,3 +31,12 @@ export {
   type NewTelemetry,
   type Telemetry,
 } from "./schema.js";
+export {
+  appendAudit,
+  appendAudits,
+  auditContext,
+  commandAuditLinks,
+  type AuditEvent,
+  type AuditContext,
+} from "./audit.js";
+export { operationAggregation } from "./operation-aggregation.js";

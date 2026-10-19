@@ -2,6 +2,7 @@ import {
   commands,
   commandOutbox,
   devices,
+  appendAudit,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -77,6 +78,13 @@ export function createCommandRepository(database: Database): CommandRepository {
             nextAttemptAt: command.createdAt,
           });
         }
+        await appendAudit(transaction, {
+          action: "command.accepted",
+          targetKind: "command",
+          targetId: command.commandId,
+          commandId: command.commandId,
+          metadata: { commandType: command.type },
+        });
         return {
           ...command,
           status: "PENDING",

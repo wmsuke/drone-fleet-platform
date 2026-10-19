@@ -8,6 +8,9 @@ import {
   groupMemberships,
   fleetOperations,
   fleetOperationTargets,
+  appendAudit,
+  appendAudits,
+  operationAuditStates,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -28,6 +31,7 @@ export class FleetOperationError extends Error {
   constructor(
     public readonly status: 400 | 404 | 409,
     message: string,
+    public readonly reason = "OPERATION_REJECTED",
   ) {
     super(message);
   }
@@ -113,8 +117,20 @@ export function createFleetOperationRepository(
             throw new FleetOperationError(
               409,
               "同じkeyで異なる要求は受け付けられません",
+              "IDEMPOTENCY_CONFLICT",
             );
           replayed = true;
+          await appendAudit(tx, {
+            action: "operation.replayed",
+            targetKind: "operation",
+            targetId: existing.operationId,
+            operationId: existing.operationId,
+            groupId: existing.groupId,
+            metadata: {
+              commandType: existing.type,
+              targetCount: existing.targetCount,
+            },
+          });
           return response(existing);
         }
         const [group] = await tx
@@ -122,9 +138,18 @@ export function createFleetOperationRepository(
           .from(groups)
           .where(eq(groups.groupId, request.groupId))
           .for("update");
-        if (!group) throw new FleetOperationError(404, "groupが見つかりません");
+        if (!group)
+          throw new FleetOperationError(
+            404,
+            "groupが見つかりません",
+            "GROUP_NOT_FOUND",
+          );
         if (group.deletedAt)
-          throw new FleetOperationError(409, "groupは削除されています");
+          throw new FleetOperationError(
+            409,
+            "groupは削除されています",
+            "GROUP_DELETED",
+          );
         const members = await tx
           .select({ deviceId: groupMemberships.deviceId })
           .from(groupMemberships)
@@ -132,9 +157,17 @@ export function createFleetOperationRepository(
           .orderBy(asc(groupMemberships.deviceId))
           .limit(options.maxTargets + 1);
         if (members.length === 0)
-          throw new FleetOperationError(409, "空groupには送信できません");
+          throw new FleetOperationError(
+            409,
+            "空groupには送信できません",
+            "GROUP_EMPTY",
+          );
         if (members.length > options.maxTargets)
-          throw new FleetOperationError(400, "対象数上限を超えています");
+          throw new FleetOperationError(
+            400,
+            "対象数上限を超えています",
+            "TARGET_LIMIT_EXCEEDED",
+          );
         const createdAt = new Date(),
           expiresAt = new Date(createdAt.getTime() + 30_000),
           resultDeadline = new Date(createdAt.getTime() + 120_000);
@@ -191,6 +224,33 @@ export function createFleetOperationRepository(
             commandId,
           })),
         );
+        await appendAudit(tx, {
+          action: "operation.accepted",
+          targetKind: "operation",
+          targetId: operationId,
+          groupId: group.groupId,
+          operationId,
+          metadata: {
+            commandType: request.type,
+            targetCount: pending.length,
+            afterStatus: "ACCEPTED",
+          },
+        });
+        await appendAudits(
+          tx,
+          pending.map((command) => ({
+            action: "command.accepted",
+            targetKind: "command",
+            targetId: command.commandId,
+            groupId: group.groupId,
+            operationId,
+            commandId: command.commandId,
+            metadata: { commandType: command.type },
+          })),
+        );
+        await tx
+          .insert(operationAuditStates)
+          .values({ operationId, status: "ACCEPTED", evaluatedAt: createdAt });
         return response(operation);
       });
       // 計測出力の失敗でcommit済み受付を失敗に見せない。

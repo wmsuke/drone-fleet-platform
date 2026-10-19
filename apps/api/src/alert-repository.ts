@@ -16,6 +16,8 @@ import {
   groupMemberships,
   fleetOperations,
   fleetOperationTargets,
+  appendAudit,
+  commandAuditLinks,
   type Database,
 } from "@drone-fleet/database";
 import { alertSchema, type Alert, type AlertQuery } from "./alert-schema.js";
@@ -147,14 +149,28 @@ export function createAlertRepository(db: Database): AlertRepository {
       };
     },
     async acknowledge(id) {
-      await db
-        .update(alerts)
-        .set({
-          acknowledgedAt: sql`clock_timestamp()`,
-          acknowledgedActorKind: "anonymous",
-          acknowledgedActorId: null,
-        })
-        .where(and(eq(alerts.alertId, id), isNull(alerts.acknowledgedAt)));
+      await db.transaction(async (tx) => {
+        const rows = await tx
+          .update(alerts)
+          .set({
+            acknowledgedAt: sql`clock_timestamp()`,
+            acknowledgedActorKind: "anonymous",
+            acknowledgedActorId: null,
+          })
+          .where(and(eq(alerts.alertId, id), isNull(alerts.acknowledgedAt)))
+          .returning();
+        const row = rows[0];
+        if (row)
+          await appendAudit(tx, {
+            action: "alert.acknowledged",
+            targetKind: "alert",
+            targetId: id,
+            alertId: id,
+            ...(row.commandId
+              ? await commandAuditLinks(tx, row.commandId)
+              : {}),
+          });
+      });
       return find(id);
     },
   };

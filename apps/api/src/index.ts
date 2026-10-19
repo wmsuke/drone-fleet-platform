@@ -35,6 +35,7 @@ async function main(): Promise<void> {
     outboxOptions,
   );
   const app = buildApi(createDeviceRepository(db), commandService, {
+    auditDatabase: db,
     dashboardOrigin: config.dashboardOrigin,
     outboxStatus: outbox.status,
     groupRepository: createGroupRepository(db),

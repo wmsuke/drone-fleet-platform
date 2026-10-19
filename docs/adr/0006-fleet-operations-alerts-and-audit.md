@@ -1,6 +1,6 @@
 # ADR 0006: 複数機体操作の集約状態と運用記録
 
-- 状態: 採用（#137〜#141、#152でgroup操作・結果追跡、#142でalert生成・解除を実装済み。alertの表示・確認とauditは未実装）
+- 状態: 採用（#137〜#141、#152でgroup操作・結果追跡、#142〜#143でalert生成・解除と表示・確認、#144でaudit記録を実装済み。audit検索・画面は未実装）
 - 決定日: 2026-10-13
 - 対象: #135、#136、後続の#137〜#148
 
@@ -14,7 +14,7 @@ Phase 4では既存の機体別commandを使い、対象の固定、受付の冪
 
 ### エンティティと責務
 
-以下はPhase 4のモデルである。#137で`groups`と`group_memberships`、#139で`fleet_operations`と`fleet_operation_targets`、#152でcommandの実行状態とイベント履歴を実装した。alert、auditの追加モデルは未実装である。現状と削除・履歴の境界は[機体グループAPI](../groups-api.md)、[グループ操作の受付API](../fleet-operations-api.md)、[commandの実行結果通知](../command-results.md)を参照する。
+以下はPhase 4のモデルである。#137で`groups`と`group_memberships`、#139で`fleet_operations`と`fleet_operation_targets`、#152でcommandの実行状態とイベント履歴を実装した。#142〜#144でalertとauditのモデルも追加した。現状と削除・履歴の境界は[機体グループAPI](../groups-api.md)、[グループ操作の受付API](../fleet-operations-api.md)、[commandの実行結果通知](../command-results.md)を参照する。
 
 | エンティティ                  | 関係・制約                                                                  | 責務                                                                                                         |
 | ----------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -34,7 +34,7 @@ APIの受付transactionでgroup行をロックし、削除状態、membership、
 
 operation、全target、対象ごとの異なるcommandId、outbox、成功auditを同じtransactionで保存し、commit後に202とoperationId・対象数を返す。1件でも作成できなければ全件rollbackする。存在しないgroupは404、空・削除済みgroupは409、不正要求・対象数上限超過は400で拒否する。対象数上限の初期値は100、設定で変更できるが、実測前に1,000台対応をうたわない。
 
-#139ではoperation・target・command・outboxの同時commitを実装した。成功auditは#144で同じtransactionに組み込む予定であり、現在は監査記録の保証を提供しない。
+#139ではoperation・target・command・outboxの同時commitを実装した。#144で成功auditも同じtransactionへ組み込んだ。拒否・失敗時の記録、匿名actor、改ざん耐性の限界は[audit log](../audit-log.md)を参照する。
 
 OFFLINEの機体も対象へ含め、勝手に除外しない。既存outboxが期限内に再送する。期限は受付時刻から既存の30秒を全targetへ共通に設定し、末尾のtargetだけ延長しない。全件受付の原子性は、全機体で同時に操作することや全件成功を保証しない。commit後のmembership変更・機体の接続変化は対象を変更しない。
 
@@ -106,7 +106,7 @@ ACK・結果の遅着で未応答や送信失敗が解消された場合は再�
 
 全体状態はtargetとcommandからAPIで集約し、ACK処理がoperationを直接更新する方式は採用しない。期限の評価は読み取り時にも行い、workerの遅延で永久に進行中にしない。一覧の集計と対象一覧は一括query・paginationで取得し、N+1を避ける。
 
-#140では各GETを一つのSQL statement・評価時刻で集約し、同一snapshotの全体件数と絞り込み済みpageを返す。初回確認終了時刻・集約変更checkpoint・audit evaluatorは#144で追加する予定で、読み取りAPIはまだこれらを記録しない。削除API・自動削除は追加せず、保存済みの対象と結果を保持する。API項目と計測条件は[グループ操作の受付・集約API](../fleet-operations-api.md)に記す。
+#140では各GETを一つのSQL statement・評価時刻で集約し、同一snapshotの全体件数と絞り込み済みpageを返す。#144で初めて終端表示を観測した時刻・集約変更checkpoint・audit workerを追加した。読み取りAPIは書き込まず、周期間に通過した中間状態の全記録は保証しない。削除API・自動削除は追加せず、保存済みの対象と結果を保持する。API項目と計測条件は[グループ操作の受付・集約API](../fleet-operations-api.md)に記す。
 
 ### 同時実行、キャンセル、再実行
 
@@ -116,7 +116,7 @@ ACK・結果の遅着で未応答や送信失敗が解消された場合は再�
 
 ### alertの初期条件
 
-#142で以下の生成・解除と永続checkpointを実装した。保存項目、旧データの移行、設定・計測と保証範囲は[alertの生成と解除](../alerts.md)を参照する。alertの表示・手動確認は#143、auditとの同時記録は#144で追加するため、現時点ではaudit保証を提供しない。
+#142で以下の生成・解除と永続checkpointを実装した。保存項目、旧データの移行、設定・計測と保証範囲は[alertの生成と解除](../alerts.md)を参照する。#143で表示・手動確認、#144でauditとの同時commitを追加した。
 
 alert evaluatorはDB確定済みの事実を周期的に評価し、MQTT保存transactionから分離する。初期評価間隔は5秒。閾値・継続時間は設定可能とし、設定値またはrule versionをalertへ記録する。DBに条件成立開始時刻、最終評価した観測識別子、回復開始時刻を保存し、再起動しても継続時間をリセットしない。複数evaluatorは対象キーをロックし、未解除一意制約と合わせて重複発生を防ぐ。
 
@@ -182,7 +182,7 @@ metadataには変更前後のgroup名・membership差分、command type、対象
 | #144〜#145 | auditの同時commit、rollback、拒否記録失敗、重複通知、DB更新拒否と検索・画面    |
 | #146〜#148 | 100台を起点に受付時間・query数・DB負荷・結果到達時間を実測し、E2Eと文書へ反映  |
 
-このIssueでは設計文書のみ変更する。新しいschema、ACK、API、alert、auditが動作するとは記載しない。後続Issueでは単一機体API、v1/v2の既存履歴、local/AWS経路への回帰も検証する。AWSでの検証は#64の費用・短時間試験の境界を守り、継続負荷はローカルで行う。
+本ADR策定時の#136では設計文書のみ変更した。その後の実装状況は冒頭と各仕様書に記す。後続Issueでは単一機体API、v1/v2の既存履歴、local/AWS経路への回帰も検証する。AWSでの検証は#64の費用・短時間試験の境界を守り、継続負荷はローカルで行う。
 
 ## 参照
 

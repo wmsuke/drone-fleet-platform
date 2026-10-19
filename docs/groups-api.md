@@ -1,6 +1,6 @@
 # 機体グループAPI
 
-#137でgroupとmembershipの管理、#138で管理画面を追加した。#139〜#140で[グループ操作の受付・集約API](fleet-operations-api.md)、#141で[操作・結果追跡画面](fleet-operations-dashboard.md)を追加した。audit logはまだない。設計は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に従う。
+#137でgroupとmembershipの管理、#138で管理画面を追加した。#139〜#140で[グループ操作の受付・集約API](fleet-operations-api.md)、#141で[操作・結果追跡画面](fleet-operations-dashboard.md)を追加した。#144で[audit log](audit-log.md)を追加した。設計は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に従う。
 
 ## ダッシュボード
 
@@ -56,7 +56,7 @@ nameは前後の空白を除去し、1〜100文字、制御文字なしとする
 
 DELETEはdeletedAtを設定し、group行とその時点のmembershipを残す。通常の一覧・詳細では非表示にし、以後の変更と再削除は404。membershipの個別削除は現在の所属だけを外し、deviceやcommand履歴を削除しない。外部キーはgroup・deviceの物理削除を制限する。
 
-fleet operationと固定済みtargetは#139で追加した。受付時のgroup名とrevisionを保存し、membership変更やgroup論理削除からcascade削除しない。結合試験でgroup削除後のtarget保持と同じkeyでの再要求を確認した。成功auditとの同時commitは#144で組み込む予定で、現時点で監査記録や認証済み操作者の保証はない。APIはローカルまたは制限したネットワークで使う。
+fleet operationと固定済みtargetは#139で追加した。受付時のgroup名とrevisionを保存し、membership変更やgroup論理削除からcascade削除しない。結合試験でgroup削除後のtarget保持と同じkeyでの再要求を確認した。成功auditとの同時commitは#144で実装した。HTTPの拒否・失敗も別途記録を試みるが、DB停止時の必達や認証済み操作者を保証しない。APIはローカルまたは制限したネットワークで使う。
 
 ## 検証
 

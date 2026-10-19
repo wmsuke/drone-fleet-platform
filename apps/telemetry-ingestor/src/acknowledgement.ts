@@ -1,6 +1,8 @@
 import {
   commands,
   commandExecutionEvents,
+  appendAudit,
+  commandAuditLinks,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -113,7 +115,22 @@ export function createCommandAcknowledgementRepository(
             receivedAt,
             disposition,
           });
-          if (disposition === "conflict") return "conflict";
+          if (disposition === "conflict") {
+            await appendAudit(tx, {
+              action: "command.conflict",
+              targetKind: "command",
+              targetId: row.commandId,
+              ...(await commandAuditLinks(tx, row.commandId)),
+              system: "telemetry-ingestor",
+              result: "REJECTED",
+              metadata: {
+                reason: "RESULT_CONFLICT",
+                beforeStatus: row.executionStatus,
+                afterStatus: message.status,
+              },
+            });
+            return "conflict";
+          }
           if (disposition === "ignored") return "duplicate";
           if (execution) {
             await tx
@@ -136,6 +153,17 @@ export function createCommandAcknowledgementRepository(
               .update(commands)
               .set({ status: "EXPIRED", expiredAt: receivedAt })
               .where(eq(commands.commandId, row.commandId));
+          await appendAudit(tx, {
+            action: execution ? "command.execution_changed" : "command.expired",
+            targetKind: "command",
+            targetId: row.commandId,
+            ...(await commandAuditLinks(tx, row.commandId)),
+            system: "telemetry-ingestor",
+            metadata: {
+              beforeStatus: execution ? row.executionStatus : row.status,
+              afterStatus: execution ? message.status : "EXPIRED",
+            },
+          });
           return "updated";
         }
         if (
@@ -151,6 +179,17 @@ export function createCommandAcknowledgementRepository(
               row.acknowledgementReceivedAt ?? receivedAt,
           })
           .where(eq(commands.commandId, row.commandId));
+        await appendAudit(tx, {
+          action: "command.acknowledged",
+          targetKind: "command",
+          targetId: row.commandId,
+          ...(await commandAuditLinks(tx, row.commandId)),
+          system: "telemetry-ingestor",
+          metadata: {
+            beforeStatus: row.status,
+            afterStatus: row.status === "EXPIRED" ? "EXPIRED" : "ACKNOWLEDGED",
+          },
+        });
         return "updated";
       });
     },
