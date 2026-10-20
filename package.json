@@ -25,6 +25,7 @@
     "load:aws": "pnpm --filter @drone-fleet/load-generator build && node --env-file-if-exists=.env apps/load-generator/dist/index.js",
     "probe:aws-iot": "pnpm --filter @drone-fleet/load-generator build && pnpm --filter @drone-fleet/load-generator probe:aws",
     "load:test:local": "./scripts/run-local-load-trial.sh",
+    "load:test:fleet": "pnpm build && node scripts/run-fleet-load.mjs",
     "test": "vitest run --passWithNoTests",
     "test:aws-iot-e2e": "./scripts/test-aws-iot-e2e.sh",
     "test:load-report": "./scripts/test-load-report-e2e.sh",

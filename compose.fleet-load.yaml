@@ -1,0 +1,40 @@
+services:
+  fleet-responder:
+    image: drone-fleet-command-load:local
+    build:
+      context: .
+      target: runtime
+    command: ["node", "apps/load-generator/dist/fleet-responder.js"]
+    environment:
+      MQTT_HOST: mqtt
+      FLEET_LOAD_DEVICES: ${FLEET_LOAD_DEVICES:-100}
+      FLEET_LOAD_PREFIX: fleetload
+      FLEET_LOAD_CONDITION: ${FLEET_LOAD_CONDITION:-success}
+    volumes:
+      - ${FLEET_LOAD_RESULTS_DIR:?required}:/workspace/load-results
+    stop_grace_period: 15s
+    restart: "no"
+  fleet-probe:
+    image: drone-fleet-command-load:local
+    command: ["node", "apps/load-report/dist/fleet-load.js"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: drone_fleet
+      POSTGRES_USER: drone_fleet
+      POSTGRES_PASSWORD: local-development-only
+      FLEET_LOAD_API: http://api:3000
+      FLEET_LOAD_DEVICES: ${FLEET_LOAD_DEVICES:-100}
+      FLEET_LOAD_PREFIX: fleetload
+      FLEET_LOAD_CONDITION: ${FLEET_LOAD_CONDITION:-success}
+    volumes:
+      - ${FLEET_LOAD_RESULTS_DIR:?required}:/workspace/load-results
+    restart: "no"
+  migrate:
+    image: drone-fleet-command-load:local
+  api:
+    image: drone-fleet-command-load:local
+  telemetry-ingestor:
+    image: drone-fleet-command-load:local
+  alert-evaluator:
+    image: drone-fleet-command-load:local

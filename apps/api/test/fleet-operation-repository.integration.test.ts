@@ -283,6 +283,50 @@ describe.skipIf(!enabled)("fleet operation acceptance", () => {
       expect(operation!.groupRevision).toBe(2);
     }
   });
+  it("reports creation stages only after commit and does not fail acceptance when metrics fail", async () => {
+    const { db } = configured();
+    const groupId = await group();
+    const metrics: {
+      operationId: string;
+      stagesMs: Record<string, number>;
+      durationMs: number;
+    }[] = [];
+    const repo = createFleetOperationRepository(db, {
+      maxTargets: 100,
+      onAccepted(value) {
+        metrics.push(value);
+        throw new Error("metrics unavailable");
+      },
+    });
+    const accepted = await repo.create(
+      { groupId, type: "RETURN_HOME" },
+      "metrics",
+    );
+    expect(metrics).toHaveLength(1);
+    expect(metrics[0]!.operationId).toBe(accepted.operationId);
+    expect(Object.keys(metrics[0]!.stagesMs)).toEqual([
+      "validationAndLocks",
+      "operation",
+      "commands",
+      "outbox",
+      "targets",
+      "auditAndCommit",
+    ]);
+    expect(
+      Object.values(metrics[0]!.stagesMs).every(
+        (v) => Number.isFinite(v) && v >= 0,
+      ),
+    ).toBe(true);
+    expect(
+      Object.values(metrics[0]!.stagesMs).reduce((a, b) => a + b, 0),
+    ).toBeLessThanOrEqual(metrics[0]!.durationMs);
+    expect(
+      await db
+        .select()
+        .from(fleetOperations)
+        .where(eq(fleetOperations.operationId, accepted.operationId)),
+    ).toHaveLength(1);
+  });
   it("benchmarks three 100-target acceptances with actual query counting", async () => {
     const { client } = configured();
     const groupId = await group(100);

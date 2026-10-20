@@ -56,23 +56,11 @@ export function createFleetOperationQueries(db: Database, clock: () => Date) {
     },
     async find(operationId: string, query: OperationTargetQuery) {
       const now = clock();
-      const predicates: SQL[] = [sql`true`];
-      if (query.status) predicates.push(sql`t.status = ${query.status}`);
-      if (query.deviceId)
-        predicates.push(sql`t."deviceId" = ${query.deviceId}`);
       const [row] = await db.execute<{
         summary: Record<string, unknown>;
         items: Record<string, unknown>[];
         total: number;
-      }>(sql`${aggregation(sql`o.operation_id = ${operationId}::uuid`, now)}, filtered AS (
-        SELECT * FROM targets t WHERE ${sql.join(predicates, sql` AND `)}
-      ), page AS (
-        SELECT * FROM filtered ORDER BY "deviceId" COLLATE "C" ASC LIMIT ${query.limit} OFFSET ${query.offset}
-      )
-      SELECT to_jsonb(s) AS summary,
-        coalesce((SELECT jsonb_agg(to_jsonb(p) - 'operation_id' ORDER BY p."deviceId" COLLATE "C" ASC) FROM page p), '[]'::jsonb) AS items,
-        (SELECT count(*)::integer FROM filtered) AS total
-      FROM summaries s`);
+      }>(operationDetailStatement(operationId, query, now));
       if (!row) return null;
       return operationDetailResponseSchema.parse({
         ...dates(row.summary),
@@ -86,4 +74,24 @@ export function createFleetOperationQueries(db: Database, clock: () => Date) {
       });
     },
   };
+}
+
+// 負荷検証でも本番GETと同じstatementをEXPLAINする。
+export function operationDetailStatement(
+  operationId: string,
+  query: OperationTargetQuery,
+  now: Date,
+) {
+  const predicates: SQL[] = [sql`true`];
+  if (query.status) predicates.push(sql`t.status = ${query.status}`);
+  if (query.deviceId) predicates.push(sql`t."deviceId" = ${query.deviceId}`);
+  return sql`${aggregation(sql`o.operation_id = ${operationId}::uuid`, now)}, filtered AS (
+    SELECT * FROM targets t WHERE ${sql.join(predicates, sql` AND `)}
+  ), page AS (
+    SELECT * FROM filtered ORDER BY "deviceId" COLLATE "C" ASC LIMIT ${query.limit} OFFSET ${query.offset}
+  )
+  SELECT to_jsonb(s) AS summary,
+    coalesce((SELECT jsonb_agg(to_jsonb(p) - 'operation_id' ORDER BY p."deviceId" COLLATE "C" ASC) FROM page p), '[]'::jsonb) AS items,
+    (SELECT count(*)::integer FROM filtered) AS total
+  FROM summaries s`;
 }
