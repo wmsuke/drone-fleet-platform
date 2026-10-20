@@ -1,0 +1,3418 @@
+{
+  "schemaVersion": 1,
+  "note": "10/100台18試行と、全件応答1000台3試行。追加1000台の初回失敗も含む。全計画・時系列は同名tar.gzに保存。",
+  "environments": [
+    {
+      "directory": "fleet-146-matrix",
+      "startedAt": "2026-10-20T00:12:56.764Z",
+      "host": {
+        "platform": "darwin",
+        "release": "23.5.0",
+        "arch": "arm64",
+        "cpu": "Apple M2",
+        "cpuCount": 8,
+        "memoryBytes": 17179869184
+      },
+      "docker": {
+        "ServerVersion": "29.8.2",
+        "NCPU": 8,
+        "MemTotal": 8392929280,
+        "Architecture": "aarch64"
+      },
+      "commit": "3d1267abb4c6bc4cd80abafafba65497c8343d14",
+      "node": "v24.21.0",
+      "counts": [10, 100],
+      "conditions": ["success", "failure", "unresponsive"],
+      "trials": 3
+    },
+    {
+      "directory": "fleet-146-1000",
+      "startedAt": "2026-10-20T00:27:33.732Z",
+      "host": {
+        "platform": "darwin",
+        "release": "23.5.0",
+        "arch": "arm64",
+        "cpu": "Apple M2",
+        "cpuCount": 8,
+        "memoryBytes": 17179869184
+      },
+      "docker": {
+        "ServerVersion": "29.8.2",
+        "NCPU": 8,
+        "MemTotal": 8392929280,
+        "Architecture": "aarch64"
+      },
+      "commit": "1848fd6b804d3b7d511c3e21b6291fcfd5b7adca",
+      "node": "v24.21.0",
+      "counts": [1000],
+      "conditions": ["success"],
+      "trials": 3
+    },
+    {
+      "directory": "fleet-146-1000-repeat-2",
+      "startedAt": "2026-10-20T00:30:20.001Z",
+      "host": {
+        "platform": "darwin",
+        "release": "23.5.0",
+        "arch": "arm64",
+        "cpu": "Apple M2",
+        "cpuCount": 8,
+        "memoryBytes": 17179869184
+      },
+      "docker": {
+        "ServerVersion": "29.8.2",
+        "NCPU": 8,
+        "MemTotal": 8392929280,
+        "Architecture": "aarch64"
+      },
+      "commit": "1848fd6b804d3b7d511c3e21b6291fcfd5b7adca",
+      "node": "v24.21.0",
+      "counts": [1000],
+      "conditions": ["success"],
+      "trials": 1
+    },
+    {
+      "directory": "fleet-146-1000-repeat-3",
+      "startedAt": "2026-10-20T00:31:46.181Z",
+      "host": {
+        "platform": "darwin",
+        "release": "23.5.0",
+        "arch": "arm64",
+        "cpu": "Apple M2",
+        "cpuCount": 8,
+        "memoryBytes": 17179869184
+      },
+      "docker": {
+        "ServerVersion": "29.8.2",
+        "NCPU": 8,
+        "MemTotal": 8392929280,
+        "Architecture": "aarch64"
+      },
+      "commit": "1848fd6b804d3b7d511c3e21b6291fcfd5b7adca",
+      "node": "v24.21.0",
+      "counts": [1000],
+      "conditions": ["success"],
+      "trials": 1
+    }
+  ],
+  "results": [
+    {
+      "source": "fleet-146-matrix/10-success-1",
+      "count": 10,
+      "condition": "success",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "171920d3-134e-42d0-8da7-b01d230bbfa3",
+      "passed": true,
+      "acceptanceMs": 55.05581599999999,
+      "repositoryMs": 26.940324000000146,
+      "stagesMs": {
+        "validationAndLocks": 5.000248000000283,
+        "operation": 3.0987910000003467,
+        "commands": 1.949707999999191,
+        "outbox": 2.882749000000331,
+        "targets": 7.858288999999786,
+        "auditAndCommit": 6.142956000000595
+      },
+      "api": {
+        "counters": {
+          "attempted": 98,
+          "succeeded": 98,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 2.985208000000057,
+          "maxMs": 63.48202200000014,
+          "p50Ms": 10.125747000000047,
+          "p95Ms": 26.073032999999896,
+          "p99Ms": 63.48202200000014
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 308,
+        "uniquePerSecond": 32.467532467532465,
+        "latency": {
+          "count": 10,
+          "minMs": 197,
+          "p50Ms": 257,
+          "p95Ms": 308,
+          "p99Ms": 308,
+          "maxMs": 308
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 1,
+        "p50Ms": 2,
+        "p95Ms": 5,
+        "p99Ms": 5,
+        "maxMs": 5
+      },
+      "ackAllVisibleFromPostMs": 564,
+      "terminalObservedMs": 577.676564,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 10,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 5.35,
+          "maxMemoryBytes": 20992491.52,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 23.5,
+          "maxMemoryBytes": 74186752,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 9.16,
+          "maxMemoryBytes": 33973862.4,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 2.47,
+          "maxMemoryBytes": 1695547.392,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 13.08,
+          "maxMemoryBytes": 61624811.52,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 6.36,
+          "maxMemoryBytes": 59097743.36,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.066239,
+          "max": 72.744959
+        },
+        "cpuMicros": {
+          "user": 279689,
+          "system": 68613
+        },
+        "memoryBytes": {
+          "rss": 38313984,
+          "heapTotal": 21245952,
+          "heapUsed": 19392320,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 42
+        },
+        "explainExecutionMs": 0.615
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-success-2",
+      "count": 10,
+      "condition": "success",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "876251d4-47ea-485e-aafe-5aca294c7c02",
+      "passed": true,
+      "acceptanceMs": 62.16073,
+      "repositoryMs": 20.768576000000394,
+      "stagesMs": {
+        "validationAndLocks": 5.955289999999877,
+        "operation": 2.3173740000002,
+        "commands": 2.6037489999998797,
+        "outbox": 3.050748999999996,
+        "targets": 1.2212500000005093,
+        "auditAndCommit": 5.612622999999985
+      },
+      "api": {
+        "counters": {
+          "attempted": 98,
+          "succeeded": 98,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 3.022332000000006,
+          "maxMs": 55.30598200000077,
+          "p50Ms": 11.376080000000002,
+          "p95Ms": 31.493031999999857,
+          "p99Ms": 55.30598200000077
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 327,
+        "uniquePerSecond": 30.581039755351682,
+        "latency": {
+          "count": 10,
+          "minMs": 241,
+          "p50Ms": 294,
+          "p95Ms": 327,
+          "p99Ms": 327,
+          "maxMs": 327
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 0,
+        "p50Ms": 2,
+        "p95Ms": 25,
+        "p99Ms": 25,
+        "maxMs": 25
+      },
+      "ackAllVisibleFromPostMs": 575,
+      "terminalObservedMs": 590.305351,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 10,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 5.89,
+          "maxMemoryBytes": 51065651.2,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 31.41,
+          "maxMemoryBytes": 47668264.96,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 14.22,
+          "maxMemoryBytes": 38660997.12,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 2.73,
+          "maxMemoryBytes": 1892679.68,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 14.69,
+          "maxMemoryBytes": 58762199.04,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 20.37,
+          "maxMemoryBytes": 69625446.4,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.697023,
+          "max": 36.798463
+        },
+        "cpuMicros": {
+          "user": 255821,
+          "system": 72406
+        },
+        "memoryBytes": {
+          "rss": 81952768,
+          "heapTotal": 21508096,
+          "heapUsed": 19379472,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 42
+        },
+        "explainExecutionMs": 0.358
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-success-3",
+      "count": 10,
+      "condition": "success",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "51583044-ba3f-4b0c-9da0-56e3bc4520dc",
+      "passed": true,
+      "acceptanceMs": 55.50865399999998,
+      "repositoryMs": 23.430245000001378,
+      "stagesMs": {
+        "validationAndLocks": 4.926748999998381,
+        "operation": 2.0751240000008693,
+        "commands": 1.965041999999812,
+        "outbox": 2.9863320000004023,
+        "targets": 1.3774579999990237,
+        "auditAndCommit": 10.092123000000356
+      },
+      "api": {
+        "counters": {
+          "attempted": 99,
+          "succeeded": 99,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 3.206873999999516,
+          "maxMs": 60.89240299999983,
+          "p50Ms": 11.428413999999975,
+          "p95Ms": 21.815787,
+          "p99Ms": 60.89240299999983
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 199,
+        "uniquePerSecond": 50.25125628140703,
+        "latency": {
+          "count": 10,
+          "minMs": 99,
+          "p50Ms": 152,
+          "p95Ms": 199,
+          "p99Ms": 199,
+          "maxMs": 199
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 0,
+        "p50Ms": 3,
+        "p95Ms": 25,
+        "p99Ms": 25,
+        "maxMs": 25
+      },
+      "ackAllVisibleFromPostMs": 567,
+      "terminalObservedMs": 573.5280789999999,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 10,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 5.72,
+          "maxMemoryBytes": 20992491.52,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 23.26,
+          "maxMemoryBytes": 47185920,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 10.34,
+          "maxMemoryBytes": 38073794.56,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 2.8,
+          "maxMemoryBytes": 2228224,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 19.24,
+          "maxMemoryBytes": 58059653.12,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 23.88,
+          "maxMemoryBytes": 36794531.84,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.615103,
+          "max": 61.374463
+        },
+        "cpuMicros": {
+          "user": 246758,
+          "system": 58355
+        },
+        "memoryBytes": {
+          "rss": 82358272,
+          "heapTotal": 21508096,
+          "heapUsed": 19416456,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 42
+        },
+        "explainExecutionMs": 0.507
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-failure-1",
+      "count": 10,
+      "condition": "failure",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "9ed0fdae-ac10-4ce9-acda-6a040051310d",
+      "passed": true,
+      "acceptanceMs": 340.547382,
+      "repositoryMs": 289.48468499999944,
+      "stagesMs": {
+        "validationAndLocks": 183.08758399999988,
+        "operation": 14.213121000000683,
+        "commands": 5.300331999999798,
+        "outbox": 16.70053800000005,
+        "targets": 27.62036900000021,
+        "auditAndCommit": 42.53849099999934
+      },
+      "api": {
+        "counters": {
+          "attempted": 99,
+          "succeeded": 99,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 3.598457999999937,
+          "maxMs": 54.56286300000011,
+          "p50Ms": 12.808581000000231,
+          "p95Ms": 25.865660999999818,
+          "p99Ms": 54.56286300000011
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 467,
+        "uniquePerSecond": 21.41327623126338,
+        "latency": {
+          "count": 10,
+          "minMs": 383,
+          "p50Ms": 419,
+          "p95Ms": 467,
+          "p99Ms": 467,
+          "maxMs": 467
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 1,
+        "p50Ms": 3,
+        "p95Ms": 14,
+        "p99Ms": 14,
+        "maxMs": 14
+      },
+      "ackAllVisibleFromPostMs": 858,
+      "terminalObservedMs": 870.3895539999999,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 1,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 6.62,
+          "maxMemoryBytes": 74595696.64,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 40.39,
+          "maxMemoryBytes": 75371642.88,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 15.39,
+          "maxMemoryBytes": 38849740.8,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 7.27,
+          "maxMemoryBytes": 1847590.912,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 15.77,
+          "maxMemoryBytes": 59391344.64,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 15.9,
+          "maxMemoryBytes": 59947089.92,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 14.024703,
+          "max": 36.798463
+        },
+        "cpuMicros": {
+          "user": 307947,
+          "system": 74370
+        },
+        "memoryBytes": {
+          "rss": 82186240,
+          "heapTotal": 21245952,
+          "heapUsed": 19487576,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 43
+        },
+        "explainExecutionMs": 0.512
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-failure-2",
+      "count": 10,
+      "condition": "failure",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "7bcd302f-0108-4036-a4ab-f39bd1ab9e53",
+      "passed": true,
+      "acceptanceMs": 146.44950800000004,
+      "repositoryMs": 48.11336400000073,
+      "stagesMs": {
+        "validationAndLocks": 13.154371999999967,
+        "operation": 1.8387079999993148,
+        "commands": 11.611163999999917,
+        "outbox": 8.82541399999991,
+        "targets": 1.648417000000336,
+        "auditAndCommit": 11.024081000000479
+      },
+      "api": {
+        "counters": {
+          "attempted": 98,
+          "succeeded": 98,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 3.4927490000000034,
+          "maxMs": 77.16252400000121,
+          "p50Ms": 12.779289000000063,
+          "p95Ms": 26.081159999999727,
+          "p99Ms": 77.16252400000121
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 463,
+        "uniquePerSecond": 21.59827213822894,
+        "latency": {
+          "count": 10,
+          "minMs": 151,
+          "p50Ms": 386,
+          "p95Ms": 463,
+          "p99Ms": 463,
+          "maxMs": 463
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 9,
+        "p99Ms": 9,
+        "maxMs": 9
+      },
+      "ackAllVisibleFromPostMs": 661,
+      "terminalObservedMs": 1182.9190250000001,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 1,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 8.2,
+          "maxMemoryBytes": 74627153.92,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 26.15,
+          "maxMemoryBytes": 86444605.44,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 14.96,
+          "maxMemoryBytes": 34613493.76,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.19,
+          "maxMemoryBytes": 1675624.448,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 25.3,
+          "maxMemoryBytes": 54043607.04,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 28.78,
+          "maxMemoryBytes": 68492984.32,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.533183,
+          "max": 38.207487
+        },
+        "cpuMicros": {
+          "user": 364492,
+          "system": 100957
+        },
+        "memoryBytes": {
+          "rss": 82239488,
+          "heapTotal": 21508096,
+          "heapUsed": 19386896,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 13,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 43
+        },
+        "explainExecutionMs": 0.56
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-failure-3",
+      "count": 10,
+      "condition": "failure",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "e4bcb96f-b343-475c-bb58-f24a8c842d56",
+      "passed": true,
+      "acceptanceMs": 60.01907399999999,
+      "repositoryMs": 29.079995000000054,
+      "stagesMs": {
+        "validationAndLocks": 6.2297910000006596,
+        "operation": 1.9579159999993863,
+        "commands": 4.3617490000006,
+        "outbox": 5.370707999999468,
+        "targets": 1.9681239999999889,
+        "auditAndCommit": 9.180999000000156
+      },
+      "api": {
+        "counters": {
+          "attempted": 98,
+          "succeeded": 98,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 2.831666000000041,
+          "maxMs": 60.77336500000001,
+          "p50Ms": 12.757456000000275,
+          "p95Ms": 33.536410999999134,
+          "p99Ms": 60.77336500000001
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 541,
+        "uniquePerSecond": 18.484288354898336,
+        "latency": {
+          "count": 10,
+          "minMs": 283,
+          "p50Ms": 473,
+          "p95Ms": 541,
+          "p99Ms": 541,
+          "maxMs": 541
+        },
+        "attempts": 10,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 10,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 8,
+        "p99Ms": 8,
+        "maxMs": 8
+      },
+      "ackAllVisibleFromPostMs": 1085,
+      "terminalObservedMs": 1114.3994790000002,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 1,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 7.08,
+          "maxMemoryBytes": 21181235.2,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 29.26,
+          "maxMemoryBytes": 89705676.8,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 20.92,
+          "maxMemoryBytes": 38084280.32,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.17,
+          "maxMemoryBytes": 2219835.392,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 17.37,
+          "maxMemoryBytes": 49335500.8,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 8.97,
+          "maxMemoryBytes": 81222696.96,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.975551,
+          "max": 37.715967
+        },
+        "cpuMicros": {
+          "user": 354067,
+          "system": 93435
+        },
+        "memoryBytes": {
+          "rss": 82423808,
+          "heapTotal": 21508096,
+          "heapUsed": 19476808,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 11,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 20,
+          "audit_logs": 43
+        },
+        "explainExecutionMs": 0.51
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-unresponsive-1",
+      "count": 10,
+      "condition": "unresponsive",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "35fd62dc-845a-4ac8-939f-c98ede585fcf",
+      "passed": true,
+      "acceptanceMs": 51.14978300000001,
+      "repositoryMs": 21.974787999999535,
+      "stagesMs": {
+        "validationAndLocks": 5.6041660000000775,
+        "operation": 4.086999000000105,
+        "commands": 2.243749999999636,
+        "outbox": 3.3679990000000544,
+        "targets": 1.2573750000001382,
+        "auditAndCommit": 5.407123999999385
+      },
+      "api": {
+        "counters": {
+          "attempted": 342,
+          "succeeded": 342,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 2.6387919999997393,
+          "maxMs": 55.0715739999996,
+          "p50Ms": 12.315123000000312,
+          "p95Ms": 26.68307900000036,
+          "p99Ms": 44.55040899999949
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 209,
+        "uniquePerSecond": 47.84688995215311,
+        "latency": {
+          "count": 10,
+          "minMs": 95,
+          "p50Ms": 155,
+          "p95Ms": 209,
+          "p99Ms": 209,
+          "maxMs": 209
+        },
+        "attempts": 14,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 9,
+        "minMs": 1,
+        "p50Ms": 5,
+        "p95Ms": 8,
+        "p99Ms": 8,
+        "maxMs": 8
+      },
+      "ackAllVisibleFromPostMs": 567,
+      "terminalObservedMs": 30317.614897,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 1,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 10.82,
+          "maxMemoryBytes": 73452748.8,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 24.46,
+          "maxMemoryBytes": 72613888,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 12.18,
+          "maxMemoryBytes": 38566625.28,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 5.49,
+          "maxMemoryBytes": 2335178.752,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 13.74,
+          "maxMemoryBytes": 59580088.32,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 13.21,
+          "maxMemoryBytes": 60492349.44,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.508607,
+          "max": 54.755327
+        },
+        "cpuMicros": {
+          "user": 468392,
+          "system": 147342
+        },
+        "memoryBytes": {
+          "rss": 82366464,
+          "heapTotal": 21770240,
+          "heapUsed": 19597128,
+          "external": 2978199,
+          "arrayBuffers": 559826
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 18,
+          "audit_logs": 41
+        },
+        "explainExecutionMs": 0.705
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-unresponsive-2",
+      "count": 10,
+      "condition": "unresponsive",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "5295afa1-de5d-4cce-8471-c0747d1a48f9",
+      "passed": true,
+      "acceptanceMs": 54.147365000000036,
+      "repositoryMs": 22.431996000000254,
+      "stagesMs": {
+        "validationAndLocks": 6.143081999999595,
+        "operation": 2.6920000000000073,
+        "commands": 2.437832999999955,
+        "outbox": 3.3126659999998083,
+        "targets": 1.4498330000005808,
+        "auditAndCommit": 6.387539999999717
+      },
+      "api": {
+        "counters": {
+          "attempted": 343,
+          "succeeded": 343,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 3.1977499999993597,
+          "maxMs": 171.8703459999997,
+          "p50Ms": 11.94253899999967,
+          "p95Ms": 29.980161999999837,
+          "p99Ms": 57.884907
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 315,
+        "uniquePerSecond": 31.746031746031747,
+        "latency": {
+          "count": 10,
+          "minMs": 187,
+          "p50Ms": 274,
+          "p95Ms": 315,
+          "p99Ms": 315,
+          "maxMs": 315
+        },
+        "attempts": 14,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 9,
+        "minMs": 1,
+        "p50Ms": 3,
+        "p95Ms": 22,
+        "p99Ms": 22,
+        "maxMs": 22
+      },
+      "ackAllVisibleFromPostMs": 583,
+      "terminalObservedMs": 30497.788116,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 1,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 8.91,
+          "maxMemoryBytes": 61551411.2,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 23.28,
+          "maxMemoryBytes": 72844574.72,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 18.55,
+          "maxMemoryBytes": 39206256.64,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.2,
+          "maxMemoryBytes": 2310012.928,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 19.36,
+          "maxMemoryBytes": 59506688,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 5.64,
+          "maxMemoryBytes": 83120619.52,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.524991,
+          "max": 97.779711
+        },
+        "cpuMicros": {
+          "user": 551082,
+          "system": 150902
+        },
+        "memoryBytes": {
+          "rss": 82591744,
+          "heapTotal": 21508096,
+          "heapUsed": 19566200,
+          "external": 2978199,
+          "arrayBuffers": 559826
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 18,
+          "audit_logs": 41
+        },
+        "explainExecutionMs": 1.851
+      }
+    },
+    {
+      "source": "fleet-146-matrix/10-unresponsive-3",
+      "count": 10,
+      "condition": "unresponsive",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "42206eb2-64ae-427b-b110-213da023d55d",
+      "passed": true,
+      "acceptanceMs": 70.09036600000002,
+      "repositoryMs": 23.578580999999758,
+      "stagesMs": {
+        "validationAndLocks": 6.519956999999522,
+        "operation": 2.3024169999998776,
+        "commands": 2.455249000000549,
+        "outbox": 4.031833000000006,
+        "targets": 1.700832999999875,
+        "auditAndCommit": 6.54950000000008
+      },
+      "api": {
+        "counters": {
+          "attempted": 341,
+          "succeeded": 341,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 2.9165830000019923,
+          "maxMs": 114.93152700000064,
+          "p50Ms": 12.189582000002702,
+          "p95Ms": 28.662038999999993,
+          "p99Ms": 53.554035
+        }
+      },
+      "publish": {
+        "unique": 10,
+        "completionMs": 396,
+        "uniquePerSecond": 25.252525252525253,
+        "latency": {
+          "count": 10,
+          "minMs": 289,
+          "p50Ms": 343,
+          "p95Ms": 396,
+          "p99Ms": 396,
+          "maxMs": 396
+        },
+        "attempts": 14,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 9,
+        "minMs": 1,
+        "p50Ms": 2,
+        "p95Ms": 3,
+        "p99Ms": 3,
+        "maxMs": 3
+      },
+      "ackAllVisibleFromPostMs": 579,
+      "terminalObservedMs": 30543.21038,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 9,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 1,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 10,
+        "commands": 10,
+        "outboxes": 10
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 12.7,
+          "maxMemoryBytes": 73956065.28,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 25.48,
+          "maxMemoryBytes": 73001861.12,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 21.15,
+          "maxMemoryBytes": 34508636.16,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 2.58,
+          "maxMemoryBytes": 2350907.392,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 19.47,
+          "maxMemoryBytes": 61215866.88,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 1.08,
+          "maxMemoryBytes": 57797509.12,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.549567,
+          "max": 47.874047
+        },
+        "cpuMicros": {
+          "user": 535440,
+          "system": 148238
+        },
+        "memoryBytes": {
+          "rss": 82292736,
+          "heapTotal": 21245952,
+          "heapUsed": 19564408,
+          "external": 2978199,
+          "arrayBuffers": 559826
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 10,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 10,
+          "operations": 1,
+          "targets": 10,
+          "commands": 10,
+          "outboxes": 10,
+          "execution_events": 18,
+          "audit_logs": 41
+        },
+        "explainExecutionMs": 0.581
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-success-1",
+      "count": 100,
+      "condition": "success",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "bdb09785-8a9a-4768-a536-c7ee329ce9f3",
+      "passed": true,
+      "acceptanceMs": 82.32848899999999,
+      "repositoryMs": 51.93578600000001,
+      "stagesMs": {
+        "validationAndLocks": 4.4192500000008295,
+        "operation": 1.6077499999992142,
+        "commands": 16.342956000000413,
+        "outbox": 9.053039999999783,
+        "targets": 5.223291000000245,
+        "auditAndCommit": 15.281498999999712
+      },
+      "api": {
+        "counters": {
+          "attempted": 99,
+          "succeeded": 99,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.440875000000233,
+          "maxMs": 104.969153,
+          "p50Ms": 13.831038999999691,
+          "p95Ms": 40.79420300000038,
+          "p99Ms": 104.969153
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 915,
+        "uniquePerSecond": 109.2896174863388,
+        "latency": {
+          "count": 100,
+          "minMs": 256,
+          "p50Ms": 641,
+          "p95Ms": 890,
+          "p99Ms": 911,
+          "maxMs": 915
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 2,
+        "p99Ms": 5,
+        "maxMs": 10
+      },
+      "ackAllVisibleFromPostMs": 1118,
+      "terminalObservedMs": 1166.61248,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 100,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 26.52,
+          "maxMemoryBytes": 72823603.2,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 45.07,
+          "maxMemoryBytes": 82009128.96,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 15.46,
+          "maxMemoryBytes": 46776975.36,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.85,
+          "maxMemoryBytes": 2395996.16,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 51.21,
+          "maxMemoryBytes": 62652416,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 2.46,
+          "maxMemoryBytes": 71617740.8,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.336575,
+          "max": 55.541759
+        },
+        "cpuMicros": {
+          "user": 415972,
+          "system": 88394
+        },
+        "memoryBytes": {
+          "rss": 83881984,
+          "heapTotal": 22818816,
+          "heapUsed": 20739536,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 402
+        },
+        "explainExecutionMs": 1.614
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-success-2",
+      "count": 100,
+      "condition": "success",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "f1e36b33-68c1-400f-8340-cd798c3d778e",
+      "passed": true,
+      "acceptanceMs": 79.35773999999998,
+      "repositoryMs": 53.26166000000012,
+      "stagesMs": {
+        "validationAndLocks": 5.583332999999584,
+        "operation": 3.3314989999998943,
+        "commands": 16.54087300000083,
+        "outbox": 9.41783199999918,
+        "targets": 5.132666000000427,
+        "auditAndCommit": 13.248665000000074
+      },
+      "api": {
+        "counters": {
+          "attempted": 99,
+          "succeeded": 99,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 5.104499000000942,
+          "maxMs": 75.08999100000074,
+          "p50Ms": 13.021248999999898,
+          "p95Ms": 32.16591300000073,
+          "p99Ms": 75.08999100000074
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 865,
+        "uniquePerSecond": 115.60693641618498,
+        "latency": {
+          "count": 100,
+          "minMs": 193,
+          "p50Ms": 595,
+          "p95Ms": 843,
+          "p99Ms": 859,
+          "maxMs": 865
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 8,
+        "p99Ms": 30,
+        "maxMs": 30
+      },
+      "ackAllVisibleFromPostMs": 1093,
+      "terminalObservedMs": 1130.6353179999999,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 100,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 25.79,
+          "maxMemoryBytes": 73159147.52,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 38.14,
+          "maxMemoryBytes": 82638274.56,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 15.19,
+          "maxMemoryBytes": 46965719.04,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 4.14,
+          "maxMemoryBytes": 2380267.52,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 48.55,
+          "maxMemoryBytes": 59653488.64,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 80.51,
+          "maxMemoryBytes": 73159147.52,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.197311,
+          "max": 42.434559
+        },
+        "cpuMicros": {
+          "user": 428519,
+          "system": 72869
+        },
+        "memoryBytes": {
+          "rss": 83513344,
+          "heapTotal": 22818816,
+          "heapUsed": 20759032,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 1,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 402
+        },
+        "explainExecutionMs": 1.294
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-success-3",
+      "count": 100,
+      "condition": "success",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "633d86d7-6681-4d3f-8c39-43476dada7c6",
+      "passed": true,
+      "acceptanceMs": 96.22215800000004,
+      "repositoryMs": 61.18641099999968,
+      "stagesMs": {
+        "validationAndLocks": 10.11687400000028,
+        "operation": 2.099833999999646,
+        "commands": 11.326122999999825,
+        "outbox": 11.342123999999785,
+        "targets": 5.9128749999999854,
+        "auditAndCommit": 20.37937300000067
+      },
+      "api": {
+        "counters": {
+          "attempted": 89,
+          "succeeded": 89,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.8130829999990965,
+          "maxMs": 276.6181409999999,
+          "p50Ms": 18.473206000000573,
+          "p95Ms": 169.41585899999973,
+          "p99Ms": 276.6181409999999
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 5577,
+        "uniquePerSecond": 17.930787161556392,
+        "latency": {
+          "count": 100,
+          "minMs": 454,
+          "p50Ms": 5028,
+          "p95Ms": 5541,
+          "p99Ms": 5573,
+          "maxMs": 5577
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 5,
+        "p99Ms": 32,
+        "maxMs": 95
+      },
+      "ackAllVisibleFromPostMs": 5901,
+      "terminalObservedMs": 5789.987706,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 100,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 29.74,
+          "maxMemoryBytes": 72592916.48,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 93.39,
+          "maxMemoryBytes": 81128325.12,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 21.01,
+          "maxMemoryBytes": 46514831.36,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 8.18,
+          "maxMemoryBytes": 2731540.48,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 114.51,
+          "maxMemoryBytes": 64099450.88,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 89.08,
+          "maxMemoryBytes": 57388564.48,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.991935,
+          "max": 216.268799
+        },
+        "cpuMicros": {
+          "user": 666751,
+          "system": 172367
+        },
+        "memoryBytes": {
+          "rss": 100265984,
+          "heapTotal": 55586816,
+          "heapUsed": 28227016,
+          "external": 3003040,
+          "arrayBuffers": 584667
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 4,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 400
+        },
+        "explainExecutionMs": 7.651
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-failure-1",
+      "count": 100,
+      "condition": "failure",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "39c01085-db7f-4b96-99a6-36508019c65c",
+      "passed": true,
+      "acceptanceMs": 136.75894499999998,
+      "repositoryMs": 108.07282400000076,
+      "stagesMs": {
+        "validationAndLocks": 5.021790999999212,
+        "operation": 1.5588330000009591,
+        "commands": 33.809996999998475,
+        "outbox": 28.477747000000818,
+        "targets": 17.190332000000126,
+        "auditAndCommit": 22.000872999999046
+      },
+      "api": {
+        "counters": {
+          "attempted": 98,
+          "succeeded": 98,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 5.498123999999734,
+          "maxMs": 151.91261099999997,
+          "p50Ms": 18.092956999999842,
+          "p95Ms": 35.048705000001064,
+          "p99Ms": 151.91261099999997
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 2142,
+        "uniquePerSecond": 46.68534080298787,
+        "latency": {
+          "count": 100,
+          "minMs": 256,
+          "p50Ms": 1001,
+          "p95Ms": 2040,
+          "p99Ms": 2120,
+          "maxMs": 2142
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 3,
+        "p99Ms": 4,
+        "maxMs": 5
+      },
+      "ackAllVisibleFromPostMs": 2677,
+      "terminalObservedMs": 2768.862115,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 10,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 29.35,
+          "maxMemoryBytes": 29769072.64,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 58.09,
+          "maxMemoryBytes": 84169195.52,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 9.71,
+          "maxMemoryBytes": 46787461.12,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.91,
+          "maxMemoryBytes": 2473590.784,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 53.74,
+          "maxMemoryBytes": 64246251.52,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 68.71,
+          "maxMemoryBytes": 55742300.16,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.533183,
+          "max": 37.584895
+        },
+        "cpuMicros": {
+          "user": 489582,
+          "system": 193604
+        },
+        "memoryBytes": {
+          "rss": 100433920,
+          "heapTotal": 55324672,
+          "heapUsed": 28179160,
+          "external": 3003529,
+          "arrayBuffers": 585156
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 3,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 413
+        },
+        "explainExecutionMs": 1.599
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-failure-2",
+      "count": 100,
+      "condition": "failure",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "91d99e4d-054d-47c1-b574-ab5a50e61cda",
+      "passed": true,
+      "acceptanceMs": 125.92798800000003,
+      "repositoryMs": 91.8639490000005,
+      "stagesMs": {
+        "validationAndLocks": 7.154457999999977,
+        "operation": 2.4312909999998737,
+        "commands": 32.576122000000396,
+        "outbox": 11.934123999999429,
+        "targets": 7.513749000000644,
+        "auditAndCommit": 30.227914000000055
+      },
+      "api": {
+        "counters": {
+          "attempted": 94,
+          "succeeded": 94,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 5.944832000000133,
+          "maxMs": 309.946054,
+          "p50Ms": 15.381997999999953,
+          "p95Ms": 51.63845399999991,
+          "p99Ms": 309.946054
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 1338,
+        "uniquePerSecond": 74.73841554559043,
+        "latency": {
+          "count": 100,
+          "minMs": 238,
+          "p50Ms": 736,
+          "p95Ms": 1290,
+          "p99Ms": 1329,
+          "maxMs": 1338
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 6,
+        "p99Ms": 16,
+        "maxMs": 25
+      },
+      "ackAllVisibleFromPostMs": 1649,
+      "terminalObservedMs": 1712.812297,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 10,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 15.33,
+          "maxMemoryBytes": 73001861.12,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 58.33,
+          "maxMemoryBytes": 88237670.4,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 36.19,
+          "maxMemoryBytes": 46661632,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.79,
+          "maxMemoryBytes": 2629828.608,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 69.65,
+          "maxMemoryBytes": 63019417.6,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 4.85,
+          "maxMemoryBytes": 75791073.28,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 14.172159,
+          "max": 332.922879
+        },
+        "cpuMicros": {
+          "user": 915429,
+          "system": 260093
+        },
+        "memoryBytes": {
+          "rss": 83488768,
+          "heapTotal": 22556672,
+          "heapUsed": 20756976,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 1,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 412
+        },
+        "explainExecutionMs": 3.849
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-failure-3",
+      "count": 100,
+      "condition": "failure",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "776d8286-3499-48a7-a147-e8328f2a11eb",
+      "passed": true,
+      "acceptanceMs": 105.83515600000004,
+      "repositoryMs": 63.682285999999294,
+      "stagesMs": {
+        "validationAndLocks": 11.775082000000111,
+        "operation": 2.250500000000102,
+        "commands": 11.424707000000126,
+        "outbox": 15.764290000000074,
+        "targets": 5.99279099999967,
+        "auditAndCommit": 16.465290000000095
+      },
+      "api": {
+        "counters": {
+          "attempted": 99,
+          "succeeded": 99,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.76524900000004,
+          "maxMs": 66.34595200000058,
+          "p50Ms": 12.96562399999948,
+          "p95Ms": 34.711663000000044,
+          "p99Ms": 66.34595200000058
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 1081,
+        "uniquePerSecond": 92.50693802035153,
+        "latency": {
+          "count": 100,
+          "minMs": 287,
+          "p50Ms": 756,
+          "p95Ms": 1041,
+          "p99Ms": 1076,
+          "maxMs": 1081
+        },
+        "attempts": 100,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 100,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 6,
+        "p99Ms": 21,
+        "maxMs": 29
+      },
+      "ackAllVisibleFromPostMs": 1621,
+      "terminalObservedMs": 1668.1469260000003,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 10,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 28.59,
+          "maxMemoryBytes": 72938946.56,
+          "samples": 6
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 48.56,
+          "maxMemoryBytes": 82124472.32,
+          "samples": 6
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 12.47,
+          "maxMemoryBytes": 46682603.52,
+          "samples": 6
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 5.14,
+          "maxMemoryBytes": 5709496.32,
+          "samples": 6
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 58.58,
+          "maxMemoryBytes": 61561896.96,
+          "samples": 6
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 92.52,
+          "maxMemoryBytes": 75990302.72,
+          "samples": 6
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 12.902399,
+          "max": 23.035903
+        },
+        "cpuMicros": {
+          "user": 408009,
+          "system": 82121
+        },
+        "memoryBytes": {
+          "rss": 83550208,
+          "heapTotal": 22818816,
+          "heapUsed": 20746696,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 2,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 200,
+          "audit_logs": 412
+        },
+        "explainExecutionMs": 1.589
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-unresponsive-1",
+      "count": 100,
+      "condition": "unresponsive",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "b0954c48-6cf7-4477-a642-61c77c3e563a",
+      "passed": true,
+      "acceptanceMs": 92.52899099999996,
+      "repositoryMs": 64.26561899999979,
+      "stagesMs": {
+        "validationAndLocks": 5.246999999999389,
+        "operation": 2.967123999999785,
+        "commands": 18.479831999999988,
+        "outbox": 10.444791000000805,
+        "targets": 5.913415999999415,
+        "auditAndCommit": 21.204789999999775
+      },
+      "api": {
+        "counters": {
+          "attempted": 344,
+          "succeeded": 344,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.34658300000001,
+          "maxMs": 87.56274399999893,
+          "p50Ms": 17.04254100000071,
+          "p95Ms": 31.76253899999938,
+          "p99Ms": 44.245122000000265
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 860,
+        "uniquePerSecond": 116.27906976744187,
+        "latency": {
+          "count": 100,
+          "minMs": 201,
+          "p50Ms": 548,
+          "p95Ms": 833,
+          "p99Ms": 854,
+          "maxMs": 860
+        },
+        "attempts": 140,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 90,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 3,
+        "p99Ms": 14,
+        "maxMs": 14
+      },
+      "ackAllVisibleFromPostMs": 1104,
+      "terminalObservedMs": 30106.511073,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 10,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 23.32,
+          "maxMemoryBytes": 73389834.24,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 36.22,
+          "maxMemoryBytes": 82952847.36,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 11.08,
+          "maxMemoryBytes": 46703575.04,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.29,
+          "maxMemoryBytes": 2359296,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 45.07,
+          "maxMemoryBytes": 61027123.2,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 65.88,
+          "maxMemoryBytes": 67339550.72,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.156351,
+          "max": 42.893311
+        },
+        "cpuMicros": {
+          "user": 568057,
+          "system": 141344
+        },
+        "memoryBytes": {
+          "rss": 83517440,
+          "heapTotal": 22556672,
+          "heapUsed": 21069280,
+          "external": 2980395,
+          "arrayBuffers": 562022
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 2,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 180,
+          "audit_logs": 383
+        },
+        "explainExecutionMs": 1.339
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-unresponsive-2",
+      "count": 100,
+      "condition": "unresponsive",
+      "repetition": 2,
+      "sourceTrial": 2,
+      "operationId": "ce23096a-93b3-4011-a883-8e676a1f1eb8",
+      "passed": true,
+      "acceptanceMs": 126.465532,
+      "repositoryMs": 83.12349399999948,
+      "stagesMs": {
+        "validationAndLocks": 6.816624000000047,
+        "operation": 2.222208000000137,
+        "commands": 34.91308099999969,
+        "outbox": 14.609707000000526,
+        "targets": 8.513582999999926,
+        "auditAndCommit": 16.038915999999517
+      },
+      "api": {
+        "counters": {
+          "attempted": 343,
+          "succeeded": 343,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.514707999998791,
+          "maxMs": 93.84178499999689,
+          "p50Ms": 15.91704000000027,
+          "p95Ms": 34.379831000000195,
+          "p99Ms": 56.79737100000057
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 835,
+        "uniquePerSecond": 119.76047904191617,
+        "latency": {
+          "count": 100,
+          "minMs": 181,
+          "p50Ms": 566,
+          "p95Ms": 814,
+          "p99Ms": 831,
+          "maxMs": 835
+        },
+        "attempts": 140,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 90,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 3,
+        "p99Ms": 7,
+        "maxMs": 7
+      },
+      "ackAllVisibleFromPostMs": 1136,
+      "terminalObservedMs": 30361.606924,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 10,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 26.08,
+          "maxMemoryBytes": 76514590.72,
+          "samples": 19
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 58.5,
+          "maxMemoryBytes": 84483768.32,
+          "samples": 19
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 10.09,
+          "maxMemoryBytes": 46682603.52,
+          "samples": 19
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 3.4,
+          "maxMemoryBytes": 2367684.608,
+          "samples": 19
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 48.57,
+          "maxMemoryBytes": 64214794.24,
+          "samples": 19
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 3.23,
+          "maxMemoryBytes": 57451479.04,
+          "samples": 19
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.197311,
+          "max": 57.966591
+        },
+        "cpuMicros": {
+          "user": 520831,
+          "system": 118863
+        },
+        "memoryBytes": {
+          "rss": 83906560,
+          "heapTotal": 22818816,
+          "heapUsed": 21133200,
+          "external": 2980395,
+          "arrayBuffers": 562022
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 1,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 180,
+          "audit_logs": 383
+        },
+        "explainExecutionMs": 1.669
+      }
+    },
+    {
+      "source": "fleet-146-matrix/100-unresponsive-3",
+      "count": 100,
+      "condition": "unresponsive",
+      "repetition": 3,
+      "sourceTrial": 3,
+      "operationId": "046ec977-6b80-4f4f-95ae-55063710ab8a",
+      "passed": true,
+      "acceptanceMs": 94.91865999999999,
+      "repositoryMs": 64.00474600000052,
+      "stagesMs": {
+        "validationAndLocks": 5.138165999999728,
+        "operation": 1.7191670000001977,
+        "commands": 11.578956999999718,
+        "outbox": 10.160624000000098,
+        "targets": 6.377958000000035,
+        "auditAndCommit": 29.01054000000022
+      },
+      "api": {
+        "counters": {
+          "attempted": 344,
+          "succeeded": 344,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 4.41204099999959,
+          "maxMs": 81.98678599999948,
+          "p50Ms": 16.441665999998804,
+          "p95Ms": 30.28399800000625,
+          "p99Ms": 48.989496000001964
+        }
+      },
+      "publish": {
+        "unique": 100,
+        "completionMs": 948,
+        "uniquePerSecond": 105.48523206751055,
+        "latency": {
+          "count": 100,
+          "minMs": 210,
+          "p50Ms": 659,
+          "p95Ms": 918,
+          "p99Ms": 944,
+          "maxMs": 948
+        },
+        "attempts": 140,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 90,
+        "minMs": 0,
+        "p50Ms": 1,
+        "p95Ms": 6,
+        "p99Ms": 27,
+        "maxMs": 27
+      },
+      "ackAllVisibleFromPostMs": 1112,
+      "terminalObservedMs": 30738.167336,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 90,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 10,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 100,
+        "commands": 100,
+        "outboxes": 100
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 24.03,
+          "maxMemoryBytes": 66112716.8,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 45.1,
+          "maxMemoryBytes": 91005911.04,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 15.46,
+          "maxMemoryBytes": 45980057.6,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 6.02,
+          "maxMemoryBytes": 2498756.608,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 53.72,
+          "maxMemoryBytes": 61540925.44,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 2.04,
+          "maxMemoryBytes": 70244106.24,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.295615,
+          "max": 41.385983
+        },
+        "cpuMicros": {
+          "user": 601430,
+          "system": 133096
+        },
+        "memoryBytes": {
+          "rss": 83648512,
+          "heapTotal": 22818816,
+          "heapUsed": 21074848,
+          "external": 2980883,
+          "arrayBuffers": 562510
+        }
+      },
+      "db": {
+        "maxObservedConnections": 15,
+        "maxObservedWaitingLocks": 0,
+        "maxObservedBacklog": 100,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 100,
+          "operations": 1,
+          "targets": 100,
+          "commands": 100,
+          "outboxes": 100,
+          "execution_events": 180,
+          "audit_logs": 383
+        },
+        "explainExecutionMs": 1.694
+      }
+    },
+    {
+      "source": "fleet-146-1000/1000-success-1",
+      "count": 1000,
+      "condition": "success",
+      "repetition": 1,
+      "sourceTrial": 1,
+      "operationId": "d3bd4537-551e-46ba-833d-4faf1bdf9821",
+      "passed": false,
+      "acceptanceMs": 3307.2392659999996,
+      "repositoryMs": 3160.8624819999995,
+      "stagesMs": {
+        "validationAndLocks": 12.7286239999994,
+        "operation": 5.503125000000182,
+        "commands": 157.2498260000002,
+        "outbox": 1282.771401,
+        "targets": 49.924997000000076,
+        "auditAndCommit": 1652.3344670000006
+      },
+      "api": {
+        "counters": {
+          "attempted": 300,
+          "succeeded": 299,
+          "failed": 1,
+          "timedOut": 1
+        },
+        "errorRate": 0.0033333333333333335,
+        "timings": {
+          "minMs": 5.997041999999055,
+          "maxMs": 629.0521380000009,
+          "p50Ms": 12.70683199999985,
+          "p95Ms": 71.82032999999865,
+          "p99Ms": 285.5604869999952
+        }
+      },
+      "publish": {
+        "unique": 900,
+        "completionMs": 29904,
+        "uniquePerSecond": 30.096308186195827,
+        "latency": {
+          "count": 900,
+          "minMs": 7991,
+          "p50Ms": 23629,
+          "p95Ms": 29417,
+          "p99Ms": 29840,
+          "maxMs": 29904
+        },
+        "attempts": 900,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 900,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 2,
+        "p99Ms": 6,
+        "maxMs": 539
+      },
+      "ackAllVisibleFromPostMs": null,
+      "terminalObservedMs": 30776.922730000002,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 900,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 100,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 1000,
+        "commands": 1000,
+        "outboxes": 1000
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": false,
+        "expectedOutcome": false
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 50.41,
+          "maxMemoryBytes": 72959918.08,
+          "samples": 19
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 393.97,
+          "maxMemoryBytes": 98849259.52,
+          "samples": 19
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 180.21,
+          "maxMemoryBytes": 67266150.4,
+          "samples": 19
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 83.87,
+          "maxMemoryBytes": 8487174.144,
+          "samples": 19
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 112.8,
+          "maxMemoryBytes": 77175193.6,
+          "samples": 19
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 88.98,
+          "maxMemoryBytes": 93470064.64,
+          "samples": 19
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 13.737983,
+          "max": 1444.937727
+        },
+        "cpuMicros": {
+          "user": 4493825,
+          "system": 1082278
+        },
+        "memoryBytes": {
+          "rss": 106340352,
+          "heapTotal": 45887488,
+          "heapUsed": 36288160,
+          "external": 3147451,
+          "arrayBuffers": 729078
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 4,
+        "maxObservedBacklog": 1000,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 1000,
+          "operations": 1,
+          "targets": 1000,
+          "commands": 1000,
+          "outboxes": 1000,
+          "execution_events": 1800,
+          "audit_logs": 3802
+        },
+        "explainExecutionMs": 4.377
+      }
+    },
+    {
+      "source": "fleet-146-1000-repeat-2/1000-success-1",
+      "count": 1000,
+      "condition": "success",
+      "repetition": 2,
+      "sourceTrial": 1,
+      "operationId": "9ec2bc24-ab1a-4c5a-86ef-42ea7b90c52b",
+      "passed": true,
+      "acceptanceMs": 381.243318,
+      "repositoryMs": 344.58877799999937,
+      "stagesMs": {
+        "validationAndLocks": 7.672416000000339,
+        "operation": 1.913166999999703,
+        "commands": 116.7280780000001,
+        "outbox": 64.00999800000045,
+        "targets": 33.0972069999998,
+        "auditAndCommit": 121.14745299999959
+      },
+      "api": {
+        "counters": {
+          "attempted": 346,
+          "succeeded": 346,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 5.818123999997624,
+          "maxMs": 177.26682599999913,
+          "p50Ms": 12.551833000001352,
+          "p95Ms": 31.9477480000005,
+          "p99Ms": 89.43291299999692
+        }
+      },
+      "publish": {
+        "unique": 1000,
+        "completionMs": 11499,
+        "uniquePerSecond": 86.9640838333768,
+        "latency": {
+          "count": 1000,
+          "minMs": 463,
+          "p50Ms": 5608,
+          "p95Ms": 11271,
+          "p99Ms": 11451,
+          "maxMs": 11499
+        },
+        "attempts": 1000,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 1000,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 1,
+        "p99Ms": 4,
+        "maxMs": 12
+      },
+      "ackAllVisibleFromPostMs": 11556,
+      "terminalObservedMs": 11742.412727,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 1000,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 1000,
+        "commands": 1000,
+        "outboxes": 1000
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 55.06,
+          "maxMemoryBytes": 77647052.8,
+          "samples": 19
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 71.15,
+          "maxMemoryBytes": 160851558.4,
+          "samples": 19
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 16.32,
+          "maxMemoryBytes": 73054289.92,
+          "samples": 19
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 7.65,
+          "maxMemoryBytes": 6053429.248,
+          "samples": 19
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 80.14,
+          "maxMemoryBytes": 72687288.32,
+          "samples": 19
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 63.73,
+          "maxMemoryBytes": 114819072,
+          "samples": 19
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 12.722175,
+          "max": 52.822015
+        },
+        "cpuMicros": {
+          "user": 1470001,
+          "system": 371212
+        },
+        "memoryBytes": {
+          "rss": 101007360,
+          "heapTotal": 37236736,
+          "heapUsed": 34988296,
+          "external": 3086887,
+          "arrayBuffers": 668174
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 3,
+        "maxObservedBacklog": 1000,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 1000,
+          "operations": 1,
+          "targets": 1000,
+          "commands": 1000,
+          "outboxes": 1000,
+          "execution_events": 2000,
+          "audit_logs": 4003
+        },
+        "explainExecutionMs": 3.035
+      }
+    },
+    {
+      "source": "fleet-146-1000-repeat-3/1000-success-1",
+      "count": 1000,
+      "condition": "success",
+      "repetition": 3,
+      "sourceTrial": 1,
+      "operationId": "2895ff10-d4c3-412c-bc75-2ab4bf839791",
+      "passed": true,
+      "acceptanceMs": 332.49549,
+      "repositoryMs": 308.27224000000024,
+      "stagesMs": {
+        "validationAndLocks": 6.35741600000074,
+        "operation": 1.7021669999994629,
+        "commands": 117.98091199999999,
+        "outbox": 65.22033199999987,
+        "targets": 42.37541500000043,
+        "auditAndCommit": 74.62537299999985
+      },
+      "api": {
+        "counters": {
+          "attempted": 346,
+          "succeeded": 346,
+          "failed": 0,
+          "timedOut": 0
+        },
+        "errorRate": 0,
+        "timings": {
+          "minMs": 5.415957999997772,
+          "maxMs": 35.45899900000222,
+          "p50Ms": 11.361875000002328,
+          "p95Ms": 27.265041000002384,
+          "p99Ms": 31.131373999996867
+        }
+      },
+      "publish": {
+        "unique": 1000,
+        "completionMs": 8131,
+        "uniquePerSecond": 122.98610257040954,
+        "latency": {
+          "count": 1000,
+          "minMs": 496,
+          "p50Ms": 4414,
+          "p95Ms": 7929,
+          "p99Ms": 8093,
+          "maxMs": 8131
+        },
+        "attempts": 1000,
+        "failures": 0
+      },
+      "ackReceive": {
+        "count": 1000,
+        "minMs": 0,
+        "p50Ms": 0,
+        "p95Ms": 1,
+        "p99Ms": 2,
+        "maxMs": 17
+      },
+      "ackAllVisibleFromPostMs": 8413,
+      "terminalObservedMs": 8524.527973999999,
+      "counts": {
+        "PENDING": 0,
+        "SENT": 0,
+        "ACKNOWLEDGED": 0,
+        "RUNNING": 0,
+        "SUCCEEDED": 1000,
+        "EXECUTION_FAILED": 0,
+        "DELIVERY_FAILED": 0,
+        "EXPIRED": 0,
+        "UNRESPONSIVE": 0,
+        "UNCERTAIN": 0
+      },
+      "rows": {
+        "targets": 1000,
+        "commands": 1000,
+        "outboxes": 1000
+      },
+      "checks": {
+        "acceptance": true,
+        "detailLatency": true,
+        "apiErrors": true,
+        "noMissingRows": true,
+        "noTimeouts": true,
+        "expectedOutcome": true
+      },
+      "resources": [
+        {
+          "name": "alert-evaluator",
+          "maxCpuPercent": 47.56,
+          "maxMemoryBytes": 70422364.16,
+          "samples": 18
+        },
+        {
+          "name": "api",
+          "maxCpuPercent": 45.31,
+          "maxMemoryBytes": 162738995.2,
+          "samples": 18
+        },
+        {
+          "name": "fleet-responder",
+          "maxCpuPercent": 14.15,
+          "maxMemoryBytes": 74763468.8,
+          "samples": 18
+        },
+        {
+          "name": "mqtt",
+          "maxCpuPercent": 5.44,
+          "maxMemoryBytes": 6987710.464,
+          "samples": 18
+        },
+        {
+          "name": "postgres",
+          "maxCpuPercent": 74.61,
+          "maxMemoryBytes": 72687288.32,
+          "samples": 18
+        },
+        {
+          "name": "telemetry-ingestor",
+          "maxCpuPercent": 63.29,
+          "maxMemoryBytes": 80446750.72,
+          "samples": 18
+        }
+      ],
+      "generator": {
+        "failures": 0,
+        "eventLoopDelayMs": {
+          "p95": 12.574719,
+          "max": 222.953471
+        },
+        "cpuMicros": {
+          "user": 1311612,
+          "system": 296196
+        },
+        "memoryBytes": {
+          "rss": 99282944,
+          "heapTotal": 37761024,
+          "heapUsed": 34297592,
+          "external": 2977955,
+          "arrayBuffers": 559582
+        }
+      },
+      "db": {
+        "maxObservedConnections": 16,
+        "maxObservedWaitingLocks": 2,
+        "maxObservedBacklog": 1000,
+        "lastBacklog": 0,
+        "deadlocks": "0",
+        "tableCounts": {
+          "devices": 1000,
+          "operations": 1,
+          "targets": 1000,
+          "commands": 1000,
+          "outboxes": 1000,
+          "execution_events": 2000,
+          "audit_logs": 4003
+        },
+        "explainExecutionMs": 2.925
+      }
+    }
+  ]
+}

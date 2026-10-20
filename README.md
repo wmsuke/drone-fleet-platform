@@ -156,26 +156,29 @@ cp .env.example .env
 
 個別のコマンドは次のとおり。
 
-| コマンド                   | 内容                                       |
-| -------------------------- | ------------------------------------------ |
-| `pnpm check`               | lint、型チェック、テスト、ビルドを順に実行 |
-| `pnpm lint`                | ESLintとPrettierによる静的検査             |
-| `pnpm typecheck`           | 全workspaceの型チェック                    |
-| `pnpm test`                | Vitestによるテスト                         |
-| `pnpm build`               | 全workspaceのビルド                        |
-| `pnpm load:local`          | ローカルMQTT向け負荷生成器                 |
-| `pnpm load:aws`            | AWS IoT向け短時間負荷生成器                |
-| `pnpm probe:aws-iot`       | Basic Ingest経路を1件で確認                |
-| `pnpm load:test:local`     | Docker Composeで段階負荷試験を1回実行      |
-| `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                |
-| `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証          |
-| `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                |
-| `pnpm test:recovery`       | 通信断・再起動・再接続のローカル復旧E2E    |
-| `pnpm test:aws-iot-e2e`    | AWS IoT Coreの短時間E2E（認証情報が必要）  |
+| コマンド                   | 内容                                        |
+| -------------------------- | ------------------------------------------- |
+| `pnpm check`               | lint、型チェック、テスト、ビルドを順に実行  |
+| `pnpm lint`                | ESLintとPrettierによる静的検査              |
+| `pnpm typecheck`           | 全workspaceの型チェック                     |
+| `pnpm test`                | Vitestによるテスト                          |
+| `pnpm build`               | 全workspaceのビルド                         |
+| `pnpm load:local`          | ローカルMQTT向け負荷生成器                  |
+| `pnpm load:aws`            | AWS IoT向け短時間負荷生成器                 |
+| `pnpm probe:aws-iot`       | Basic Ingest経路を1件で確認                 |
+| `pnpm load:test:local`     | Docker Composeで段階負荷試験を1回実行       |
+| `pnpm load:test:fleet`     | 複数機体commandを10台・100台で各条件3回測定 |
+| `pnpm test:load-report`    | 負荷試験レポートの小規模E2E                 |
+| `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証           |
+| `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                 |
+| `pnpm test:recovery`       | 通信断・再起動・再接続のローカル復旧E2E     |
+| `pnpm test:aws-iot-e2e`    | AWS IoT Coreの短時間E2E（認証情報が必要）   |
 
 Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、PostgreSQLのintegration test、負荷試験レポートの小規模E2E、通信断・再起動の復旧E2Eを実行する。
 
 ### 負荷生成器
+
+複数機体commandの計測は[受付・配送・ACK・集約APIの負荷検証](docs/load-testing/fleet-commands.md)を参照する。telemetryの定常送信とは別のローカル試験である。
 
 `apps/load-generator`は通常のシミュレータとは別に、指定範囲のdeviceIdからローカルMosquittoまたはAWS IoT Coreへテレメトリを送る。件数上限または時間上限に達すると送信を止め、MQTT接続を閉じて`LOAD_REPORT_PATH`へJSONレポートを保存する。AWSモードはBillingの事前確認と月間200,000件の自主上限を必須にし、Basic IngestへmTLSで送信する。手順は[AWS IoTクラウド経路の短時間確認](docs/load-testing/aws-iot-free-tier.md)を参照する。
 
