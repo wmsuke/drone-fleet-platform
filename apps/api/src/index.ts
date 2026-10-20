@@ -44,7 +44,10 @@ async function main(): Promise<void> {
     alertRepository: createAlertRepository(db),
     fleetOperationRepository: createFleetOperationRepository(db, {
       ...fleetOptions,
-      onAccepted: (metrics) => console.info("fleet operation受付", metrics),
+      onAccepted: (metrics) =>
+        console.info(
+          JSON.stringify({ event: "fleet.operation.accepted", ...metrics }),
+        ),
     }),
   });
 

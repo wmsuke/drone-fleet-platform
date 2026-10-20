@@ -80,6 +80,8 @@ export function createFleetOperationRepository(
       targetCount: number;
       durationMs: number;
       replayed: boolean;
+      operationId: string;
+      stagesMs: Record<string, number>;
     }) => void;
   } = { maxTargets: 100 },
 ): FleetOperationRepository {
@@ -94,6 +96,13 @@ export function createFleetOperationRepository(
     async create(request, key) {
       const start = performance.now();
       let replayed = false;
+      const stagesMs: Record<string, number> = {};
+      let stageStart = performance.now();
+      const mark = (name: string) => {
+        const end = performance.now();
+        stagesMs[name] = end - stageStart;
+        stageStart = end;
+      };
       const result = await db.transaction(async (tx) => {
         const scope = "anonymous";
         // 同じkeyを先に直列化する。hash衝突は待機を増やすだけで、正本の照合には使わない。
@@ -172,6 +181,7 @@ export function createFleetOperationRepository(
           expiresAt = new Date(createdAt.getTime() + 30_000),
           resultDeadline = new Date(createdAt.getTime() + 120_000);
         const operationId = randomUUID();
+        mark("validationAndLocks");
         const [operation] = await tx
           .insert(fleetOperations)
           .values({
@@ -189,6 +199,7 @@ export function createFleetOperationRepository(
           })
           .returning();
         if (!operation) throw new Error("operation insert returned no row");
+        mark("operation");
         const pending = members.map(({ deviceId }) => ({
           commandId: randomUUID(),
           deviceId,
@@ -198,6 +209,7 @@ export function createFleetOperationRepository(
           expiresAt,
         }));
         await tx.insert(commands).values(pending);
+        mark("commands");
         await tx.insert(commandOutbox).values(
           pending.map((command) => ({
             commandId: command.commandId,
@@ -217,6 +229,7 @@ export function createFleetOperationRepository(
             nextAttemptAt: createdAt,
           })),
         );
+        mark("outbox");
         await tx.insert(fleetOperationTargets).values(
           pending.map(({ deviceId, commandId }) => ({
             operationId,
@@ -224,6 +237,7 @@ export function createFleetOperationRepository(
             commandId,
           })),
         );
+        mark("targets");
         await appendAudit(tx, {
           action: "operation.accepted",
           targetKind: "operation",
@@ -253,12 +267,15 @@ export function createFleetOperationRepository(
           .values({ operationId, status: "ACCEPTED", evaluatedAt: createdAt });
         return response(operation);
       });
+      mark("auditAndCommit");
       // 計測出力の失敗でcommit済み受付を失敗に見せない。
       try {
         options.onAccepted?.({
           targetCount: result.targetCount,
           durationMs: performance.now() - start,
           replayed,
+          operationId: result.operationId,
+          stagesMs,
         });
       } catch {
         /* DB結果を優先する */
