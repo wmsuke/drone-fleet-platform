@@ -193,6 +193,10 @@ export class FleetE2eHarness {
       const d = (await (await this.request("/devices")).json()) as {
         deviceId: string;
       }[];
+      // PUBACKだけではingestorの購読・保存完了を示さない。未登録機体だけ再送する。
+      const registered = new Set(d.map((device) => device.deviceId));
+      for (const id of sessions.keys())
+        if (!registered.has(id)) await sendTelemetry(id);
       return d.length === 5;
     });
     const offline = connectionStatusMessageSchema.parse({
