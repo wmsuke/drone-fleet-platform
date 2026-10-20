@@ -2,11 +2,11 @@
 
 ドローンの状態監視と遠隔コマンドを扱うデバイス管理基盤。
 
-TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認する。帰還・再起動コマンドの送信とACKの追跡まで、AWS projectや実機なしのローカル構成で試せる。必要に応じて同じ通信仕様のままAWS IoT Coreへ切り替えられる。
+TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置やバッテリー残量、接続状態をダッシュボードで確認する。グループへの帰還・再起動、実行結果、alertとauditの追跡まで、AWS projectや実機なしのローカル構成で試せる。必要に応じて同じ通信仕様のままAWS IoT Coreへ切り替えられる。
 
 ## 開発状況
 
-Phase 3の復旧処理まで実装済みで、`v0.3.0`として次の範囲を利用できる。変更点は[v0.3.0リリースノート](docs/releases/v0.3.0.md)を参照する。
+Phase 4の複数機体運用まで実装済みで、`v0.4.0`の対象機能として次の範囲を利用できる。変更点と更新時の注意は[v0.4.0リリースノート](docs/releases/v0.4.0.md)を参照する。Git tag・GitHub Releaseの発行を意味しない。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -28,6 +28,12 @@ Phase 3の復旧処理まで実装済みで、`v0.3.0`として次の範囲を�
 - telemetry v2のsessionId、SQLite永続バッファ、DB保存receipt、再送時の重複排除
 - commandの操作開始期限、永続履歴、API outboxと再起動後の再送
 - 通信断・再起動・容量超過のローカル復旧E2Eとログ保存
+- 機体グループと所属管理、対象スナップショット・冪等な受付による複数機体command
+- ACK v3の実行結果通知、機体別の結果とoperation全体の集約・追跡画面
+- OFFLINE・低battery・command不成功のalert、確認と自動解除の分離
+- 操作・状態変更のaudit log、検索APIと閲覧画面（操作者の認証は未実装）
+
+[複数機体運用デモ](docs/fleet-demo.md)では、group作成→所属設定→帰還→結果→alertの発生・確認・解除→auditの追跡を、専用のローカルComposeで再現できる。通常の1操作の上限は100台。100台の負荷検証と1,000台で残った制約は[#146の実測](docs/load-testing/fleet-commands.md)、混在結果と後着成功は[#147のE2E](docs/fleet-e2e.md)を参照する。
 
 通信断中の蓄積から再送完了までを確認するには[復旧デモと運用制約](docs/recovery-demo.md)を使う。専用Compose環境のため、通常の開発データやAWS環境は使わない。容量内・永続領域維持・通信とDBとreceipt経路の復旧を条件にat-least-once保存するもので、exactly-once配送・操作完了を保証しない。
 
@@ -60,7 +66,7 @@ docker compose up --build -d --wait
 
 1. 一覧から任意の機体の「機体詳細を見る」を押す。
 2. 「帰還させる」または「再起動する」を押し、確認画面から実行する。
-3. コマンド履歴が「ACK受信済み」になることを確認する。画面は5秒ごとに更新される。
+3. コマンド履歴が「ACK受信済み」になることを確認する。これは受領の表示であり実行完了ではない。画面は5秒ごとに更新される。実行結果は[グループ操作のデモ](docs/fleet-demo.md)で確認する。
 4. 帰還では飛行状態が「帰還中」になり、再起動では一時切断後にオンラインへ戻る。
 
 ![最新テレメトリとACK受信済みのコマンド履歴](docs/dashboard-device-detail.jpg)
@@ -111,7 +117,9 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 - MosquittoはComposeネットワーク内で匿名接続を許可する開発用設定であり、外部公開を想定しない。
 - AWS IoT CoreはPhase 2の2台E2Eと#64の100台の短時間接続・クラウド経路に確認記録がある。Phase 3のreceipt・outboxを含む実AWSの復旧障害注入と実機は未検証である。
 - 操作できるコマンドは`RETURN_HOME`と`REBOOT`のみである。
-- ACKは仮想ドローンがコマンドを受領したことを示し、実行完了を示すものではない。
+- 受領ACKは実行完了ではない。ACK v3の実行結果を別に保存し、グループ操作画面で追跡する。仮想帰還・再接続の成功は実機の安全を証明しない。
+- グループ操作の受付は原子的だが、各機体の開始・成功は原子的ではない。受付後のキャンセル・自動再実行・全機体同時実行は提供しない。
+- HTTP操作者の認証・権限制御は未実装。auditは操作者の本人性や管理者改ざんへの耐性を保証しない。APIと画面はローカルまたは制限したネットワークで使う。
 - commandは30秒の操作開始期限を持つ。simulatorはSQLiteに受領・操作試行・結果とACKを残し、プロセス再起動後も同じIDの操作を繰り返さない。停止境界・時刻同期・履歴上限・更新手順は[コマンドの期限と永続化](docs/command-durability.md)を参照する。
 - APIはcommandとoutboxを同時に保存し、202 / PENDINGで受付を返す。送信はバックグラウンドで期限内に再試行し、API再起動後も同じcommandIdを使う。`GET /command-outbox/status`で滞留件数・最古時刻・試行数・失敗数を確認できる。
 - モデル名とソフトウェアバージョンはPhase 1のメッセージに含まれないため、画面では未登録と表示する。
@@ -172,9 +180,10 @@ cp .env.example .env
 | `pnpm verify:mqtt`         | Mosquittoの起動とMQTT送受信を検証           |
 | `pnpm test:telemetry-path` | MQTTからAPIまでの結合テスト                 |
 | `pnpm test:recovery`       | 通信断・再起動・再接続のローカル復旧E2E     |
+| `pnpm test:fleet-e2e`      | group操作・alert・auditのローカルE2E        |
 | `pnpm test:aws-iot-e2e`    | AWS IoT Coreの短時間E2E（認証情報が必要）   |
 
-Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、PostgreSQLのintegration test、負荷試験レポートの小規模E2E、通信断・再起動の復旧E2Eを実行する。
+Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check`、テレメトリ経路の結合テスト、PostgreSQLのintegration test、負荷試験レポートの小規模E2E、通信断・再起動の復旧E2E、group操作・alert・auditのE2Eを実行する。
 
 ### 負荷生成器
 
@@ -450,6 +459,8 @@ docker compose down --volumes
 - [グループ操作の受付・集約API](docs/fleet-operations-api.md)
 - [グループ操作と結果の追跡画面](docs/fleet-operations-dashboard.md)
 - [alertの生成と解除](docs/alerts.md)
+- [複数機体運用デモと制約](docs/fleet-demo.md)
+- [audit logの記録](docs/audit-log.md)と[検索・閲覧](docs/audit-log-search.md)
 - [commandの実行結果通知](docs/command-results.md)
 - [ロードマップ](docs/roadmap.md)
 - [環境変数と秘密情報](docs/environment.md)
@@ -457,6 +468,7 @@ docker compose down --volumes
 - [ADR 0001: pnpmでTypeScriptのモノレポを構成する](docs/adr/0001-monorepo.md)
 - [ADR 0002: デバイスとの通信にMQTTを使う](docs/adr/0002-mqtt-protocol.md)
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](docs/adr/0003-database.md)
+- [ADR 0006: 複数機体操作の集約状態と運用記録](docs/adr/0006-fleet-operations-alerts-and-audit.md)
 
 ## ライセンス
 

@@ -136,7 +136,7 @@ rollbackしたkeyは消費しない。応答を失ったときは同じkeyで再
 | 1 | 1 | 5.728 | 1 |
 | 100 | 10 | 4.997 | 1 |
 
-集計はpageだけでなく全targetを対象とし、一覧も1 queryだった。query数はDrizzle loggerで測定した。fixture作成・HTTP転送・MQTT配送・連続負荷は含めず、この単発値を性能保証としない。大規模な履歴件数や1,000台は未検証である。
+集計はpageだけでなく全targetを対象とし、一覧も1 queryだった。query数はDrizzle loggerで測定した。fixture作成・HTTP転送・MQTT配送・連続負荷は含めず、この単発値を性能保証としない。この時点では大規模な履歴件数や1,000台は未検証だった。後続#146の[負荷結果](load-testing/fleet-commands.md)では10/100台の各3条件と追加1,000台を測り、1,000台の未達試行も記録した。通常上限100を維持し、長期履歴は引き続き未検証とする。
 
 `DATABASE_INTEGRATION=true pnpm api:test:integration`で10状態の優先順位・件数、一部/全件不成功、期限前後の後着証拠、UNCERTAIN解消、期限拒否・終端不一致、実outbox更新、未commitの状態を混ぜない読み取り、group変更・論理削除後のsnapshot、物理削除制約、pagination・絞り込み、実repositoryを使うAPIを検証する。計測の再現は`pnpm exec vitest run --no-file-parallelism --silent=false apps/api/test/fleet-operation-results.integration.test.ts --reporter=verbose`を使う。
 

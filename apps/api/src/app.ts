@@ -59,6 +59,7 @@ export function buildApi(
     const dashboardOrigin = options.dashboardOrigin;
     void app.register(cors, {
       exposedHeaders: ["X-Request-Id"],
+      methods: ["GET", "HEAD", "POST", "PATCH", "DELETE"],
       origin(origin, callback) {
         callback(null, origin === dashboardOrigin);
       },

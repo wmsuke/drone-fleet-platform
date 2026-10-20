@@ -58,6 +58,8 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 #152で実行結果を受領ACKと分け、同じcommand-acks topic上のACK v3を追加した。command v2、受領・期限拒否ACK v1/v2の互換性は維持する。結果通知の責務と互換性、成功条件は[commandの実行結果通知](command-results.md)と[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
 
+Phase 4のgroup・fleet operation・alert・auditはHTTP APIとDBのモデルであり、group共有topicや一括command payloadは追加しない。APIが受付時の対象ごとに異なるcommandIdのcommand v2を作り、既存の機体別topicへ送る。Idempotency-KeyはHTTP受付用でMQTT payloadには含めない。通常の1操作の上限は100台（設定範囲1〜1000）で、設定上限は性能保証ではない。QoS・retain・IoT Policyの変更はない。手順と状態の読み方は[複数機体運用デモ](fleet-demo.md)を参照する。
+
 | 項目 | 内容 |
 |---|---|
 | `schemaVersion` | telemetry・command・simulatorの受領ACKは`2`、実行結果通知は`3`。旧v1、status、telemetry-receiptsは`1` |

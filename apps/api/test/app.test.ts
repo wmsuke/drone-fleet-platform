@@ -64,6 +64,53 @@ function commands(
   return { history, send };
 }
 
+describe("dashboard CORS preflight", () => {
+  it.each(["PATCH", "DELETE"])(
+    "allows %s from the configured dashboard",
+    async (method) => {
+      const app = buildApi(repository(), commands(), {
+        dashboardOrigin: "http://localhost:5173",
+      });
+      apps.push(app);
+      const response = await app.inject({
+        method: "OPTIONS",
+        url: "/groups/c1eaa546-9ff8-4b7b-8f9a-b8c0739d6b55",
+        headers: {
+          origin: "http://localhost:5173",
+          "access-control-request-method": method,
+          "access-control-request-headers": "content-type",
+        },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(response.headers["access-control-allow-origin"]).toBe(
+        "http://localhost:5173",
+      );
+      expect(
+        String(response.headers["access-control-allow-methods"]).split(/,\s*/),
+      ).toContain(method);
+      expect(response.headers["access-control-allow-headers"]).toBe(
+        "content-type",
+      );
+    },
+  );
+
+  it("does not allow an untrusted origin to modify groups", async () => {
+    const app = buildApi(repository(), commands(), {
+      dashboardOrigin: "http://localhost:5173",
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/groups/c1eaa546-9ff8-4b7b-8f9a-b8c0739d6b55",
+      headers: {
+        origin: "https://untrusted.example.test",
+        "access-control-request-method": "DELETE",
+      },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+});
+
 describe("GET /devices", () => {
   it("allows the configured dashboard origin", async () => {
     const app = buildApi(repository(), commands(), {

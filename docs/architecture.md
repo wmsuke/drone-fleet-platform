@@ -2,7 +2,7 @@
 
 ## 開発範囲
 
-仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領確認まで追跡する。
+仮想ドローン10台をローカルで動かす構成と、AWS IoT Coreを経由する構成を提供する。各機体からテレメトリを受信・保存し、ダッシュボードで状態を確認する。帰還と再起動のコマンドを送り、受領と実行結果を分けて追跡する。Phase 4ではgroup操作・alert・audit logを追加した。[複数機体運用デモ](fleet-demo.md)と[v0.4.0の変更点](releases/v0.4.0.md)に利用手順と制約を記す。Phase 4の横断検証はローカルのみで、AWSでの動作確認とは分ける。
 
 Phase 2でAWS接続を追加した。Phase 3ではtelemetryのsessionId、SQLite永続バッファ、未確認行の再送、DB重複排除、DB保存確認receipt、commandの永続履歴とAPI outboxを追加した。[復旧デモと運用制約](recovery-demo.md)で停止・復旧・容量計画を確認できる。配送保証と復旧時の責務は[ADR 0005](adr/0005-delivery-and-recovery.md)に定めた。AWS対応後もローカルだけで動作する構成を維持する。
 
@@ -85,7 +85,8 @@ docs/
 │   ├── 0002-mqtt-protocol.md
 │   ├── 0003-database.md
 │   ├── 0004-aws-iot-connection-and-credentials.md
-│   └── 0005-delivery-and-recovery.md
+│   ├── 0005-delivery-and-recovery.md
+│   └── 0006-fleet-operations-alerts-and-audit.md
 ├── aws/
 ├── load-testing/
 ├── releases/
@@ -172,6 +173,8 @@ React、Vite、TanStack Query、React Routerによる画面基盤と機体一覧
 ### apps/alert-evaluator
 
 #142でalertの生成・継続・解除を追加した。5秒ごとにcommit済みDBを評価する独立プロセスで、MQTT保存transactionから呼ばない。OFFLINEの遷移時刻、非retainedの観測、実行結果を使い、継続・回復・採用済み観測のcheckpointとalertを同時commitする。targetごとのロックと未解除key一意制約で重複を防ぐ。閾値、鮮度、障害分離、計測と保持の制約は[alertの生成と解除](alerts.md)を参照する。#143でAPIに一覧・詳細・確認操作、dashboardに対応画面を追加した。確認は自動解除から独立し、認証未実装のactorはanonymousとする。#144で[audit log](audit-log.md)とoperationの集約状態監査workerを追加した。#145で[検索APIと閲覧画面](audit-log-search.md)を追加した。
+
+同じalert-evaluatorプロセス内で、別workerがoperationの集約状態とcheckpointを周期評価してauditを記録する。GET APIは書き込まず、そのcheckpointにも依存せず現在の結果を計算する。周期間に通過した中間状態の全記録は保証しない。
 
 ### packages/protocol
 
@@ -325,7 +328,6 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 ## 後続Phaseで扱うこと
 
-- 複数機体への一括操作
 - OTAと段階的な配信
 - ROS 2との接続
 - 運用ログを使ったAIによる調査支援
@@ -339,6 +341,20 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 複数機体操作は受付transactionでgroup membershipを固定し、対象ごとの既存command/outboxを作成する。APIが受付と集約、ingestorが受領・実行結果の保存、simulatorが操作と永続結果通知を担当する。受領ACKと実行完了は別に扱う。alert evaluatorはDBの確定済み状態から異常を判定し、telemetry保存とは分離する。重要操作の成功auditは業務変更と同時commitする。
 
 エンティティの関係、二重受付防止、状態集約、alert、auditの信頼境界は[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に定めた。#139で`fleet_operations`と`fleet_operation_targets`、原子的で冪等な受付APIを実装した。送信は既存outbox workerへ任せる。#152で[commandの実行結果通知](command-results.md)を追加し、SQLiteの最新結果からACK v3を送ってPostgreSQLの実行状態と履歴へ保存する。配送・受領状態は実行状態と分ける。#140で一覧・詳細を同一DB snapshotと評価時刻で集約し、全体の状態・件数とtargetのページを返す。#141でgroupからの確認付き送信と履歴・機体別結果の画面を追加し、sessionStorageの同一keyで受付不明時の再照会を行う。#142で独立したalert evaluator、#143で表示・確認を追加した。#144で操作と状態変更のauditを同時commitする。APIと計測は[グループ操作の受付・集約API](fleet-operations-api.md)、画面は[グループ操作と結果の追跡](fleet-operations-dashboard.md)を参照する。
+
+### 正本とサービスの責務
+
+| データ | 正本・担当 | 境界 |
+| --- | --- | --- |
+| group / membership | PostgreSQL、APIが管理 | 現在の所属。論理削除でも過去の操作対象を消さない |
+| fleet operation / target | PostgreSQL、APIが受付・集約 | 受付時に対象・名称・revisionを固定し機体別command/outboxを同時作成。表示は現在のmembershipを参照しない |
+| command / execution event | 端末SQLiteの操作履歴・通知、ingestorがPostgreSQLの正本へ反映 | 受領と実行を分離。帰還完了・再接続確認はsimulatorの成功条件であり実機の安全保証ではない |
+| alert / checkpoint | PostgreSQL、alert-evaluatorが評価、APIが確認情報を保存 | 発生・解除と確認は独立。保存済みtelemetry/ACKをalert障害で巻き戻さない |
+| audit / operation checkpoint | 各書き込み経路と周期workerがPostgreSQLへ追記、APIが検索 | 成功は業務変更と同時commit。本人確認・業務正本・管理者改ざん検知の代用にはしない |
+
+通常の対象上限は100台（設定範囲1〜1000）。#146の[負荷検証](load-testing/fleet-commands.md)では10/100台の必須条件を満たしたが、追加1,000台は期限切れ・timeoutを伴う試行があり、上限100を維持する。#147の[横断E2E](fleet-e2e.md)は4対象で混在結果・後着成功・alert・auditと後処理を検証する。Testing Library＋jsdomと実HTTPであり、Playwrightや実AWSの試験ではない。
+
+HTTPのactorはanonymousで権限制御も未実装。成功auditの失敗は業務変更もrollbackする一方、拒否・失敗auditはDB停止時に欠落し得る。既定ComposeはDB ownerを共用し、append-only triggerがあっても管理者による変更を防止・検出できない。外部保管、保持・archive、自動再実行・キャンセル、全機体の同時開始は提供しない。
 
 ## 関連ADR
 

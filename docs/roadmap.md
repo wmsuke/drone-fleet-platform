@@ -6,7 +6,7 @@ Backend、AWS、IoTの実装から始め、Edge、ROS 2、ドローンシミュ�
 
 ## 現在の状況
 
-Phase 2まで完了した。Docker Composeによるローカル構成に加え、AWS IoT CoreへmTLS接続し、機体単位のIoT Policyで制限したtelemetry・status・command・ACKの経路を利用できる。ローカル構成はAWS projectや証明書なしで引き続き利用できる。次はPhase 2.5の負荷検証を進める。
+Phase 4までの対象機能を実装した。Docker Composeによるローカル構成、Phase 2のAWS IoT接続、Phase 3の永続バッファ・receipt・outboxに加え、group操作・実行結果・alert・auditを利用できる。[v0.4.0](releases/v0.4.0.md)と[複数機体運用デモ](fleet-demo.md)に確認手順を記す。HTTP操作者の認証は未実装で、Phase 3・4の実AWS横断検証も未実施。Phase 2.5の負荷結果と#146のcommand負荷結果は別に扱う。ローカル構成はAWS projectや証明書なしで引き続き利用できる。
 
 日付による期限は設けず、各Phaseの完了条件を満たした時点で次へ進む。個別の作業と進捗はGitHub Issueで管理する。
 
@@ -158,7 +158,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 リリース：`v0.4.0`
 
-グループ単位の操作と、コマンド・異常の追跡を追加する。
+実装済み。グループ単位の操作と、コマンド・異常の追跡を追加した。#148で[複数機体運用デモと制約](fleet-demo.md)、[v0.4.0の変更点](releases/v0.4.0.md)へまとめた。Git tag・GitHub Releaseの発行は別作業とする。
 
 親Issueは#135。#136で[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)に対象スナップショット、冪等な受付、受領と実行結果の分離、全体状態、alert、auditの記録方針を定めた。#137で[機体グループAPI](groups-api.md)とDB、#138でgroup管理画面、#139で受付API、#152で[commandの実行結果通知](command-results.md)、#140で[グループ操作の集約API](fleet-operations-api.md)、#141で[複数機体の操作・結果追跡画面](fleet-operations-dashboard.md)、#142で[alertの生成・解除](alerts.md)、#143でalertの一覧・詳細・確認APIと画面を追加した。#144で[操作・状態変更のaudit log](audit-log.md)を追加した。#145で[検索APIと閲覧画面](audit-log-search.md)を追加した。既存の受領ACKを完了と扱わない。
 
@@ -183,10 +183,10 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 - 対象機体ごとの受領・完了・失敗を確認できる。
 - 一部の機体が応答しない場合も結果を追跡できる。
 - アラートの発生条件と解除条件が定義されている。
-- 誰が、いつ、どの機体へ操作したかを記録できる。
+- いつ、どの機体へ何を操作したかを追跡できる。HTTP操作者はanonymousであり、認証された「誰が」の識別は未実装と明示する。
 - 検証した台数、送信間隔、処理遅延、実行環境を記載している。
 
-100台、1000台への対応は、実測結果を基に判断する。
+通常上限100台を維持する。10/100台の負荷結果と1,000台の未達試行、4対象の横断E2Eを記録済みで、同時複数group・長期履歴・大量alert・Phase 4の実AWS経路は未検証とする。
 
 ## Phase 5：OTAと段階的な配信
 

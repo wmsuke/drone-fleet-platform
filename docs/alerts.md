@@ -85,4 +85,4 @@ alerts、ONLINE観測、評価checkpointに自動削除は設けない。観測�
 
 2026-10-19、Node.js 24.21.0 / pnpm 10.28.1 / OrbStack / PostgreSQL 17でalert結合15件、既存telemetry結合24件、API結合52件、DB移行3件を確認した。専用ComposeのNode.js 22では、確認用に周期100ms・OFFLINE継続1000msへ短縮して独立workerを起動し、生成と再起動後の同一alertId・発生時刻の保持、failed=0の周期ログを確認した。defaultの時間境界は偽時計を使う単体・DB結合テストで評価しており、短縮した起動確認を60秒の実時間計測とは扱わない。
 
-温度、位置、物理的な飛行安全、容量予測、メール等の外部通知、自動command、auditの検索画面は対象外。AWSの実通信・100台のalert性能は未検証であり、ローカルでの検証をAWS運用の保証としない。
+温度、位置、物理的な飛行安全、容量予測、メール等の外部通知、自動commandは対象外。auditの検索画面は#145で追加済みで、[複数機体運用デモ](fleet-demo.md)からalertと監査をたどれる。AWSの実通信・100台のalert性能は未検証であり、ローカルでの検証をAWS運用の保証としない。
