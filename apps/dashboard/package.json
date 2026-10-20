@@ -11,6 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@drone-fleet/protocol": "workspace:*",
+    "mqtt": "^5.16.0",
     "@drone-fleet/config": "workspace:*",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

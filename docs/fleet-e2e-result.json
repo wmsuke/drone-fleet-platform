@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "transport": "local",
+  "startedAt": "2026-10-20T01:12:30.499Z",
+  "aws": {
+    "executed": false,
+    "unverified": ["mTLS", "IoT Policy", "AWS経路・費用"]
+  },
+  "scenarios": {
+    "groupId": "cbb19804-3cbf-4c24-95b9-e88e81c0b2fe",
+    "operationId": "97f236a8-ccad-44f3-97d1-3fbeeddc6ea3",
+    "snapshot": [
+      {
+        "deviceId": "drone-001",
+        "commandId": "af720eeb-252c-4de9-a607-61f3f30e15ee"
+      },
+      {
+        "deviceId": "fleet-expired",
+        "commandId": "9ae5f85f-3e55-4900-b690-026676e4d9b9"
+      },
+      {
+        "deviceId": "fleet-failed",
+        "commandId": "64ece27e-045d-42d0-8e68-a50f37c4e5a6"
+      },
+      {
+        "deviceId": "fleet-silent",
+        "commandId": "5ff707c1-e2ce-4131-816e-d05088e1ba80"
+      }
+    ],
+    "counts": {
+      "operations": 1,
+      "targets": 4,
+      "commands": 4,
+      "outboxes": 4
+    },
+    "mixed": {
+      "PENDING": 0,
+      "SENT": 0,
+      "ACKNOWLEDGED": 0,
+      "RUNNING": 0,
+      "SUCCEEDED": 1,
+      "EXECUTION_FAILED": 1,
+      "DELIVERY_FAILED": 0,
+      "EXPIRED": 1,
+      "UNRESPONSIVE": 1,
+      "UNCERTAIN": 0
+    },
+    "recovered": {
+      "PENDING": 0,
+      "SENT": 0,
+      "ACKNOWLEDGED": 0,
+      "RUNNING": 0,
+      "SUCCEEDED": 2,
+      "EXECUTION_FAILED": 1,
+      "DELIVERY_FAILED": 0,
+      "EXPIRED": 1,
+      "UNRESPONSIVE": 0,
+      "UNCERTAIN": 0
+    },
+    "alert": {
+      "alertId": "a1d69f5b-61f5-4161-9f42-80a139c7c314",
+      "occurredAt": "2026-10-20T01:13:44.243Z",
+      "acknowledgedAt": "2026-10-20T01:13:44.594Z",
+      "resolvedAt": "2026-10-20T01:13:44.825Z"
+    },
+    "auditActions": [
+      "alert.resolved",
+      "command.execution_changed",
+      "alert.acknowledged",
+      "alert.raised",
+      "alert.raised",
+      "operation.status_changed",
+      "command.expired",
+      "command.execution_changed",
+      "alert.raised",
+      "command.execution_changed",
+      "command.execution_changed",
+      "command.acknowledged",
+      "operation.replayed",
+      "operation.status_changed",
+      "membership.added",
+      "membership.removed",
+      "command.execution_changed",
+      "command.acknowledged",
+      "command.accepted",
+      "command.accepted",
+      "command.accepted",
+      "command.accepted",
+      "operation.accepted",
+      "membership.added",
+      "membership.added",
+      "membership.added",
+      "membership.added",
+      "group.created"
+    ],
+    "ui": "jsdom + real HTTP (no response mocks)"
+  },
+  "phase": "実ブラウザ確認待ち API=http://127.0.0.1:32798",
+  "cleanup": {
+    "success": true,
+    "errors": []
+  },
+  "fixtureErrors": [],
+  "finishedAt": "2026-10-20T01:15:54.491Z"
+}

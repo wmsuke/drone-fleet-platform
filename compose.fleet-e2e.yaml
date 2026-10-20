@@ -1,0 +1,102 @@
+# Phase 4のE2E専用。通常環境とAWS認証情報を使わない。
+x-runtime: &runtime
+  build:
+    context: .
+    target: runtime
+  image: ${COMPOSE_PROJECT_NAME}-runtime
+  restart: "no"
+x-database: &database
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: fleet_e2e
+  POSTGRES_USER: fleet_e2e
+  POSTGRES_PASSWORD: fleet-e2e-test-only
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      <<: *database
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "fleet_e2e", "-d", "fleet_e2e"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  mqtt:
+    image: eclipse-mosquitto:2.0.22
+    ports: ["127.0.0.1::1883"]
+    volumes:
+      - ./infra/local/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mosquitto_pub",
+          "-h",
+          "localhost",
+          "-t",
+          "fleet/health",
+          "-m",
+          "ready",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  migrate:
+    <<: *runtime
+    command: ["node", "packages/database/dist/migrate.js"]
+    environment: *database
+    depends_on:
+      postgres: { condition: service_healthy }
+  telemetry-ingestor:
+    <<: *runtime
+    command: ["node", "apps/telemetry-ingestor/dist/index.js"]
+    environment:
+      <<: *database
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mqtt: { condition: service_healthy }
+  api:
+    <<: *runtime
+    command: ["node", "apps/api/dist/index.js"]
+    ports: ["127.0.0.1::3000"]
+    environment:
+      <<: *database
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      API_HOST: 0.0.0.0
+      # 検証用loopback originだけを許可する。通常の公開設定は変更しない。
+      DASHBOARD_ORIGIN: http://localhost:15147
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  simulator:
+    <<: *runtime
+    command: ["node", "apps/simulator/dist/index.js"]
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+      DRONE_COUNT: 1
+      SIMULATION_SEED: fleet-e2e
+      TELEMETRY_INTERVAL_MS: 1000
+      TELEMETRY_BUFFER_DIR: /workspace/simulator-data
+    volumes: [simulator-data:/workspace/simulator-data]
+    depends_on:
+      telemetry-ingestor: { condition: service_started }
+  alert-evaluator:
+    <<: *runtime
+    command: ["node", "apps/alert-evaluator/dist/index.js"]
+    environment:
+      <<: *database
+      ALERT_EVALUATION_INTERVAL_MS: 250
+      # commandの30/120秒期限は短縮しない。
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  probe:
+    <<: *runtime
+    command: ["node", "-e", "setInterval(() => {}, 1000000)"]
+    environment: *database
+volumes:
+  postgres-data:
+  simulator-data:

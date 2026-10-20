@@ -16,6 +16,7 @@ pids
 *.pid.lock
 load-results/
 recovery-results/
+fleet-e2e-results/
 simulator-data/
 *.sqlite
 *.sqlite-wal

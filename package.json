@@ -32,6 +32,7 @@
     "telemetry:test:integration": "pnpm --filter @drone-fleet/telemetry-ingestor test:integration",
     "test:telemetry-path": "./scripts/test-telemetry-path.sh",
     "test:recovery": "./scripts/test-recovery.sh",
+    "test:fleet-e2e": "bash scripts/test-fleet-e2e.sh",
     "test:telemetry-receipts": "vitest run --no-file-parallelism apps/telemetry-ingestor/test/receipt.integration.test.ts",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:mqtt": "./scripts/verify-mqtt.sh"

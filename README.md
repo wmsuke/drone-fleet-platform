@@ -178,6 +178,8 @@ Pull Requestと`main`ブランチへのpushでは、GitHub Actionsが`pnpm check
 
 ### 負荷生成器
 
+group操作・alert・auditの一連の確認は `pnpm test:fleet-e2e` で実行する。[E2Eの範囲と後処理](docs/fleet-e2e.md)に再現手順を記す。
+
 複数機体commandの計測は[受付・配送・ACK・集約APIの負荷検証](docs/load-testing/fleet-commands.md)を参照する。telemetryの定常送信とは別のローカル試験である。
 
 `apps/load-generator`は通常のシミュレータとは別に、指定範囲のdeviceIdからローカルMosquittoまたはAWS IoT Coreへテレメトリを送る。件数上限または時間上限に達すると送信を止め、MQTT接続を閉じて`LOAD_REPORT_PATH`へJSONレポートを保存する。AWSモードはBillingの事前確認と月間200,000件の自主上限を必須にし、Basic IngestへmTLSで送信する。手順は[AWS IoTクラウド経路の短時間確認](docs/load-testing/aws-iot-free-tier.md)を参照する。

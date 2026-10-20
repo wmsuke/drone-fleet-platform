@@ -104,6 +104,9 @@ importers:
       '@drone-fleet/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@drone-fleet/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@testing-library/jest-dom':
         specifier: ^7.0.1
         version: 7.0.1(@testing-library/dom@10.4.2)(vitest@4.1.0(@types/node@26.6.3)(jsdom@30.1.1)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(tsx@4.23.15)))
@@ -122,6 +125,9 @@ importers:
       jsdom:
         specifier: ^30.1.1
         version: 30.1.1
+      mqtt:
+        specifier: ^5.16.0
+        version: 5.16.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
