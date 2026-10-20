@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "transport": "local",
+  "startedAt": "2026-10-20T01:16:09.521Z",
+  "aws": {
+    "executed": false,
+    "unverified": ["mTLS", "IoT Policy", "AWS経路・費用"]
+  },
+  "scenarios": {},
+  "phase": "専用環境起動",
+  "failure": "Error: cleanup確認用の意図した失敗",
+  "cleanup": {
+    "success": true,
+    "errors": []
+  },
+  "fixtureErrors": [],
+  "finishedAt": "2026-10-20T01:19:20.877Z"
+}

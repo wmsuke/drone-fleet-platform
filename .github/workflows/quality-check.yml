@@ -137,6 +137,32 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  fleet-e2e:
+    name: Fleet operation, alert, and audit E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify fleet operation, alert, and audit
+        run: pnpm test:fleet-e2e
+      - name: Upload fleet E2E result and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: fleet-e2e-results/
+          if-no-files-found: warn
+          retention-days: 14
+
   terraform:
     name: Terraform format, validate, and test
     runs-on: ubuntu-latest
