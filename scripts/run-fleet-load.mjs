@@ -315,5 +315,9 @@ try {
       }
 } finally {
   await cleanup();
+  if (results.length) {
+    const { summarizeFleetLoad } = await import("./summarize-fleet-load.mjs");
+    await summarizeFleetLoad(output);
+  }
 }
 console.log(`保存先: ${output}`);

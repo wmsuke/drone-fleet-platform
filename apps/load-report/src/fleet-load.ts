@@ -49,6 +49,8 @@ export function expectedOutcome(
   const affected = condition === "success" ? 0 : count / 10;
   return (
     operation.status === (affected ? "PARTIALLY_FAILED" : "COMPLETED") &&
+    Object.values(operation.counts).reduce((sum, value) => sum + value, 0) ===
+      count &&
     operation.counts.SUCCEEDED === count - affected &&
     (operation.counts.EXECUTION_FAILED ?? 0) ===
       (condition === "failure" ? affected : 0) &&
@@ -148,8 +150,9 @@ async function main() {
         await wait(500);
       }
     })();
-    // 成功・失敗も10秒間観測し、未応答は実際の30秒開始期限を待つ。
-    const durationMs = condition === "unresponsive" ? 35000 : 10000;
+    // 10/100台の成功・失敗も10秒間観測する。追加の1000台と未応答は35秒観測する。
+    const durationMs =
+      condition === "unresponsive" || count === 1000 ? 35000 : 10000;
     const api = await runApiProbe({
       testId: prefix,
       targetUrl: `http://api:3000/fleet-operations/${operationId}?limit=100&offset=0`,
