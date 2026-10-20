@@ -166,6 +166,7 @@ export class FleetE2eHarness {
       ),
     );
     let sequence = 0;
+    const lastSequences = new Map<string, number>();
     const sendTelemetry = async (id: string) => {
       const message = telemetryV2MessageSchema.parse({
         schemaVersion: 2,
@@ -182,6 +183,7 @@ export class FleetE2eHarness {
           status: "IDLE",
         },
       });
+      lastSequences.set(id, message.sequence);
       await this.client!.publishAsync(
         createTelemetryTopic(id),
         JSON.stringify(message),
@@ -198,6 +200,17 @@ export class FleetE2eHarness {
       for (const id of sessions.keys())
         if (!registered.has(id)) await sendTelemetry(id);
       return d.length === 5;
+    });
+    // 再送分のflushより前にOFFLINE通知を送ると、後のtelemetryでONLINEへ戻り得る。
+    await eventually("fixture telemetryの全保存", async () => {
+      const saved = await this.pg<{ device_id: string; sequence: string }[]>(
+        "SELECT device_id,max(sequence) AS sequence FROM telemetry WHERE device_id LIKE 'fleet-%' GROUP BY device_id",
+      );
+      return [...lastSequences].every(([id, seq]) =>
+        saved.some(
+          (row) => row.device_id === id && Number(row.sequence) >= seq,
+        ),
+      );
     });
     const offline = connectionStatusMessageSchema.parse({
       schemaVersion: 1,
