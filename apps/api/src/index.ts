@@ -1,5 +1,6 @@
 import { createDatabase } from "@drone-fleet/database";
 import { createReleaseRepository } from "./release-repository.js";
+import { createDeploymentRepository } from "./deployment-repository.js";
 
 import { buildApi } from "./app.js";
 import {
@@ -46,6 +47,10 @@ async function main(): Promise<void> {
   const app = buildApi(createDeviceRepository(db), commandService, {
     ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH
       ? {
+          deploymentRepository: createDeploymentRepository(db, {
+            directory: process.env.OTA_RELEASE_DIR,
+            trustStorePath: process.env.OTA_TRUST_STORE_PATH,
+          }),
           releases: {
             repository: createReleaseRepository(db),
             directory: process.env.OTA_RELEASE_DIR,

@@ -1,5 +1,7 @@
 import { ApiError } from "./api.js";
 export const auditActions = [
+  "deployment.accepted",
+  "deployment.replayed",
   "release.registered",
   "group.created",
   "group.updated",
@@ -45,7 +47,8 @@ export interface AuditItem {
     | "command"
     | "operation"
     | "alert"
-    | "release";
+    | "release"
+    | "deployment";
   targetId: string | null;
   result: "SUCCEEDED" | "REJECTED" | "FAILED";
   requestId: string | null;
@@ -110,9 +113,15 @@ function valid(v: unknown): v is AuditItem {
     typeof v.action === "string" &&
     auditActions.some((a) => a === v.action) &&
     typeof v.targetKind === "string" &&
-    ["group", "device", "command", "operation", "alert", "release"].includes(
-      v.targetKind,
-    ) &&
+    [
+      "group",
+      "device",
+      "command",
+      "operation",
+      "alert",
+      "release",
+      "deployment",
+    ].includes(v.targetKind) &&
     (v.targetId === null ||
       (typeof v.targetId === "string" &&
         /^[A-Za-z0-9_-]{1,128}$/.test(v.targetId))) &&

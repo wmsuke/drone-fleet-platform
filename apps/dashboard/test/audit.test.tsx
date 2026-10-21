@@ -54,6 +54,28 @@ afterEach(() => {
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
 });
+it("accepts deployment audit records without breaking the existing audit list", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json({
+        items: [
+          {
+            ...item,
+            action: "deployment.accepted",
+            targetKind: "deployment",
+            metadata: { targetCount: 10, afterStatus: "ACCEPTED" },
+          },
+        ],
+        limit: 20,
+        nextCursor: null,
+      }),
+    ),
+  );
+  expect((await fetchAuditPage("http://api.test", "")).items[0]?.action).toBe(
+    "deployment.accepted",
+  );
+});
 it("restores search conditions, pages by cursor and resets cursor when searching", async () => {
   const mock = vi.fn(async (url: string) => {
     const query = new URL(url).searchParams;
