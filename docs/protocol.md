@@ -56,6 +56,16 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ## 共通項目
 
+### Phase 5の追加予定（現在は未対応）
+
+#165の[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)で、既存の`fleet/v1/devices/{deviceId}/`配下に`ota-requests`、`ota-events`、`ota-receipts`を追加する設計を定めた。いずれも新規schemaVersion 1、QoS 1・retainなし。APPLY_RELEASE / STOP_UPDATE / QUERY_STATEと進捗・boot/version/health・DB保存receiptを扱う。既存command v2・ACK v1/v2/v3・telemetry v1/v2・status/receipt v1はそのまま維持する。
+
+deploymentId・stageId・targetId・attemptId・commandId・releaseId/digest・fence・期限を照合し、eventの重複/衝突・古いattempt・遅着を分ける。fenceは64bit整数の10進文字列とし、healthは期限付きchallengeと継続観測で評価する。受領・適用・評価・停止確認・回復成功を別に記録する。初期OTA開始期限300秒・結果期限600秒はstage解禁時に固定し、既存commandの期限へ影響させない。
+
+上記topic、Zod schema、topic生成/解析、supervisorの購読、ingestorの保存/receipt、対応IoT Policyは#167以降の実装対象であり、現在のトピック表に実装済みとして加えない。未対応端末へOTAを送らず、受信側・Policy・supervisorを揃えてからopt-inで有効にする。payload項目・状態/health・再送上限と移行順はADRを正とする。
+
+### 現在のメッセージ
+
 #152で実行結果を受領ACKと分け、同じcommand-acks topic上のACK v3を追加した。command v2、受領・期限拒否ACK v1/v2の互換性は維持する。結果通知の責務と互換性、成功条件は[commandの実行結果通知](command-results.md)と[ADR 0006](adr/0006-fleet-operations-alerts-and-audit.md)を参照する。
 
 Phase 4のgroup・fleet operation・alert・auditはHTTP APIとDBのモデルであり、group共有topicや一括command payloadは追加しない。APIが受付時の対象ごとに異なるcommandIdのcommand v2を作り、既存の機体別topicへ送る。Idempotency-KeyはHTTP受付用でMQTT payloadには含めない。通常の1操作の上限は100台（設定範囲1〜1000）で、設定上限は性能保証ではない。QoS・retain・IoT Policyの変更はない。手順と状態の読み方は[複数機体運用デモ](fleet-demo.md)を参照する。
