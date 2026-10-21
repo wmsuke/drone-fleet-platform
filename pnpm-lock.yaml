@@ -60,6 +60,9 @@ importers:
       '@drone-fleet/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@drone-fleet/releases':
+        specifier: workspace:*
+        version: link:../../packages/releases
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
@@ -253,6 +256,28 @@ importers:
       '@drone-fleet/config':
         specifier: workspace:*
         version: link:../config
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
+  packages/releases:
+    dependencies:
+      semver:
+        specifier: ^7.7.4
+        version: 7.8.5
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@drone-fleet/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.8.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1039,6 +1064,9 @@ packages:
 
   '@types/readable-stream@4.0.24':
     resolution: {integrity: sha512-NRvUNC/JFGPJvqdAfEve8oginbM6V08u5NzLWpG8MwA2kTPOLnqk+wpwuPT+mp3aUsxyuT6m2gnrPuHYCruzEg==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
@@ -2735,6 +2763,8 @@ snapshots:
   '@types/readable-stream@4.0.24':
     dependencies:
       '@types/node': 26.6.3
+
+  '@types/semver@7.8.0': {}
 
   '@types/ws@8.18.1':
     dependencies:

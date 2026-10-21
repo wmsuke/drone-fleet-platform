@@ -1,0 +1,23 @@
+# local限定の任意起動。通常Composeと既存simulatorの動作は変えない。
+services:
+  api:
+    environment:
+      OTA_RELEASE_DIR: /artifacts
+      OTA_TRUST_STORE_PATH: /trust/trust-store.json
+    volumes:
+      - ${OTA_LOCAL_OBJECTS_DIR:-./secrets/ota/objects}:/artifacts:ro
+      - ${OTA_LOCAL_TRUST_DIR:-./secrets/ota/trust}:/trust:ro
+
+  artifacts:
+    build:
+      context: .
+      target: runtime
+    command: ["node", "packages/releases/dist/server.js"]
+    environment:
+      OTA_RELEASE_DIR: /artifacts
+    volumes:
+      - ${OTA_LOCAL_OBJECTS_DIR:-./secrets/ota/objects}:/artifacts:ro
+    # ホスト検証もloopbackだけ。外部公開は禁止。
+    ports:
+      - "127.0.0.1:${OTA_ARTIFACT_PORT:-8080}:8080"
+    restart: unless-stopped

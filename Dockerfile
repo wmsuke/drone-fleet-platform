@@ -15,6 +15,7 @@ COPY apps/telemetry-ingestor/package.json apps/telemetry-ingestor/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/protocol/package.json packages/protocol/package.json
+COPY packages/releases/package.json packages/releases/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY apps ./apps

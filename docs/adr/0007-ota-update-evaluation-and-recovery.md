@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#165は文書のみ。OTAの通信・保存・適用・画面は未実装
+- 状態: 採用する設計。#166でrelease管理・local配信を実装。OTA通信・適用・画面は未実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -26,6 +26,8 @@ MQTT接続は機体ごとにsupervisorだけが所有する。同一Thing/client
 ### 配信元と保存
 
 #166でlocalの専用artifact HTTPサービスを追加する。配信物はdigestに基づく不変objectとして保存し、APIは登録metadataのみを管理する。端末は事前設定したoriginの固定pathからreleaseId/digestで取得し、要求中の任意URLを取得しない。localのHTTP例外は閉じたComposeネットワークのallowlistに限定する。本番・外部接続はHTTPS必須。redirect、別origin、userinfo、query内認証情報、path traversal、未許可の解決先を拒否し、DNS解決先も接続時に検証する。
+
+#166では署名用CLIが先にobjectを原子的に配置し、APIと専用HTTPサービスが同じread-only領域を読む方式を採用した。登録APIは外部URLを受け取らずHTTP接続もしない。端末のorigin/DNS/redirect制限は端末clientを追加する#168で実装する。localのホスト検証portもloopbackに限定する。manifestのenvelopeもcanonical JSONだけを受理し、初期互換baselineはNode.js 22.13.0、OTA protocol/supervisor/state schema各1.0.0とする。release全体をDB triggerで変更・削除不可にし、deployment参照は#169で追加する。[手順と現行の境界](../releases.md)を参照する。
 
 AWS IoT Jobsは初期方式では採用しない。Jobsはjob documentと端末からのexecution状態更新を扱うが、それだけで本ADRのhealth成功を証明しない。[公式workflow](https://docs.aws.amazon.com/iot/latest/developerguide/jobs-workflow-jobs-online.html)と[execution states](https://docs.aws.amazon.com/iot/latest/developerguide/iot-jobs-lifecycle.html)を参照した。Jobs採用案はクラウド側の段階配信を使える一方、local用との二重実装と追加の認可・費用確認が必要になる。本方式は既存MQTT transportとDBを使ってlocalで再現することを優先し、独自worker・journalの保守を引き受ける。
 

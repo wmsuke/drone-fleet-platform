@@ -1,4 +1,5 @@
 import { createDatabase } from "@drone-fleet/database";
+import { createReleaseRepository } from "./release-repository.js";
 
 import { buildApi } from "./app.js";
 import {
@@ -18,6 +19,13 @@ import { createDeviceRepository } from "./repository.js";
 import { createShutdown } from "./shutdown.js";
 
 async function main(): Promise<void> {
+  if (
+    Boolean(process.env.OTA_RELEASE_DIR) !==
+    Boolean(process.env.OTA_TRUST_STORE_PATH)
+  )
+    throw new Error(
+      "OTA_RELEASE_DIRとOTA_TRUST_STORE_PATHは両方設定してください",
+    );
   const config = loadApiConfig();
   const outboxOptions = loadOutboxOptions();
   const fleetOptions = loadFleetOperationOptions();
@@ -36,6 +44,15 @@ async function main(): Promise<void> {
     outboxOptions,
   );
   const app = buildApi(createDeviceRepository(db), commandService, {
+    ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH
+      ? {
+          releases: {
+            repository: createReleaseRepository(db),
+            directory: process.env.OTA_RELEASE_DIR,
+            trustStorePath: process.env.OTA_TRUST_STORE_PATH,
+          },
+        }
+      : {}),
     auditDatabase: db,
     auditQueryRepository: createAuditQueryRepository(db),
     dashboardOrigin: config.dashboardOrigin,

@@ -192,7 +192,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 リリース：`v0.5.0`
 
-設計段階。親Issueは[#164](https://github.com/wmsuke/drone-fleet-platform/issues/164)。#135完了後、#165で[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)を追加した。更新するのは署名済みアプリbundleで、OTA用構成だけ固定supervisorと機体別の子プロセスへ分ける。version書き換え・受領・download完了では成功にしない。新bootのversion/digestと60秒の新鮮な継続healthで評価する。これは採用する設計であり、OTA機能はまだ未実装である。
+親Issueは[#164](https://github.com/wmsuke/drone-fleet-platform/issues/164)。#135完了後、#165で[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)を追加し、#166で[署名付き配信物の登録・検証とlocal配信](releases.md)を実装した。実更新はまだ未実装である。更新するのは署名済みアプリbundleで、OTA用構成だけ固定supervisorと機体別の子プロセスへ分ける。version書き換え・受領・download完了では成功にしない。新bootのversion/digestと60秒の新鮮な継続healthで評価する。
 
 実装順はrelease・配信元（#166）と通信契約（#167）→実適用（#168）・snapshot受付（#169）→証拠評価（#170）→段階/停止（#171）→制限付き復旧（#172）→介入記録（#173）→画面（#174）→10台E2E（#175）→デモ文書（#176）。各Issueの依存関係と移行・検証条件はADRに定める。
 
