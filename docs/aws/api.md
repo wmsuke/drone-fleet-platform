@@ -14,7 +14,7 @@ APIにはデバイスやtelemetry-ingestorと共有しないX.509証明書を使
 api_certificate_arn = "arn:aws:iot:ap-northeast-1:123456789012:cert/3333333333333333333333333333333333333333333333333333333333333333"
 ```
 
-TerraformはAPI用IoT Policyだけを証明書へattachする。Policyは固定clientIdでの接続と`fleet/v1/devices/*/commands`へのpublishだけを許可し、subscribe、receive、他suffixへのpublishは許可しない。Terraformはdevice、telemetry-ingestor、APIのcertificate ARNが相互に異なることをplan時に検証する。
+TerraformはAPI用IoT Policyだけを証明書へattachする。Policyは固定clientIdでの接続と`fleet/v1/devices/*/commands`、`fleet/v1/devices/*/ota-requests`へのpublishだけを許可し、subscribe、receive、その他suffixへのpublishは許可しない。#167のota-requestsは権限定義と通信契約のみで、APIのOTA送信はまだ未実装。今回実AWSへ適用しない。[OTAの更新順](../ota-protocol.md#iot-policyと更新順)に従う。Terraformはdevice、telemetry-ingestor、APIのcertificate ARNが相互に異なることをplan時に検証する。
 
 ## 接続設定
 

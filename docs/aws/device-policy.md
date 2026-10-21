@@ -7,9 +7,9 @@
 | 操作                | 対象                                                                                                                           |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | connect             | clientIdが`${iot:Connection.Thing.ThingName}`と一致し、証明書がThingへattach済みの場合だけ。接続属性は`LastWill`だけを許可する |
-| publish             | 自機の`telemetry`、`status`、`command-acks`                                                                                    |
+| publish             | 自機の`telemetry`、`status`、`command-acks`、`ota-events`                                                                      |
 | retained publish    | 自機の`status`だけ                                                                                                             |
-| subscribe / receive | 自機の`commands`と`telemetry-receipts`だけ                                                                                     |
+| subscribe / receive | 自機の`commands`、`telemetry-receipts`、`ota-requests`、`ota-receipts`だけ                                                     |
 
 Policyは`${iot:ClientId}`をtopicへ使わない。clientIdに`+`や`#`を指定して権限を広げられないよう、`iot:Connect`のresourceをThing名へ固定し、全statementへ`iot:Connection.Thing.IsAttached = true`を指定する。
 
@@ -18,6 +18,8 @@ simulatorは接続時に自機の`status` topicへretain付きLWTを設定する
 telemetry-ingestor用PolicyとAPI用Policyは別リソースであり、デバイス証明書にはattachしない。デバイスPolicyには全機体を表すtopic wildcardやバックエンド用clientIdを含めない。
 
 ## Terraform設定
+
+#167でOTAのPolicy定義を追加したが、実AWSへの適用・OTA送受信はまだ行っていない。OTAにはRetainPublishを許可しない。API/ingestorの方向別権限と更新順は[OTA通信仕様](../ota-protocol.md#iot-policyと更新順)を参照する。
 
 `#93`で発行した各証明書の`manifest.json`から、certificate ARNをGit管理外の`terraform.tfvars`へ設定する。秘密鍵と証明書本文はTerraformへ渡さない。
 

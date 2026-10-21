@@ -343,7 +343,7 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 既存command/outboxの保存・再送の原則は利用するが、OTAは専用のtable・topic・schemaに分離し、通常commandの30秒開始期限とfleet operationの120秒評価を変更しない。停止は後続送信の抑止と端末の確認を分け、rollbackは別attemptと回復評価を持つ。前試行の未停止・結果不明・非互換schemaでは自動再適用しない。署名の信頼根、状態遷移、healthの数値、段階の分母、crash境界、復旧上限はADRを正とする。
 
-#166でrelease DB/API、署名・archive検証、local専用artifact HTTPサービスを追加した。APIと配信サービスは同じread-only object領域を読み、任意URLを取得しない。生成・登録と不変性の境界は[配信物管理](releases.md)を参照する。supervisor、deployment、OTA protocol、Policy拡張は#167〜#176で順に実装する。実AWSのOTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
+#166でrelease DB/API、署名・archive検証、local専用artifact HTTPサービスを追加した。APIと配信サービスは同じread-only object領域を読み、任意URLを取得しない。生成・登録と不変性の境界は[配信物管理](releases.md)を参照する。#167で[OTA通信契約](ota-protocol.md)の型・schema・topic・scope照合とIoT Policy定義を追加した。supervisor、deployment、OTAの送受信・保存・成功評価は#168以降で実装する。実AWSへのPolicy適用・OTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
 
 ## Phase 4の設計と実装範囲
 

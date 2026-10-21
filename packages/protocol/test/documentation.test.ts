@@ -7,6 +7,9 @@ import {
   commandAcknowledgementV3MessageSchema,
   connectionStatusMessageSchema,
   telemetryV2MessageSchema,
+  otaRequestMessageSchema,
+  otaEventMessageSchema,
+  otaReceiptMessageSchema,
 } from "../src/index.js";
 
 const document = readFileSync(
@@ -15,6 +18,23 @@ const document = readFileSync(
 );
 
 describe("通信仕様の掲載JSON", () => {
+  it("OTA文書の要求・health・receipt例がschemaと一致する", () => {
+    const ota = readFileSync(
+      new URL("../../../docs/ota-protocol.md", import.meta.url),
+      "utf8",
+    );
+    const examples = [...ota.matchAll(/```json\n([\s\S]*?)```/g)].map((match) =>
+      JSON.parse(match[1]!),
+    );
+    expect(examples).toHaveLength(3);
+    [
+      otaRequestMessageSchema,
+      otaEventMessageSchema,
+      otaReceiptMessageSchema,
+    ].forEach((schema, index) =>
+      expect(schema.parse(examples[index])).toEqual(examples[index]),
+    );
+  });
   it.each([
     ["テレメトリ", telemetryV2MessageSchema, 2],
     ["接続状態", connectionStatusMessageSchema, 1],

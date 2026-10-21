@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#166でrelease管理・local配信を実装。OTA通信・適用・画面は未実装
+- 状態: 採用する設計。#166でrelease管理・local配信、#167でOTA通信契約・Policy定義を実装。OTA送受信・適用・画面は未実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -87,7 +87,7 @@ OTAは専用topic・schemaVersion 1を追加する。既存command v2、ACK v1/v
 | ota-events                                    | supervisor → ingestor | 受領・進捗・適用・起動・version/health・停止・状態照会への応答 |
 | ota-receipts                                  | ingestor → supervisor | DB commit済みeventIdとpayload hashの一致確認                   |
 
-全てQoS 1・retainなし。型・生成/解析・実行時検証は#167で`packages/protocol`へ追加する。新しいOTA topicが未実装の間は運用で送信しない。
+全てQoS 1・retainなし。型・生成/解析・実行時検証は#167で`packages/protocol`へ追加した。具体的なrequest/event/receiptの項目、固定期限、子とsupervisorのboot識別、payload hashと採否規則は[OTA通信仕様 v1](../ota-protocol.md)を正とする。送受信サービスが揃うまでは運用で送信しない。
 
 APPLY_RELEASEはcommandId、deploymentId、stageId、targetId、attemptId、fence、releaseId/digest、目的、createdAt・expiresAt・resultDeadlineと評価仕様versionを持つ。stop/queryも新commandIdで対象attempt/fenceを参照するが、新適用attemptを作らない。URL、秘密鍵、任意コマンド、自己申告actorを送らない。releaseの取得先は登録済みの固定originとmanifestから解決する。
 

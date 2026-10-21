@@ -80,6 +80,33 @@ resource "aws_iot_policy" "device" {
             "iot:Connection.Thing.IsAttached" = "true"
           }
         }
+      },
+      {
+        Sid       = "PublishOtaEvents"
+        Effect    = "Allow"
+        Action    = "iot:Publish"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-events"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid    = "SubscribeToOtaRequestsAndReceipts"
+        Effect = "Allow"
+        Action = "iot:Subscribe"
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-requests",
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-receipts"
+        ]
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid    = "ReceiveOtaRequestsAndReceipts"
+        Effect = "Allow"
+        Action = "iot:Receive"
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-requests",
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-receipts"
+        ]
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
       }
     ]
   })
@@ -129,6 +156,24 @@ resource "aws_iot_policy" "telemetry_ingestor" {
         Effect   = "Allow"
         Action   = "iot:Publish"
         Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/telemetry-receipts"
+      },
+      {
+        Sid      = "SubscribeToOtaEvents"
+        Effect   = "Allow"
+        Action   = "iot:Subscribe"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/+/ota-events"
+      },
+      {
+        Sid      = "ReceiveOtaEvents"
+        Effect   = "Allow"
+        Action   = "iot:Receive"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/ota-events"
+      },
+      {
+        Sid      = "PublishOtaReceipts"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/ota-receipts"
       }
     ]
   })
@@ -158,6 +203,12 @@ resource "aws_iot_policy" "api" {
         Effect   = "Allow"
         Action   = "iot:Publish"
         Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/commands"
+      },
+      {
+        Sid      = "PublishOtaRequests"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/ota-requests"
       }
     ]
   })
