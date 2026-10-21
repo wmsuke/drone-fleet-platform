@@ -16,6 +16,7 @@
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@drone-fleet/releases": "workspace:*",
     "@drone-fleet/database": "workspace:*",
     "@drone-fleet/protocol": "workspace:*",
     "@fastify/cors": "^11.3.0",

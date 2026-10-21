@@ -85,6 +85,13 @@
       "when": 1792385266300,
       "tag": "0011_melodic_brother_voodoo",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792562358433,
+      "tag": "0012_legal_swordsman",
+      "breakpoints": true
     }
   ]
 }

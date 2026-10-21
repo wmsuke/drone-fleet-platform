@@ -335,7 +335,7 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 5のOTA設計（未実装）
+## Phase 5のOTA設計と配信物管理
 
 #165の[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)でsimulator/Edge AgentのアプリケーションOTAを定めた。現行の複数機体simulatorは維持し、OTA用構成だけ機体ごとの固定supervisorと更新対象の子プロセスへ分ける。supervisorが単一のMQTT接続・更新排他・journal・署名検証・active切替と起動確認を持ち、子はIPC adapterで既存のtelemetry/command処理を使う。OS・Node.js・supervisor・飛行制御firmwareの更新は含めない。
 
@@ -343,7 +343,7 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 既存command/outboxの保存・再送の原則は利用するが、OTAは専用のtable・topic・schemaに分離し、通常commandの30秒開始期限とfleet operationの120秒評価を変更しない。停止は後続送信の抑止と端末の確認を分け、rollbackは別attemptと回復評価を持つ。前試行の未停止・結果不明・非互換schemaでは自動再適用しない。署名の信頼根、状態遷移、healthの数値、段階の分母、crash境界、復旧上限はADRを正とする。
 
-本段落は設計であり、artifactサービス、supervisor、OTA DB/API/protocol、Policy拡張はまだ存在しない。#166〜#176で順に実装・検証する。実AWSのOTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
+#166でrelease DB/API、署名・archive検証、local専用artifact HTTPサービスを追加した。APIと配信サービスは同じread-only object領域を読み、任意URLを取得しない。生成・登録と不変性の境界は[配信物管理](releases.md)を参照する。supervisor、deployment、OTA protocol、Policy拡張は#167〜#176で順に実装する。実AWSのOTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
 
 ## Phase 4の設計と実装範囲
 

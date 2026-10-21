@@ -5,6 +5,7 @@ import { auditLogs, fleetOperationTargets, fleetOperations } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 export type AuditAction =
+  | "release.registered"
   | "group.created"
   | "group.updated"
   | "group.deleted"
@@ -30,7 +31,13 @@ export const auditContext = new AsyncLocalStorage<AuditContext>();
 export type AuditWriter = Pick<Database, "insert">;
 export interface AuditEvent {
   action: AuditAction;
-  targetKind: "group" | "device" | "command" | "operation" | "alert";
+  targetKind:
+    | "group"
+    | "device"
+    | "command"
+    | "operation"
+    | "alert"
+    | "release";
   targetId?: string | null;
   result?: "SUCCEEDED" | "REJECTED" | "FAILED";
   system?: "telemetry-ingestor" | "alert-evaluator" | "operation-evaluator";

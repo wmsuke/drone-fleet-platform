@@ -8,6 +8,7 @@ export {
 export {
   commandStatusEnum,
   auditLogs,
+  releases,
   operationAuditStates,
   alerts,
   alertEvaluationStates,

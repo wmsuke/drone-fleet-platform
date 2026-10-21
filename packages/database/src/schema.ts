@@ -75,13 +75,44 @@ export const auditLogs = pgTable(
     ),
     check(
       "audit_logs_target_valid",
-      sql`${t.targetKind} IN ('group','device','command','operation','alert')`,
+      sql`${t.targetKind} IN ('group','device','command','operation','alert','release')`,
     ),
     check(
       "audit_logs_metadata_bounded",
       sql`jsonb_typeof(${t.metadata})='object' AND octet_length(${t.metadata}::text)<=8192`,
     ),
     check("audit_logs_version_valid", sql`${t.schemaVersion}=1`),
+  ],
+);
+
+export const releases = pgTable(
+  "releases",
+  {
+    releaseId: uuid("release_id").primaryKey(),
+    application: text("application").notNull(),
+    version: text("version").notNull(),
+    platform: text("platform").notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    envelope: jsonb("envelope").$type<Record<string, unknown>>().notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    verification: text("verification").notNull().default("VERIFIED"),
+    actorKind: text("actor_kind").notNull().default("anonymous"),
+    actorId: text("actor_id"),
+  },
+  (t) => [
+    uniqueIndex("releases_application_version_platform_unique").on(
+      t.application,
+      t.version,
+      t.platform,
+    ),
+    check("releases_verification_valid", sql`${t.verification}='VERIFIED'`),
+    check(
+      "releases_actor_valid",
+      sql`${t.actorKind}='anonymous' AND ${t.actorId} IS NULL`,
+    ),
+    check("releases_digest_valid", sql`${t.digest} ~ '^[0-9a-f]{64}$'`),
   ],
 );
 

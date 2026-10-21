@@ -158,7 +158,14 @@ function List({ base }: { base: string }) {
             {
               name: "targetKind",
               label: "対象種別",
-              values: ["group", "device", "command", "operation", "alert"],
+              values: [
+                "group",
+                "device",
+                "command",
+                "operation",
+                "alert",
+                "release",
+              ],
             },
             {
               name: "result",

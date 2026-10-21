@@ -469,7 +469,8 @@ docker compose down --volumes
 - [ADR 0002: デバイスとの通信にMQTTを使う](docs/adr/0002-mqtt-protocol.md)
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](docs/adr/0003-database.md)
 - [ADR 0006: 複数機体操作の集約状態と運用記録](docs/adr/0006-fleet-operations-alerts-and-audit.md)
-- [ADR 0007: OTAの実更新・成功評価・復旧境界（設計のみ・機能未実装）](docs/adr/0007-ota-update-evaluation-and-recovery.md)
+- [更新配信物の登録・検証とlocal配信（実更新は未実装）](docs/releases.md)
+- [ADR 0007: OTAの実更新・成功評価・復旧境界](docs/adr/0007-ota-update-evaluation-and-recovery.md)
 
 ## ライセンス
 
