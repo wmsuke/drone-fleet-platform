@@ -86,7 +86,8 @@ docs/
 │   ├── 0003-database.md
 │   ├── 0004-aws-iot-connection-and-credentials.md
 │   ├── 0005-delivery-and-recovery.md
-│   └── 0006-fleet-operations-alerts-and-audit.md
+│   ├── 0006-fleet-operations-alerts-and-audit.md
+│   └── 0007-ota-update-evaluation-and-recovery.md
 ├── aws/
 ├── load-testing/
 ├── releases/
@@ -334,6 +335,16 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
+## Phase 5のOTA設計（未実装）
+
+#165の[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)でsimulator/Edge AgentのアプリケーションOTAを定めた。現行の複数機体simulatorは維持し、OTA用構成だけ機体ごとの固定supervisorと更新対象の子プロセスへ分ける。supervisorが単一のMQTT接続・更新排他・journal・署名検証・active切替と起動確認を持ち、子はIPC adapterで既存のtelemetry/command処理を使う。OS・Node.js・supervisor・飛行制御firmwareの更新は含めない。
+
+配信物は署名manifestと不変のJavaScript bundle archive、配信元はlocalの専用artifactサービスとする。AWS IoT Jobsは初期方式では採用しない。API/workerはdeployment・段階・対象・方針を固定して送信待ちを保存し、ingestorはOTA eventとDB保存receipt、評価workerは新versionの起動と新鮮な継続healthから成功を判定する。HTTP 202、受領ACK、download完了では成功にしない。
+
+既存command/outboxの保存・再送の原則は利用するが、OTAは専用のtable・topic・schemaに分離し、通常commandの30秒開始期限とfleet operationの120秒評価を変更しない。停止は後続送信の抑止と端末の確認を分け、rollbackは別attemptと回復評価を持つ。前試行の未停止・結果不明・非互換schemaでは自動再適用しない。署名の信頼根、状態遷移、healthの数値、段階の分母、crash境界、復旧上限はADRを正とする。
+
+本段落は設計であり、artifactサービス、supervisor、OTA DB/API/protocol、Policy拡張はまだ存在しない。#166〜#176で順に実装・検証する。実AWSのOTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
+
 ## Phase 4の設計と実装範囲
 
 #137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)、#143で一覧・詳細・確認APIと画面を実装した。#144で操作と状態変更のauditを同時commitする。
@@ -363,3 +374,4 @@ HTTPのactorはanonymousで権限制御も未実装。成功auditの失敗は業
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](adr/0003-database.md)
 - [ADR 0004: AWS IoT Coreへ既存サービスを直接MQTT接続する](adr/0004-aws-iot-connection-and-credentials.md)
 - [ADR 0006: 複数機体操作の集約状態と運用記録](adr/0006-fleet-operations-alerts-and-audit.md)
+- [ADR 0007: OTAの実更新・成功評価・復旧境界](adr/0007-ota-update-evaluation-and-recovery.md)
