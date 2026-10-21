@@ -10,6 +10,8 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "test:ota-device": "bash scripts/test-ota-device.sh",
+    "ota:bundle": "pnpm --filter @drone-fleet/ota-supervisor build && node apps/ota-supervisor/dist/bundle-cli.js",
     "release:tool": "pnpm --filter @drone-fleet/releases build && node packages/releases/dist/cli.js",
     "alerts:test:integration": "pnpm --filter @drone-fleet/alert-evaluator test:integration",
     "api:test:integration": "pnpm --filter @drone-fleet/api test:integration",

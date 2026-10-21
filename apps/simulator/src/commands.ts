@@ -11,6 +11,7 @@ export interface ProcessedCommand {
 }
 
 export interface CommandProcessor {
+  hasUnfinished(): boolean;
   process(
     topic: string,
     payload: Buffer,
@@ -39,6 +40,7 @@ export function createCommandProcessor(
   const store = new CommandStore(deviceId, options);
 
   return {
+    hasUnfinished: () => store.hasUnfinished(),
     process(topic, payload, timestamp) {
       if (topic !== commandsTopic) {
         return null;

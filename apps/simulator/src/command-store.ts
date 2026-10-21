@@ -121,6 +121,15 @@ export class CommandStore {
     this.lastTime = now;
     return now;
   }
+  hasUnfinished(): boolean {
+    return (
+      this.db
+        .prepare(
+          "SELECT 1 FROM command_history WHERE device_id=? AND state IN ('RECEIVED','STARTED','UNCERTAIN') LIMIT 1",
+        )
+        .get(this.deviceId) !== undefined
+    );
+  }
   private find(id: string): Row | undefined {
     return this.db
       .prepare(

@@ -1,6 +1,6 @@
 # OTA通信仕様 v1
 
-#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。simulatorの実適用・supervisor、OTAのpublish/subscribe、ingestor保存・評価workerはまだ未実装で、通常起動時にOTAを送信しない。
+#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。#168で[opt-in端末supervisor・実適用・local health](ota-device.md)を追加した。backendのOTA受付・保存/receipt・評価workerはまだ未実装で、通常起動時にOTAを送信しない。
 
 ## topicと互換性
 

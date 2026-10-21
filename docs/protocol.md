@@ -62,7 +62,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 deploymentId・stageId・targetId・attemptId・commandId・releaseId/digest・fence・期限を照合し、eventの重複/衝突・古いattempt・遅着を分ける。fenceは64bit整数の10進文字列とし、healthは期限付きchallengeと継続観測で評価する。受領・適用・評価・停止確認・回復成功を別に記録する。初期OTA開始期限300秒・結果期限600秒はstage解禁時に固定し、既存commandの期限へ影響させない。
 
-#167で上記topicの生成/解析、OTA v1のZod schema・型・scope照合とTerraformのIoT Policy定義を追加した。契約・掲載JSON・重複/逆転/矛盾の採否規則・更新順は[OTA通信仕様 v1](ota-protocol.md)を参照する。supervisorの購読、APIのpublish、ingestorの保存/receipt、継続health評価はまだ未実装で、通常運転のトピック表へ動作済みとして加えない。未対応端末へOTAを送らず、受信側・Policy・supervisorを揃えてからopt-inで有効にする。実AWSへのPolicy適用は今回行わない。
+#167で上記topicの生成/解析、OTA v1のZod schema・型・scope照合とTerraformのIoT Policy定義を追加した。契約・掲載JSON・採否規則は[OTA通信仕様 v1](ota-protocol.md)を参照する。#168で[opt-in端末supervisor・実適用・local health](ota-device.md)を追加したが、APIのOTA publish、ingestorの保存/receipt、サーバーの継続health評価はまだ未実装である。未対応端末へOTAを送らず、受信側・Policy・supervisorを揃えてから有効にする。実AWSへのPolicy適用は今回行わない。
 
 ### 現在のメッセージ
 

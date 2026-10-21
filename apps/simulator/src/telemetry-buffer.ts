@@ -51,6 +51,21 @@ export interface TelemetryAppendResult {
 const SCHEMA_VERSION = 2;
 
 export class TelemetryBuffer {
+  checkHealth(): boolean {
+    this.database.exec(
+      "CREATE TABLE IF NOT EXISTS application_health (id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL)",
+    );
+    this.database
+      .prepare(
+        "INSERT INTO application_health VALUES(1,1) ON CONFLICT(id) DO UPDATE SET value=value+1",
+      )
+      .run();
+    return (
+      this.database
+        .prepare("SELECT value FROM application_health WHERE id=1")
+        .get() !== undefined
+    );
+  }
   private readonly database: DatabaseSync;
 
   constructor(

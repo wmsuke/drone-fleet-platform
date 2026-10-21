@@ -1,0 +1,18 @@
+{
+  "deviceId": "ota-drone-001",
+  "root": "/ota-state",
+  "data": "/ota-data",
+  "trustPath": "/trust/trust-store.json",
+  "metadataSource": {
+    "origin": "http://api:3000",
+    "allowedCidrs": ["172.16.0.0/12"],
+    "localHttp": true
+  },
+  "artifactSource": {
+    "origin": "http://artifacts:8080",
+    "allowedCidrs": ["172.16.0.0/12"],
+    "localHttp": true
+  },
+  "clockTrusted": true,
+  "telemetryIntervalMs": 5000
+}

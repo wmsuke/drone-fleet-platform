@@ -39,3 +39,4 @@ export {
 } from "./topics.js";
 export * from "./telemetry-receipt.js";
 export * from "./ota.js";
+export * from "./ota-ipc.js";
