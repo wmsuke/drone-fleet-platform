@@ -75,7 +75,7 @@ export const auditLogs = pgTable(
     ),
     check(
       "audit_logs_target_valid",
-      sql`${t.targetKind} IN ('group','device','command','operation','alert','release')`,
+      sql`${t.targetKind} IN ('group','device','command','operation','alert','release','deployment')`,
     ),
     check(
       "audit_logs_metadata_bounded",
@@ -618,3 +618,193 @@ export const alertEvaluationStates = pgTable("alert_evaluation_states", {
   }).notNull(),
   ruleVersion: text("rule_version").notNull(),
 });
+
+// 未観測の旧simulatorには行を作らない。観測経路の実装は#170で追加する。
+export const otaDeviceStates = pgTable(
+  "ota_device_states",
+  {
+    deviceId: varchar("device_id", { length: 64 })
+      .primaryKey()
+      .references(() => devices.deviceId, { onDelete: "restrict" }),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    observedAt: timestamp("observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    highestFence: bigint("highest_fence", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+  },
+  (t) => [check("ota_device_fence_valid", sql`${t.highestFence} >= 0`)],
+);
+
+export const otaDeployments = pgTable(
+  "ota_deployments",
+  {
+    deploymentId: uuid("deployment_id").primaryKey(),
+    idempotencyScope: text("idempotency_scope").notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    requestHash: varchar("request_hash", { length: 64 }).notNull(),
+    request: jsonb("request").$type<Record<string, unknown>>().notNull(),
+    releaseId: uuid("release_id")
+      .notNull()
+      .references(() => releases.releaseId, { onDelete: "restrict" }),
+    releaseSnapshot: jsonb("release_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    policy: jsonb("policy").$type<Record<string, unknown>>().notNull(),
+    status: text("status").notNull().default("ACCEPTED"),
+    targetCount: integer("target_count").notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_deployment_key_unique").on(
+      t.idempotencyScope,
+      t.idempotencyKey,
+    ),
+    check(
+      "ota_deployment_count_valid",
+      sql`${t.targetCount} BETWEEN 1 AND 100`,
+    ),
+    check(
+      "ota_deployment_scope_valid",
+      sql`${t.idempotencyScope} = 'anonymous'`,
+    ),
+    check(
+      "ota_deployment_status_valid",
+      sql`${t.status} IN ('ACCEPTED','RUNNING','STOPPING','PAUSED','WAITING_FOR_HUMAN','COMPLETED','FAILED','CANCELLED')`,
+    ),
+  ],
+);
+export const otaStages = pgTable(
+  "ota_stages",
+  {
+    stageId: uuid("stage_id").primaryKey(),
+    deploymentId: uuid("deployment_id")
+      .notNull()
+      .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    status: text("status").notNull(),
+    deviceIds: jsonb("device_ids").$type<string[]>().notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_stage_position_unique").on(t.deploymentId, t.position),
+    check("ota_stage_position_valid", sql`${t.position} BETWEEN 0 AND 9`),
+    check(
+      "ota_stage_status_valid",
+      sql`${t.status} IN ('PENDING','RUNNING','AWAITING_APPROVAL','PASSED','STOPPING','PAUSED','FAILED')`,
+    ),
+  ],
+);
+export const otaTargets = pgTable(
+  "ota_targets",
+  {
+    targetId: uuid("target_id").primaryKey(),
+    deploymentId: uuid("deployment_id")
+      .notNull()
+      .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+    stageId: uuid("stage_id")
+      .notNull()
+      .references(() => otaStages.stageId, { onDelete: "restrict" }),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "restrict" }),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    status: text("status").notNull().default("QUEUED"),
+  },
+  (t) => [
+    uniqueIndex("ota_target_device_unique").on(t.deploymentId, t.deviceId),
+  ],
+);
+export const otaReservations = pgTable("ota_reservations", {
+  deviceId: varchar("device_id", { length: 64 })
+    .primaryKey()
+    .references(() => devices.deviceId, { onDelete: "restrict" }),
+  targetId: uuid("target_id")
+    .notNull()
+    .references(() => otaTargets.targetId, { onDelete: "restrict" }),
+});
+export const otaAttempts = pgTable(
+  "ota_attempts",
+  {
+    attemptId: uuid("attempt_id").primaryKey(),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => otaTargets.targetId, { onDelete: "restrict" }),
+    ordinal: integer("ordinal").notNull().default(1),
+    commandId: uuid("command_id").notNull(),
+    fence: bigint("fence", { mode: "bigint" }).notNull(),
+    purpose: text("purpose").notNull().default("APPLY"),
+    previousAttemptId: uuid("previous_attempt_id"),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    resultDeadline: timestamp("result_deadline", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    deliveryStatus: text("delivery_status").notNull().default("HELD"),
+    applicationStatus: text("application_status"),
+    evaluationStatus: text("evaluation_status").notNull().default("PENDING"),
+  },
+  (t) => [
+    uniqueIndex("ota_attempt_command_unique").on(t.commandId),
+    uniqueIndex("ota_attempt_ordinal_unique").on(t.targetId, t.ordinal),
+    check("ota_attempt_fence_valid", sql`${t.fence} > 0`),
+    check(
+      "ota_attempt_purpose_valid",
+      sql`${t.purpose} IN ('APPLY','ROLLBACK')`,
+    ),
+    check(
+      "ota_attempt_times_valid",
+      sql`(${t.startedAt} IS NULL AND ${t.expiresAt} IS NULL AND ${t.resultDeadline} IS NULL AND ${t.deliveryStatus}='HELD') OR (${t.startedAt} IS NOT NULL AND ${t.expiresAt}=${t.startedAt}+interval '300 seconds' AND ${t.resultDeadline}=${t.startedAt}+interval '600 seconds' AND ${t.deliveryStatus}<>'HELD')`,
+    ),
+  ],
+);
+export const otaOutbox = pgTable(
+  "ota_outbox",
+  {
+    commandId: uuid("command_id")
+      .primaryKey()
+      .references(() => otaAttempts.commandId, { onDelete: "restrict" }),
+    topic: text("topic").notNull(),
+    payload: text("payload"),
+    status: text("status").notNull().default("HELD"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    nextAttemptAt: timestamp("next_attempt_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    attempts: integer("attempts").notNull().default(0),
+  },
+  (t) => [
+    check(
+      "ota_outbox_held_valid",
+      sql`(${t.status}='HELD' AND ${t.payload} IS NULL AND ${t.expiresAt} IS NULL AND ${t.nextAttemptAt} IS NULL AND ${t.attempts}=0) OR (${t.status}<>'HELD' AND ${t.payload} IS NOT NULL AND ${t.expiresAt} IS NOT NULL)`,
+    ),
+  ],
+);
+// #170で採否・評価を追加するための受信事実。受付時には端末eventを捏造しない。
+export const otaEvents = pgTable(
+  "ota_events",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp("occurred_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [uniqueIndex("ota_event_sequence_unique").on(t.attemptId, t.sequence)],
+);

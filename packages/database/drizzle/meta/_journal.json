@@ -92,6 +92,13 @@
       "when": 1792562358433,
       "tag": "0012_legal_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792571664006,
+      "tag": "0013_perpetual_skullbuster",
+      "breakpoints": true
     }
   ]
 }

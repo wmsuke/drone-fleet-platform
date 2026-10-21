@@ -471,6 +471,7 @@ docker compose down --volumes
 - [ADR 0006: 複数機体操作の集約状態と運用記録](docs/adr/0006-fleet-operations-alerts-and-audit.md)
 - [更新配信物の登録・検証とlocal配信（実更新は未実装）](docs/releases.md)
 - [OTA通信仕様 v1（型・topic・権限の契約）](docs/ota-protocol.md)
+- [OTA deploymentの受付API](docs/deployments-api.md)
 - [端末の実更新と起動後health（opt-in simulator）](docs/ota-device.md)
 - [ADR 0007: OTAの実更新・成功評価・復旧境界](docs/adr/0007-ota-update-evaluation-and-recovery.md)
 

@@ -12,6 +12,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 
 import type { CommandHistoryItem, CommandResponse } from "./schema.js";
+import { assertNotOtaReserved } from "./ota-reservation.js";
 
 export interface PendingCommand {
   commandId: string;
@@ -52,10 +53,12 @@ export function createCommandRepository(database: Database): CommandRepository {
           .select({ deviceId: devices.deviceId })
           .from(devices)
           .where(eq(devices.deviceId, command.deviceId))
-          .limit(1);
+          .limit(1)
+          .for("update");
         if (registered.length === 0) {
           return null;
         }
+        await assertNotOtaReserved(transaction, [command.deviceId]);
         await transaction.insert(commands).values({
           ...command,
           status: "PENDING",
