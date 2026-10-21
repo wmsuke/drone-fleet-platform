@@ -17,10 +17,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/semver": "^7.7.1",
     "@drone-fleet/config": "workspace:*",
     "typescript": "catalog:"
   },
   "dependencies": {
+    "semver": "^7.7.4",
     "zod": "^4.6.5"
   }
 }

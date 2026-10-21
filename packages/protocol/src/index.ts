@@ -25,6 +25,9 @@ export {
 
 export {
   createCommandAcksTopic,
+  createOtaRequestsTopic,
+  createOtaEventsTopic,
+  createOtaReceiptsTopic,
   createCommandsTopic,
   createStatusTopic,
   createTelemetryTopic,
@@ -35,3 +38,4 @@ export {
   type ParsedMqttTopic,
 } from "./topics.js";
 export * from "./telemetry-receipt.js";
+export * from "./ota.js";

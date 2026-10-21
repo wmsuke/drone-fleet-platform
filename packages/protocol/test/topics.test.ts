@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createCommandAcksTopic,
+  createOtaRequestsTopic,
+  createOtaEventsTopic,
+  createOtaReceiptsTopic,
   createCommandsTopic,
   createStatusTopic,
   createTelemetryTopic,
@@ -17,6 +20,9 @@ describe("MQTT topics", () => {
     [createStatusTopic, "status"],
     [createCommandsTopic, "commands"],
     [createCommandAcksTopic, "command-acks"],
+    [createOtaRequestsTopic, "ota-requests"],
+    [createOtaEventsTopic, "ota-events"],
+    [createOtaReceiptsTopic, "ota-receipts"],
   ] as const)("generates and parses the %s topic", (createTopic, kind) => {
     const topic = createTopic("drone_ABC-123");
 

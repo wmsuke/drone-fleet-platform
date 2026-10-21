@@ -35,7 +35,7 @@ endpointには`mqtts://`やpathを付けない。clientIdは`terraform output -j
 
 ## 購読と再接続
 
-接続後に次を購読する。v2のDB commit後は機体別telemetry-receiptsにQoS 1・retainなしで通知する。Policyはこのsuffixだけのpublishを許可する。実AWS確認前にPolicy更新を適用する。[telemetry保存確認receipt](../telemetry-receipts.md)に保証と費用境界を記す。
+接続後に次を購読する。v2のDB commit後は機体別telemetry-receiptsにQoS 1・retainなしで通知する。#167でPolicy定義にはota-eventsの購読/受信とota-receiptsへのpublishも追加したが、OTAの購読・保存・receipt送信はまだ未実装で、今回実AWSへ適用しない。OTAのpublishはreceiptsだけに限定する。[OTAの更新順](../ota-protocol.md#iot-policyと更新順)と[telemetry保存確認receipt](../telemetry-receipts.md)に従う。
 
 | topic filter                      | QoS | 処理                                     |
 | --------------------------------- | --: | ---------------------------------------- |

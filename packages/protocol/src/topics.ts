@@ -6,6 +6,9 @@ export type MqttTopicKind =
   | "telemetry-receipts"
   | "status"
   | "commands"
+  | "ota-requests"
+  | "ota-events"
+  | "ota-receipts"
   | "command-acks";
 
 export interface ParsedMqttTopic {
@@ -50,12 +53,25 @@ export function createCommandAcksTopic(deviceId: string): string {
   return createMqttTopic(deviceId, "command-acks");
 }
 
+export function createOtaRequestsTopic(deviceId: string): string {
+  return createMqttTopic(deviceId, "ota-requests");
+}
+export function createOtaEventsTopic(deviceId: string): string {
+  return createMqttTopic(deviceId, "ota-events");
+}
+export function createOtaReceiptsTopic(deviceId: string): string {
+  return createMqttTopic(deviceId, "ota-receipts");
+}
+
 function isMqttTopicKind(value: string): value is MqttTopicKind {
   return (
     value === "telemetry" ||
     value === "telemetry-receipts" ||
     value === "status" ||
     value === "commands" ||
+    value === "ota-requests" ||
+    value === "ota-events" ||
+    value === "ota-receipts" ||
     value === "command-acks"
   );
 }
