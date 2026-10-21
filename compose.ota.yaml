@@ -1,0 +1,37 @@
+services:
+  ota-supervisor:
+    build:
+      context: .
+      target: runtime
+    entrypoint:
+      ["node", "apps/ota-supervisor/dist/locked.js", "/ota-config/device.json"]
+    command: ["serve"]
+    environment:
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+    volumes:
+      - ota-device-state:/ota-state
+      - ota-device-data:/ota-data
+      - ${OTA_DEVICE_CONFIG:-./secrets/ota/device.json}:/ota-config/device.json:ro
+      - ${OTA_BASELINE_MANIFEST:-./secrets/ota/baseline.json}:/bootstrap/baseline.json:ro
+      - ${OTA_LOCAL_TRUST_DIR:-./secrets/ota/trust}:/trust:ro
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=16m
+    cap_drop: ["ALL"]
+    cap_add: ["SETUID", "SETGID", "CHOWN", "FOWNER", "DAC_OVERRIDE"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      artifacts:
+        condition: service_started
+    # 不明な再起動をloopさせず、journalと子の状態を確認してから手動で起動する。
+    restart: "no"
+    stop_grace_period: 90s
+
+volumes:
+  ota-device-state:
+  ota-device-data:

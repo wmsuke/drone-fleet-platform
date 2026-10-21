@@ -4,6 +4,23 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/simulator.ts",
+      "development": "./src/simulator.ts",
+      "import": "./dist/simulator.js"
+    },
+    "./transport": {
+      "types": "./src/mqtt-transport.ts",
+      "development": "./src/mqtt-transport.ts",
+      "import": "./dist/mqtt-transport.js"
+    },
+    "./config": {
+      "types": "./src/config.ts",
+      "development": "./src/config.ts",
+      "import": "./dist/config.js"
+    }
+  },
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",

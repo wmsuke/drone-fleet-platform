@@ -4,11 +4,19 @@ import { MAX_ARCHIVE_BYTES, ReleaseError } from "./manifest.js";
 
 const MAX_EXPANDED = 128 * 1024 * 1024;
 // 狭いPOSIX ustar subsetだけを受け付ける。展開・コード実行は行わない。
-export async function verifyArchive(bytes: Uint8Array) {
+export async function verifyArchive(
+  bytes: Uint8Array,
+  visitor?: {
+    start(path: string, directory: boolean): Promise<void>;
+    data(bytes: Uint8Array): Promise<void>;
+    end(): Promise<void>;
+  },
+) {
   if (bytes.length > MAX_ARCHIVE_BYTES) throw new ReleaseError("INVALID_SIZE");
   const stream = Readable.from([bytes]).pipe(createGunzip());
   let pending: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   let remaining = 0;
+  let contentRemaining = 0;
   let total = 0;
   let entries = 0;
   let zeros = 0;
@@ -43,7 +51,12 @@ export async function verifyArchive(bytes: Uint8Array) {
         const block = pending.subarray(0, 512);
         pending = pending.subarray(512);
         if (remaining > 0) {
+          await visitor?.data(
+            block.subarray(0, Math.min(contentRemaining, 512)),
+          );
+          contentRemaining -= Math.min(contentRemaining, 512);
           remaining--;
+          if (remaining === 0) await visitor?.end();
           continue;
         }
         if (block.every((v) => v === 0)) {
@@ -110,6 +123,9 @@ export async function verifyArchive(bytes: Uint8Array) {
         if (normalized === "app/main.mjs" && !isDirectory && size > 0)
           entrypoint = true;
         remaining = Math.ceil(size / 512);
+        contentRemaining = size;
+        await visitor?.start(normalized, isDirectory);
+        if (remaining === 0) await visitor?.end();
       }
     }
     if (pending.length !== 0 || remaining !== 0 || zeros < 2 || !entrypoint)

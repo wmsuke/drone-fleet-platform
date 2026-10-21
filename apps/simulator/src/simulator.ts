@@ -35,6 +35,14 @@ import {
 } from "./messages.js";
 
 export interface RunningSimulator {
+  prepareForUpdate(): Promise<boolean>;
+  releaseUpdateGate(): void;
+  inspectHealth(): {
+    sequence: number;
+    receipts: number;
+    sqlite: boolean;
+    commandReady: boolean;
+  };
   shutdown(): Promise<void>;
   getBufferStatus(): TelemetryBufferStats & {
     healthy: boolean;
@@ -50,6 +58,7 @@ export interface RunningSimulator {
 }
 
 export interface SimulatorDeviceConfig {
+  telemetryTemperatureOffset?: number;
   commandHistoryRetentionMs?: number;
   commandHistoryMaxRows?: number;
   commandClockTrusted?: boolean;
@@ -115,6 +124,7 @@ export type TelemetryBufferStore = Pick<
   | "confirmStored"
   | "stats"
   | "close"
+  | "checkHealth"
 >;
 export type OpenTelemetryBuffer = (
   path: string,
@@ -236,6 +246,9 @@ export async function startSimulator(
   let connectionGeneration = 0;
   let flightStatus: TelemetryMessage["payload"]["status"] | undefined;
   let commandQueue = Promise.resolve();
+  let updateGate = false;
+  let lastFlightStatus: TelemetryMessage["payload"]["status"] | undefined;
+  let confirmedReceipts = 0;
   let commandAckTimer: NodeJS.Timeout | undefined;
   let commandAckFailures = 0;
   let flushingAcks: Promise<void> | undefined;
@@ -616,12 +629,15 @@ export async function startSimulator(
       flightStatus,
       config.simulationSeed,
     );
+    lastFlightStatus = telemetry.payload.status;
+    telemetry.payload.temperature += config.telemetryTemperatureOffset ?? 0;
     if (returnedHome && !returnPath)
       Object.assign(telemetry.payload, {
         latitude: home.latitude,
         longitude: home.longitude,
         altitude: 0,
       });
+    if (returnedHome && !returnPath) lastFlightStatus = "IDLE";
     if (returnPath) {
       const progress = Math.min(
         1,
@@ -754,6 +770,7 @@ export async function startSimulator(
           !buffer.confirmStored(receipt.data.sessionId, receipt.data.sequence)
         )
           return;
+        confirmedReceipts++;
         refreshBufferStatus();
         if (
           waitingReceipt?.sessionId === receipt.data.sessionId &&
@@ -770,10 +787,11 @@ export async function startSimulator(
       }
       return;
     }
+    if (updateGate) return;
     commandQueue = commandQueue
       .then(async () => {
         await startupReady;
-        if (shuttingDown) return;
+        if (shuttingDown || updateGate) return;
         const processed = commandProcessor.process(
           topic,
           payload,
@@ -832,6 +850,33 @@ export async function startSimulator(
   }
 
   return {
+    async prepareForUpdate() {
+      updateGate = true;
+      await commandQueue;
+      return (
+        !shuttingDown &&
+        !bufferError &&
+        !activeCommand &&
+        !commandProcessor.hasUnfinished() &&
+        (flightStatus ?? lastFlightStatus) === "IDLE" &&
+        config.commandClockTrusted !== false
+      );
+    },
+    releaseUpdateGate() {
+      updateGate = false;
+    },
+    inspectHealth() {
+      return {
+        sequence,
+        receipts: confirmedReceipts,
+        sqlite: bufferError === undefined && buffer.checkHealth(),
+        commandReady:
+          !shuttingDown &&
+          !updateGate &&
+          config.commandClockTrusted !== false &&
+          !commandProcessor.hasUnfinished(),
+      };
+    },
     getBufferStatus() {
       return {
         ...bufferStats,

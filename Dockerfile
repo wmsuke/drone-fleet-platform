@@ -6,6 +6,7 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/ota-supervisor/package.json apps/ota-supervisor/package.json
 COPY apps/alert-evaluator/package.json apps/alert-evaluator/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY apps/load-generator/package.json apps/load-generator/package.json
@@ -27,6 +28,7 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm build
 
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache flock
 
 WORKDIR /workspace
 

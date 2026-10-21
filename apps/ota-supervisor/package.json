@@ -1,0 +1,25 @@
+{
+  "name": "@drone-fleet/ota-supervisor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@drone-fleet/protocol": "workspace:*",
+    "@drone-fleet/releases": "workspace:*",
+    "@drone-fleet/simulator": "workspace:*",
+    "mqtt": "^5.16.0",
+    "semver": "^7.7.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@drone-fleet/config": "workspace:*",
+    "@types/node": "^26.6.3",
+    "@types/semver": "^7.7.1",
+    "esbuild": "^0.28.2",
+    "typescript": "catalog:"
+  }
+}
