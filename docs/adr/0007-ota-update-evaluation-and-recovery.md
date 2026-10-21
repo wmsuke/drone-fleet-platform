@@ -60,6 +60,8 @@ streamingで圧縮・展開サイズとentry数を数える。絶対path、`..`�
 
 deployment受付は全targetのdevice予約、snapshot、初期stage、初期attemptの送信待ち、成功auditを同じDB transactionで保存する。予約はdeviceId一意で並行deploymentを拒否し、停止要求やlease timeoutだけでは解放しない。後続stageのtargetは待機のまま予約し、初期attemptはそのstageを解禁するまでpublishしない。空集合、不適合機体、重複device、上限超過を全件拒否し、一部受付しない。通常上限は100台、最大10stage、同時適用2台、新規要求1件/秒。これは初期安全設定で性能保証ではない。
 
+予約中は未解禁targetもメンテナンス対象として扱う。deploymentがCOMPLETED/FAILED/CANCELLEDになり、全試行の終端または停止・現在版を確認できたtransactionで予約を解放する。PAUSED/STOPPING/WAITING_FOR_HUMANでは保持し、介入で状態を照合するまで新deploymentや通常commandを通さない。可用性より不明な並行操作の回避を優先する判断である。
+
 HTTP操作者は現在anonymous / actorId nullのまま。idempotency scopeもanonymousとし、同一key・正規化本文hashなら元deployment、異なる本文は409。これは認証・認可の代わりではない。後述の別操作APIもidempotency key・理由を必須にする。
 
 | 軸         | 状態と意味                                                                                                                                                    |
@@ -102,6 +104,8 @@ AWS Policyは#167で、deviceの自機ota-events publish、自機ota-requests/ot
 ## 5. 起動・version・継続healthによる成功評価
 
 初期評価仕様を`ota-health-v1`としてdeploymentへ固定し、後から閾値を変えない。
+
+以下の数値はlocal検証を始めるための設計値であり、実測した性能・実機安全の閾値ではない。変更するときは評価仕様versionとADRを更新し、既存deploymentへ遡及しない。
 
 1. 署名・digest・互換性検証とactive切替のjournal記録がある。
 2. 新しい子のPIDとbootIdをsupervisorが採取し、実際にロードしたbundleのdigest、IPCで返したreleaseId/version/buildIdが候補と一致する。旧子は終了済みである。
