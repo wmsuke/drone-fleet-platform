@@ -136,3 +136,29 @@ export function verifyEnvelope(envelope: Envelope, keys: TrustStore) {
   )
     throw new ReleaseError("INCOMPATIBLE_RELEASE");
 }
+
+export function compatibleUpgrade(
+  manifest: Manifest,
+  current: {
+    application: string;
+    platform: string;
+    version: string;
+    nodeVersion: string;
+    otaProtocolVersion: string;
+    supervisorVersion: string;
+    stateSchemaVersion: string;
+    healthContractVersion: string;
+  },
+) {
+  return (
+    manifest.application === current.application &&
+    manifest.platform === current.platform &&
+    manifest.healthContractVersion === current.healthContractVersion &&
+    semver.valid(current.version) !== null &&
+    semver.gt(manifest.version, current.version) &&
+    semver.satisfies(current.nodeVersion, manifest.nodeRange) &&
+    semver.satisfies(current.otaProtocolVersion, manifest.otaProtocolRange) &&
+    semver.satisfies(current.supervisorVersion, manifest.supervisorRange) &&
+    semver.satisfies(current.stateSchemaVersion, manifest.stateSchemaRange)
+  );
+}

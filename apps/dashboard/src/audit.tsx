@@ -165,6 +165,7 @@ function List({ base }: { base: string }) {
                 "operation",
                 "alert",
                 "release",
+                "deployment",
               ],
             },
             {

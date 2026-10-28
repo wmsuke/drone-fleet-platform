@@ -3,6 +3,8 @@ import type { AuditEvent } from "@drone-fleet/database";
 type AuditAction = AuditEvent["action"];
 import { deviceIdSchema } from "./schema.js";
 export const auditActions = [
+  "deployment.accepted",
+  "deployment.replayed",
   "release.registered",
   "group.created",
   "group.updated",
@@ -52,6 +54,8 @@ export const publicMetadataSchema = z
   .strict();
 type Metadata = z.infer<typeof publicMetadataSchema>;
 const allowed: Record<AuditAction, readonly (keyof Metadata)[]> = {
+  "deployment.accepted": ["targetCount", "afterStatus"],
+  "deployment.replayed": ["targetCount"],
   "release.registered": ["afterStatus"],
   "group.created": ["afterName"],
   "group.updated": ["beforeName", "afterName", "descriptionChanged"],
@@ -98,7 +102,15 @@ export const auditQuerySchema = z
       .optional(),
     action: z.enum(auditActions).optional(),
     targetKind: z
-      .enum(["group", "device", "command", "operation", "alert", "release"])
+      .enum([
+        "group",
+        "device",
+        "command",
+        "operation",
+        "alert",
+        "release",
+        "deployment",
+      ])
       .optional(),
     targetId: targetId.optional(),
     result: z.enum(["SUCCEEDED", "REJECTED", "FAILED"]).optional(),
@@ -153,6 +165,7 @@ export const auditItemSchema = z.object({
     "operation",
     "alert",
     "release",
+    "deployment",
   ]),
   targetId: targetId.nullable(),
   result: z.enum(["SUCCEEDED", "REJECTED", "FAILED"]),

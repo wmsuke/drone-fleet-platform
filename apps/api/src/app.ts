@@ -1,4 +1,7 @@
 import cors from "@fastify/cors";
+import { registerDeploymentRoutes } from "./deployment-routes.js";
+import type { DeploymentRepository } from "./deployment-repository.js";
+import { OtaReservationError } from "./ota-reservation.js";
 import type { Database } from "@drone-fleet/database";
 import {
   registerReleaseRoutes,
@@ -37,6 +40,7 @@ export function buildApi(
   options: {
     dashboardOrigin?: string | null;
     releases?: ReleaseOptions;
+    deploymentRepository?: DeploymentRepository;
     outboxStatus?: () => Promise<unknown>;
     groupRepository?: GroupRepository;
     auditDatabase?: Database;
@@ -46,6 +50,8 @@ export function buildApi(
   } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (options.deploymentRepository)
+    registerDeploymentRoutes(app, options.deploymentRepository);
   if (options.releases) registerReleaseRoutes(app, options.releases);
   if (options.auditDatabase) registerAuditHooks(app, options.auditDatabase);
   if (options.auditQueryRepository)
@@ -132,6 +138,8 @@ export function buildApi(
         );
         return reply.code(202).send(commandResponseSchema.parse(command));
       } catch (error) {
+        if (error instanceof OtaReservationError)
+          return reply.code(409).send({ error: "DEVICE_RESERVED_FOR_OTA" });
         if (error instanceof DeviceNotFoundError) {
           return reply.code(404).send({ error: "deviceが見つかりません" });
         }

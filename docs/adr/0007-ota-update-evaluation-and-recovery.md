@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168でopt-in端末supervisor・実適用・local healthを実装。backendのOTA保存/評価・段階配信・画面は未実装
+- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168でopt-in端末supervisor・実適用・local health、#169で固定snapshot受付・device予約・HELD outboxを実装。backendのOTA保存/評価・段階解禁/配送・画面は未実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -47,7 +47,7 @@ streamingで圧縮・展開サイズとentry数を数える。絶対path、`..`�
 
 ## 3. 永続モデルと状態の分離
 
-以下は後続Issueで追加する論理モデルで、現行DB tableが存在するという記述ではない。IDはUUID、fenceはdeviceごとに増える64bit整数をJSONでは10進文字列で表す。
+以下はPhase 5の論理モデルで、#169ではdeployment/stage/target/attempt・送信待ち・device予約とevent保存領域までを追加した。eventの保存経路・評価・復旧・介入は後続Issueで追加する。IDはUUID、fenceはdeviceごとに増える64bit整数をJSONでは10進文字列で表す。
 
 | 単位               | 保存するもの・責務                                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -206,7 +206,7 @@ rollbackは自動起動せず、原因確認と明示承認を必要とする。
 
 旧protocolとSQLite/DB履歴は残し、通常10台デモを回帰する。OTA結果が保存できる前に端末だけ更新しない。DB downgradeやsupervisor bootstrapの自動rollbackは行わない。誤った信頼根・schema移行はバックアップと運用者の復旧対象である。
 
-後続の具体的なAPI/table名・Zod schemaは上の契約を実装するIssueで追加する。契約や上限を変更する場合はADRと対応文書を同じPRで更新し、暗黙に実装へ合わせない。本Issueの検証は文書の整合・参照・既存品質チェックまでで、OTAの実更新・crash復旧やAWS動作を検証済みとはしない。
+#169の具体的なAPI/table・受付条件と未実装の境界は[deployment受付API](../deployments-api.md)に記す。受付時に全stageを予約し、先行stageも承認待ち、全attemptをHELDに置く。機体の現在版・能力は15秒未満の観測を要求し、旧simulatorの未確認値を補完しない。変更されたmembershipを再送時に再解決しない。契約や上限を変更する場合はADRと対応文書を同じPRで更新し、暗黙に実装へ合わせない。ADR自体の検証は文書の整合・参照までで、実行検証の証拠は各実装Issue/PRに分けて記録する。
 
 ## 参照
 

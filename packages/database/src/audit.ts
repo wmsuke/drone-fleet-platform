@@ -5,6 +5,8 @@ import { auditLogs, fleetOperationTargets, fleetOperations } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 export type AuditAction =
+  | "deployment.accepted"
+  | "deployment.replayed"
   | "release.registered"
   | "group.created"
   | "group.updated"
@@ -37,7 +39,8 @@ export interface AuditEvent {
     | "command"
     | "operation"
     | "alert"
-    | "release";
+    | "release"
+    | "deployment";
   targetId?: string | null;
   result?: "SUCCEEDED" | "REJECTED" | "FAILED";
   system?: "telemetry-ingestor" | "alert-evaluator" | "operation-evaluator";

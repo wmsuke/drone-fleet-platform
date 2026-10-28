@@ -18,6 +18,7 @@ function id(value: unknown) {
 const routes: Record<string, [AuditEvent["action"], AuditEvent["targetKind"]]> =
   {
     "POST /releases": ["release.registered", "release"],
+    "POST /deployments": ["deployment.accepted", "deployment"],
     "POST /groups": ["group.created", "group"],
     "PATCH /groups/:groupId": ["group.updated", "group"],
     "DELETE /groups/:groupId": ["group.deleted", "group"],

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   commands,
+  devices,
   commandOutbox,
   groups,
   groupMemberships,
@@ -26,6 +27,10 @@ import type {
   OperationDetailResponse,
 } from "./fleet-operation-schema.js";
 import { createFleetOperationQueries } from "./fleet-operation-query.js";
+import {
+  assertNotOtaReserved,
+  OtaReservationError,
+} from "./ota-reservation.js";
 
 export class FleetOperationError extends Error {
   constructor(
@@ -177,6 +182,31 @@ export function createFleetOperationRepository(
             "対象数上限を超えています",
             "TARGET_LIMIT_EXCEEDED",
           );
+        await tx
+          .select({ deviceId: devices.deviceId })
+          .from(devices)
+          .where(
+            inArray(
+              devices.deviceId,
+              members.map((m) => m.deviceId),
+            ),
+          )
+          .orderBy(asc(devices.deviceId))
+          .for("update");
+        try {
+          await assertNotOtaReserved(
+            tx,
+            members.map((m) => m.deviceId),
+          );
+        } catch (error) {
+          if (error instanceof OtaReservationError)
+            throw new FleetOperationError(
+              409,
+              "OTA予約中の機体を含みます",
+              "DEVICE_RESERVED_FOR_OTA",
+            );
+          throw error;
+        }
         const createdAt = new Date(),
           expiresAt = new Date(createdAt.getTime() + 30_000),
           resultDeadline = new Date(createdAt.getTime() + 120_000);
