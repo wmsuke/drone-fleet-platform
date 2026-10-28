@@ -6,7 +6,7 @@
 
 DB migrationを適用し、配信物管理と同じ`OTA_RELEASE_DIR` / `OTA_TRUST_STORE_PATH`をAPIへ設定する。両方が未設定ならこのrouteは登録しない。署名鍵はAPIへ渡さない。認証・認可は追加していないため、管理APIを外部公開しない。
 
-現段階では先行stageも承認待ちで、全attempt/outboxは`HELD`になる。開始時刻・開始期限・結果期限・送信payloadはnullのまま保存する。HTTP内のMQTT送信、stageの解禁、配送workerは実装していない。#171で理由付き承認と解禁を追加するまで送信は始まらない。通常command outboxとは別tableなので、既存workerがOTAを誤配信することもない。
+受付時は先行stageも承認待ちで、全attempt/outboxは`HELD`になる。開始時刻・開始期限・結果期限・送信payloadはnullのまま保存する。#171で[理由付き承認・段階配信・停止/再開](ota-rollout.md)を追加した。HTTP内ではMQTT送信せず、明示承認後にopt-inのOTA workerが配送する。通常command outboxとは別tableなので、既存workerがOTAを誤配信することもない。
 
 端末の現在版・能力を保存する`ota_device_states`には既定値を挿入しない。通常simulatorのtelemetryからOTA対応やversionを推測しない。#170でopt-in supervisorの実観測INVENTORYを登録する経路を追加した。[観測・評価手順](ota-evaluation.md)を参照する。旧simulatorなど未観測の機体は`DEVICE_OTA_UNCONFIRMED`で拒否する。versionや観測時刻を手作業で捏造しない。
 
@@ -45,7 +45,7 @@ idempotency scopeは`anonymous`、keyはASCII英数字・`_`・`-`の1〜128文�
 
 予約中の機体への`POST /devices/:deviceId/commands`は409、予約機体を1台でも含む`POST /fleet-operations`も全受付を409で拒否する。fleet operationの同key再送は新操作ではないため元応答を返す。予約前に受付済みの通常commandを取消したことにはせず、端末側gateと終了確認を併用する。
 
-予約の自動解放・TTLはない。後続の終了/停止/現在版の確認と解放transactionが実装されるまで、受付後に新deploymentや通常commandは通らない。PAUSED/STOPPING/WAITING_FOR_HUMANやlease切れだけで解放してはならない。検証は専用DBで行い、共有デモの機体を試しに予約しない。
+予約の自動TTLはない。#171で全対象の目的release成功と現在状態を確認したCOMPLETED transactionだけで解放する。PAUSED/STOPPING/WAITING_FOR_HUMANやlease切れだけでは解放しない。検証は専用DBで行い、共有デモの機体を試しに予約しない。
 
 受付で受領・適用・health・成功eventを生成しない。#170でeventの採否、DB保存receipt、challenge、評価と一覧/詳細APIを追加した。`GET /deployments` / `GET /deployments/:deploymentId`の進捗・根拠・期限の見方は[証拠評価](ota-evaluation.md)を参照する。元のcommand/ACK・telemetryの意味は変更しない。
 

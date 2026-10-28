@@ -154,6 +154,7 @@ export class Supervisor {
   private stopRequest?: Extract<OtaRequestMessage, { type: "STOP_UPDATE" }>;
   private subscriptions = false;
   private lastReceipt = 0;
+  private lastInventoryReceipt = 0;
   private closing = false;
   private reportTimer?: NodeJS.Timeout;
   private publishing = false;
@@ -296,6 +297,7 @@ export class Supervisor {
         parseOtaMessage(topic, value, metadata);
         if (topic === createOtaReceiptsTopic(this.config.deviceId)) {
           if (this.journal.confirmInventory(value)) {
+            this.lastInventoryReceipt = performance.now();
             this.reportFailures = 0;
             this.nextReportAt = 0;
             return;
@@ -346,6 +348,15 @@ export class Supervisor {
             timestamp: new Date().toISOString(),
             measuredAt: probe.measuredAt,
             sampleAgeMs: Math.ceil(probe.roundTripMs),
+            readiness: {
+              ...this.checks(probe),
+              receipts:
+                probe.receipts > 0 &&
+                this.lastInventoryReceipt > 0 &&
+                performance.now() - this.lastInventoryReceipt < 15000
+                  ? "PASSED"
+                  : "FAILED",
+            },
             running: {
               release: this.inspectedIdentity(probe),
               bootId: probe.bootId,

@@ -67,7 +67,7 @@ export const auditLogs = pgTable(
     index("audit_logs_target_idx").on(t.targetKind, t.targetId, t.occurredAt),
     check(
       "audit_logs_actor_valid",
-      sql`(${t.actorKind}='anonymous' AND ${t.actorId} IS NULL) OR (${t.actorKind}='system' AND ${t.actorId} IS NOT NULL AND ${t.actorId} IN ('telemetry-ingestor','alert-evaluator','operation-evaluator'))`,
+      sql`(${t.actorKind}='anonymous' AND ${t.actorId} IS NULL) OR (${t.actorKind}='system' AND ${t.actorId} IS NOT NULL AND ${t.actorId} IN ('telemetry-ingestor','alert-evaluator','operation-evaluator','ota-worker'))`,
     ),
     check(
       "audit_logs_result_valid",
@@ -872,6 +872,7 @@ export const otaQueries = pgTable(
 export const otaEvaluations = pgTable(
   "ota_evaluations",
   {
+    revision: bigserial("revision", { mode: "number" }).notNull(),
     evaluationId: uuid("evaluation_id").primaryKey(),
     attemptId: uuid("attempt_id")
       .notNull()
@@ -910,3 +911,66 @@ export const otaInventories = pgTable(
     uniqueIndex("ota_inventory_sequence_unique").on(t.deviceId, t.sequence),
   ],
 );
+
+// snapshotとは別の制御記録。stop latchは明示再開だけで解除する。
+export const otaRollouts = pgTable("ota_rollouts", {
+  deploymentId: uuid("deployment_id")
+    .primaryKey()
+    .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+  stoppedAt: timestamp("stopped_at", { withTimezone: true, mode: "date" }),
+  stopReason: text("stop_reason"),
+});
+export const otaActions = pgTable(
+  "ota_actions",
+  {
+    actionId: uuid("action_id").primaryKey(),
+    deploymentId: uuid("deployment_id")
+      .notNull()
+      .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+    key: varchar("key", { length: 128 }).notNull(),
+    requestHash: text("request_hash").notNull(),
+    action: text("action").notNull(),
+    reason: text("reason").notNull(),
+    response: jsonb("response").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [uniqueIndex("ota_action_key_unique").on(t.deploymentId, t.key)],
+);
+export const otaDispatches = pgTable("ota_dispatches", {
+  attemptId: uuid("attempt_id")
+    .primaryKey()
+    .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+  claimedAt: timestamp("claimed_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+});
+export const otaStops = pgTable("ota_stops", {
+  commandId: uuid("command_id").primaryKey(),
+  attemptId: uuid("attempt_id")
+    .notNull()
+    .references(() => otaAttempts.attemptId, { onDelete: "restrict" })
+    .unique(),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+  expiresAt: timestamp("expires_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+  resultDeadline: timestamp("result_deadline", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+  nextAttemptAt: timestamp("next_attempt_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  confirmedEventId: uuid("confirmed_event_id"),
+});

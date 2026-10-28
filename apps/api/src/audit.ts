@@ -19,6 +19,18 @@ const routes: Record<string, [AuditEvent["action"], AuditEvent["targetKind"]]> =
   {
     "POST /releases": ["release.registered", "release"],
     "POST /deployments": ["deployment.accepted", "deployment"],
+    "POST /deployments/:deploymentId/stages/:stageId/approve": [
+      "deployment.approved",
+      "deployment",
+    ],
+    "POST /deployments/:deploymentId/stop": [
+      "deployment.stopped",
+      "deployment",
+    ],
+    "POST /deployments/:deploymentId/resume": [
+      "deployment.resumed",
+      "deployment",
+    ],
     "POST /groups": ["group.created", "group"],
     "PATCH /groups/:groupId": ["group.updated", "group"],
     "DELETE /groups/:groupId": ["group.deleted", "group"],
@@ -66,7 +78,9 @@ export function registerAuditHooks(app: FastifyInstance, db: Database) {
               ? alertId
               : targetKind === "device"
                 ? deviceId
-                : null,
+                : targetKind === "deployment"
+                  ? id(params.deploymentId)
+                  : null,
         groupId,
         alertId,
         requestId: request.id,

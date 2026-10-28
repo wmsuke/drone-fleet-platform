@@ -8,7 +8,7 @@
 - `GET /audit-logs/:eventId`: 1件の公開情報。不存在は404。
 - 不正な検索条件・UUID・cursorは400、DB障害は500。更新・削除APIはない。
 
-一覧は`from`・`to`（両端を含むUTC ISO時刻、小数秒0〜6桁）、`actorKind`、`actorId`、`action`、`targetKind`、`targetId`、`result`、`requestId`、`groupId`、`operationId`、`commandId`、`alertId`の完全一致で絞る。指定した条件はANDになる。actorKindはanonymous/system、actorIdはtelemetry-ingestor/alert-evaluator/operation-evaluator、resultはSUCCEEDED/REJECTED/FAILED。actionとtargetKindは[audit log](audit-log.md)の記録種別に従う。
+一覧は`from`・`to`（両端を含むUTC ISO時刻、小数秒0〜6桁）、`actorKind`、`actorId`、`action`、`targetKind`、`targetId`、`result`、`requestId`、`groupId`、`operationId`、`commandId`、`alertId`の完全一致で絞る。指定した条件はANDになる。actorKindはanonymous/system、actorIdはtelemetry-ingestor/alert-evaluator/operation-evaluator/ota-worker、resultはSUCCEEDED/REJECTED/FAILED。actionとtargetKindは[audit log](audit-log.md)の記録種別に従う。
 
 ```text
 GET /audit-logs?action=command.execution_changed&from=2026-10-19T00%3A00%3A00Z&limit=20

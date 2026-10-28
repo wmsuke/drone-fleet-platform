@@ -9,13 +9,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import {
   createDatabase,
   createOtaRepository,
-  otaDeploymentLock,
   otaDeviceStates,
   otaAttempts,
   otaTargets,
-  otaStages,
-  otaDeployments,
-  otaOutbox,
   otaQueries,
   otaEvaluations,
   otaEvents,
@@ -23,10 +19,6 @@ import {
   commandOutbox,
 } from "@drone-fleet/database";
 import { publishArtifact } from "@drone-fleet/releases";
-import {
-  otaRequestMessageSchema,
-  createOtaRequestsTopic,
-} from "@drone-fleet/protocol";
 import type { SimulatorMqttClient } from "../../simulator/src/simulator.js";
 import { fixture, identity } from "../../ota-supervisor/test/support.js";
 import { bootstrap, Supervisor } from "../../ota-supervisor/src/supervisor.js";
@@ -245,61 +237,13 @@ describe.skipIf(process.env.OTA_BACKEND_INTEGRATION !== "true")(
         .select()
         .from(otaAttempts)
         .where(eq(otaAttempts.targetId, target!.targetId));
-      const created = new Date(),
-        expiresAt = new Date(created.getTime() + 300000),
-        resultDeadline = new Date(created.getTime() + 600000);
-      const apply = otaRequestMessageSchema.parse({
-        schemaVersion: 1,
-        deviceId: "ota-test",
-        deploymentId: accepted.deploymentId,
-        stageId: target!.stageId,
-        targetId: target!.targetId,
-        attemptId: attempt!.attemptId,
-        commandId: attempt!.commandId,
-        fence: attempt!.fence.toString(),
-        release: identity(f.candidate),
-        type: "APPLY_RELEASE",
-        purpose: "APPLY",
-        createdAt: created.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-        resultDeadline: resultDeadline.toISOString(),
-        evaluationVersion: "ota-health-v1",
+      const approval = await app.inject({
+        method: "POST",
+        url: `/deployments/${accepted.deploymentId}/stages/${target!.stageId}/approve`,
+        headers: { "Idempotency-Key": "ota-e2e-approve" },
+        payload: { reason: "LOCAL_E2E" },
       });
-      // #171の未実装APIを通したとはしない。解禁済みsnapshotをfixtureで準備する。
-      await db.transaction(async (tx) => {
-        await otaDeploymentLock(tx, accepted.deploymentId);
-        await tx
-          .update(otaStages)
-          .set({ status: "RUNNING" })
-          .where(eq(otaStages.stageId, target!.stageId));
-        await tx
-          .update(otaDeployments)
-          .set({ status: "RUNNING" })
-          .where(eq(otaDeployments.deploymentId, accepted.deploymentId));
-        await tx
-          .update(otaAttempts)
-          .set({
-            startedAt: created,
-            expiresAt,
-            resultDeadline,
-            deliveryStatus: "PENDING",
-          })
-          .where(eq(otaAttempts.attemptId, attempt!.attemptId));
-        await tx
-          .update(otaOutbox)
-          .set({
-            status: "PENDING",
-            payload: JSON.stringify(apply),
-            expiresAt,
-            nextAttemptAt: created,
-          })
-          .where(eq(otaOutbox.commandId, attempt!.commandId));
-      });
-      await controller.publishAsync(
-        createOtaRequestsTopic("ota-test"),
-        JSON.stringify(apply),
-        { qos: 1, retain: false },
-      );
+      expect(approval.statusCode).toBe(202);
       await until(async () => {
         const [count] = await db.execute<{ count: number }>(
           sql`SELECT count(*)::int AS count FROM ota_queries WHERE attempt_id=${attempt!.attemptId} AND consumed_event_id IS NOT NULL AND challenge_id IS NOT NULL`,
@@ -342,6 +286,12 @@ describe.skipIf(process.env.OTA_BACKEND_INTEGRATION !== "true")(
         observed.snapshot.bootId,
       );
       expect(detail.targets[0].attempts[0].freshHealth).toBe(true);
+      await until(async () => {
+        const current = (
+          await app.inject({ url: `/deployments/${accepted.deploymentId}` })
+        ).json();
+        return current.status === "COMPLETED" ? true : undefined;
+      });
       const evaluations = await db
         .select()
         .from(otaEvaluations)

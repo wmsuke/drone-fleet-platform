@@ -25,6 +25,7 @@ import {
   otaRejections,
   otaEvaluations,
   otaQueries,
+  otaStops,
   otaDeviceStates,
   otaInventories,
   otaReservations,
@@ -138,10 +139,7 @@ export function createOtaRepository(
       .select()
       .from(otaEvaluations)
       .where(eq(otaEvaluations.attemptId, id))
-      .orderBy(
-        desc(otaEvaluations.evaluatedAt),
-        desc(otaEvaluations.evaluationId),
-      )
+      .orderBy(desc(otaEvaluations.revision))
       .limit(1);
     const previousSuccess: OtaVerdict | undefined =
       previous?.status === "SUCCEEDED"
@@ -346,8 +344,28 @@ export function createOtaRepository(
           !reason &&
           event.type === "PROGRESS" &&
           event.requestType !== "APPLY_RELEASE"
+        ) {
+          const [stop] = await tx
+            .select()
+            .from(otaStops)
+            .where(eq(otaStops.commandId, event.commandId));
+          if (
+            !stop ||
+            stop.attemptId !== event.attemptId ||
+            stop.attempts < 1 ||
+            receivedAt < stop.createdAt ||
+            receivedAt >= stop.resultDeadline ||
+            now >= stop.resultDeadline
+          )
+            reason = "UNKNOWN_CONTROL_REQUEST";
+        }
+        if (
+          !reason &&
+          event.type === "PROGRESS" &&
+          event.requestType === "APPLY_RELEASE" &&
+          event.commandId !== c.apply.commandId
         )
-          reason = "UNKNOWN_CONTROL_REQUEST";
+          reason = "UNKNOWN_APPLY_REQUEST";
         if (!reason && (receivedAt < c.attempt.startedAt! || receivedAt > now))
           reason = "INVALID_SERVER_TIME";
         if (!reason && (event.type === "HEALTH" || event.type === "STATE")) {
@@ -455,6 +473,40 @@ export function createOtaRepository(
           reason,
           receipt,
         });
+        if (
+          !reason &&
+          event.type === "STATE" &&
+          event.state === "STOPPED" &&
+          event.running
+        ) {
+          const [stop] = await tx
+            .select()
+            .from(otaStops)
+            .where(eq(otaStops.attemptId, event.attemptId));
+          if (
+            stop &&
+            !stop.confirmedEventId &&
+            receivedAt < stop.resultDeadline &&
+            now < stop.resultDeadline
+          ) {
+            const [confirmation] = await tx
+              .select()
+              .from(otaEvents)
+              .where(
+                and(
+                  eq(otaEvents.attemptId, event.attemptId),
+                  eq(otaEvents.acceptance, "ACCEPTED"),
+                  sql`${otaEvents.payload}->>'type'='PROGRESS' AND ${otaEvents.payload}->>'requestType'='STOP_UPDATE' AND ${otaEvents.payload}->>'state'='STOPPED' AND ${otaEvents.payload}->>'commandId'=${stop.commandId} AND ${otaEvents.sequence}<${BigInt(event.sequence)}`,
+                ),
+              )
+              .limit(1);
+            if (confirmation)
+              await tx
+                .update(otaStops)
+                .set({ confirmedEventId: event.eventId })
+                .where(eq(otaStops.commandId, stop.commandId));
+          }
+        }
         if (c.current) {
           const acceptedProgress = await tx
             .select()
@@ -697,7 +749,17 @@ export function createOtaRepository(
               .where(eq(otaOutbox.commandId, c.attempt.commandId));
           }
           await evaluate(tx, candidate.id, now);
-          if (now.getTime() >= c.attempt.resultDeadline!.getTime() + 60000)
+          const [stop] = await tx
+            .select()
+            .from(otaStops)
+            .where(eq(otaStops.attemptId, candidate.id));
+          if (
+            now.getTime() >=
+            Math.max(
+              c.attempt.resultDeadline!.getTime() + 60000,
+              stop?.resultDeadline.getTime() ?? 0,
+            )
+          )
             return;
           const queries = await tx
             .select()
@@ -725,7 +787,12 @@ export function createOtaRepository(
               ? otaEventMessageSchema.parse(version.payload)
               : null;
             const commandId = randomUUID(),
-              challengeId = v?.type === "VERSION" ? randomUUID() : null;
+              challengeId =
+                !stop &&
+                !["FAILED", "UNCERTAIN"].includes(c.attempt.evaluationStatus) &&
+                v?.type === "VERSION"
+                  ? randomUUID()
+                  : null;
             const payload = otaRequestMessageSchema.parse({
               ...Object.fromEntries(
                 Object.entries(c.apply).filter(([key]) => key !== "purpose"),

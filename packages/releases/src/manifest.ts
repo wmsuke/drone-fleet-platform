@@ -151,11 +151,28 @@ export function compatibleUpgrade(
   },
 ) {
   return (
+    compatibleRuntime(manifest, current) &&
+    semver.valid(current.version) !== null &&
+    semver.gt(manifest.version, current.version)
+  );
+}
+
+export function compatibleRuntime(
+  manifest: Manifest,
+  current: {
+    application: string;
+    platform: string;
+    nodeVersion: string;
+    otaProtocolVersion: string;
+    supervisorVersion: string;
+    stateSchemaVersion: string;
+    healthContractVersion: string;
+  },
+) {
+  return (
     manifest.application === current.application &&
     manifest.platform === current.platform &&
     manifest.healthContractVersion === current.healthContractVersion &&
-    semver.valid(current.version) !== null &&
-    semver.gt(manifest.version, current.version) &&
     semver.satisfies(current.nodeVersion, manifest.nodeRange) &&
     semver.satisfies(current.otaProtocolVersion, manifest.otaProtocolRange) &&
     semver.satisfies(current.supervisorVersion, manifest.supervisorRange) &&

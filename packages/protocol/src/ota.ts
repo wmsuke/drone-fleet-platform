@@ -252,6 +252,19 @@ export const otaInventoryMessageSchema = z
     timestamp: time,
     measuredAt: time,
     sampleAgeMs: count.max(5000),
+    // readinessは再開の現状確認だけに使い、更新成功や継続healthへ流用しない。
+    readiness: z
+      .object({
+        eventLoop: check,
+        telemetry: check,
+        sqlite: check,
+        commandReady: check,
+        mqtt: check,
+        subscriptions: check,
+        receipts: check,
+      })
+      .strict()
+      .optional(),
     running,
     capabilities: z
       .object({

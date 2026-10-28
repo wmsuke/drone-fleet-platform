@@ -47,7 +47,7 @@ HTTP API以外からrepositoryを直接呼ぶテスト・内部処理にも成�
 
 ## 認証・秘密情報・改ざん耐性
 
-HTTPのactorKindはanonymous、actorIdはnull。requestIdはサーバーでUUIDを生成し、`X-Request-Id`応答headerに返す。クライアントのactor・request-id headerは採用しない。requestIdは追跡用で本人確認ではない。内部処理のactorKindはsystem、actorIdはtelemetry-ingestor / alert-evaluator / operation-evaluatorの固定識別子で、端末操作者や物理的な実行の正当性を証明しない。
+HTTPのactorKindはanonymous、actorIdはnull。requestIdはサーバーでUUIDを生成し、`X-Request-Id`応答headerに返す。クライアントのactor・request-id headerは採用しない。requestIdは追跡用で本人確認ではない。内部処理のactorKindはsystem、actorIdはtelemetry-ingestor / alert-evaluator / operation-evaluator / ota-workerの固定識別子で、端末操作者や物理的な実行の正当性を証明しない。#171の`deployment.approved` / `deployment.stopped` / `deployment.resumed`は理由付き操作と同時保存し、自動停止はota-workerとして区別する。
 
 metadataは変更前後のgroup名、descriptionの変更有無、差分のdeviceId、command type、対象件数、状態・理由コード、statusCodeだけを許可し、helperで未知のkeyを拒否する。DBでもobjectと8KiB上限を要求する。description本文、HTTP本文・header、IP、user-agent、idempotency key、証明書・秘密鍵、telemetry本文・位置、任意の例外全文は保存しない。group名自体に秘密情報や個人情報を入れない。
 

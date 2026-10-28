@@ -1,15 +1,29 @@
-import { createOtaRepository, type Database } from "@drone-fleet/database";
+import {
+  createOtaRepository,
+  createOtaRollout,
+  type Database,
+} from "@drone-fleet/database";
 
 export function createOtaMonitor(
   db: Database,
   publish: (topic: string, payload: string, expiresAt: Date) => Promise<void>,
   repository = createOtaRepository(db),
 ) {
+  const rollout = createOtaRollout(db);
   let stopped = false,
     timer: ReturnType<typeof setTimeout> | undefined,
     running: Promise<void> | undefined;
   async function runOnce() {
     const sends = await repository.tick();
+    // 評価で発動した停止をQUERY配送より先に処理する。
+    for (const send of await rollout.tick()) {
+      if (stopped) break;
+      try {
+        await rollout.deliver(send, publish);
+      } catch {
+        /* 同じIDの永続outboxだけを再送する */
+      }
+    }
     for (const send of sends) {
       if (stopped) break;
       try {

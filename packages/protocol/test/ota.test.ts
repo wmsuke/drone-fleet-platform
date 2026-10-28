@@ -50,6 +50,24 @@ it("separates initial inventory from attempt evidence and requires a matching in
     },
   };
   expect(otaInventoryMessageSchema.safeParse(inventory).success).toBe(true);
+  const readiness = {
+    eventLoop: "PASSED",
+    telemetry: "PASSED",
+    sqlite: "PASSED",
+    commandReady: "PASSED",
+    mqtt: "PASSED",
+    subscriptions: "PASSED",
+    receipts: "PASSED",
+  };
+  expect(
+    otaInventoryMessageSchema.safeParse({ ...inventory, readiness }).success,
+  ).toBe(true);
+  expect(
+    otaInventoryMessageSchema.safeParse({
+      ...inventory,
+      readiness: { ...readiness, sqlite: "UNKNOWN" },
+    }).success,
+  ).toBe(false);
   expect(otaEventMessageSchema.safeParse(inventory).success).toBe(false);
   expect(
     parseOtaMessage(createOtaEventsTopic("drone-001"), inventory, {
