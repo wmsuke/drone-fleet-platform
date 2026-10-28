@@ -29,7 +29,7 @@ Idempotency-Key: ota-demo-001
 - deviceIdをASCII順に固定し、既定stageは先行1台、次に最大3台、残り全台。10台なら1/3/6で、空stageは作らない。
 - 明示する場合は`stages: [{ "deviceIds": ["ota-drone-001"] }, { "deviceIds": ["ota-drone-002"] }]`の順序付き配列を使う。各stage内は正規化してASCII順にし、stageを連結した列が全対象のASCII順と一致する必要がある。漏れ・重複・空stage・逆順を拒否する。
 - 100台・10stageが上限。複数groupの重複、groupと明示deviceの重複も全件拒否し、暗黙の重複除去や一部受付はしない。空groupも拒否する。
-- health/停止閾値を弱める任意設定は受け付けない。`evaluationVersion`は省略時も`ota-health-v1`。30秒の起動確認、5秒間隔・13標本・60秒・gap最大10秒・鮮度15秒、全対象成功による昇格、失敗率10%以上/不確定・integrity失敗時の停止latch、承認必須、同時適用上限2台をsnapshotに持つ。復旧は自動無効・rollbackは明示承認とし、将来の復旧予算15分/256 MiB・新attempt最大1回を保持する。これらの評価・停止・復旧の実行は後続Issueで実装する。
+- health/停止閾値を弱める任意設定は受け付けない。`evaluationVersion`は省略時も`ota-health-v1`。30秒の起動確認、5秒間隔・13標本・60秒・gap最大10秒・鮮度15秒、全対象成功による昇格、失敗率10%以上/不確定・integrity失敗時の停止latch、承認必須、同時適用上限2台をsnapshotに持つ。復旧は自動無効・rollbackは明示承認とし、将来の復旧予算15分/256 MiB・新attempt最大1回を保持する。評価は#170、段階/停止は#171で実装し、制限付き復旧は#172で追加する。
 
 ## 冪等性と検証
 
@@ -51,7 +51,7 @@ idempotency scopeは`anonymous`、keyはASCII英数字・`_`・`-`の1〜128文�
 
 ## 応答とエラー
 
-202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進捗GETは#170、承認・停止操作APIは#171以降の範囲である。
+202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進捗GETは[証拠評価](ota-evaluation.md)、承認・停止・再開APIは[段階配信](ota-rollout.md)を参照する。
 
 | status | 主なerror |
 | --- | --- |
