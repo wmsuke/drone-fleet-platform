@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { auditContext } from "@drone-fleet/database";
 import { deploymentRequestSchema } from "./deployment-schema.js";
 import { idempotencyKeySchema } from "./fleet-operation-schema.js";
@@ -11,6 +12,41 @@ export function registerDeploymentRoutes(
   app: FastifyInstance,
   repository: DeploymentRepository,
 ) {
+  app.get("/deployments", async (request, reply) => {
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+        before: z.iso.datetime({ precision: 3 }).optional(),
+      })
+      .strict()
+      .safeParse(request.query);
+    if (!query.success)
+      return reply.code(400).send({ error: "INVALID_DEPLOYMENT_QUERY" });
+    return repository.list(query.data.limit, query.data.before);
+  });
+  app.get("/deployments/:deploymentId", async (request, reply) => {
+    const params = z
+      .object({ deploymentId: z.uuid().transform((v) => v.toLowerCase()) })
+      .safeParse(request.params);
+    const query = z
+      .object({
+        eventLimit: z.coerce.number().int().min(1).max(100).default(20),
+        stageId: z
+          .uuid()
+          .transform((v) => v.toLowerCase())
+          .optional(),
+      })
+      .strict()
+      .safeParse(request.query);
+    if (!params.success || !query.success)
+      return reply.code(400).send({ error: "INVALID_DEPLOYMENT_QUERY" });
+    const row = await repository.find(
+      params.data.deploymentId,
+      query.data.eventLimit,
+      query.data.stageId,
+    );
+    return row ?? reply.code(404).send({ error: "DEPLOYMENT_NOT_FOUND" });
+  });
   app.post("/deployments", { bodyLimit: 32768 }, async (request, reply) => {
     const body = deploymentRequestSchema.safeParse(request.body);
     const key = idempotencyKeySchema.safeParse(

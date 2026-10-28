@@ -14,6 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ota-backend:
+    name: OTA evidence and backend recovery E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify real MQTT, PostgreSQL and application health
+        run: bash scripts/test-ota-backend.sh
   ota-device:
     name: OTA device application and health
     runs-on: ubuntu-latest

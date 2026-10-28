@@ -14,6 +14,9 @@ import {
   type OtaApplyRequest,
   type OtaEventMessage,
   type OtaReceiptMessage,
+  otaInventoryReceiptSchema,
+  serializeOtaInventory,
+  type OtaInventoryMessage,
 } from "@drone-fleet/protocol";
 import { z } from "zod";
 
@@ -95,7 +98,9 @@ export class Journal {
       CREATE TABLE IF NOT EXISTS requests (command_id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL, sequence INTEGER NOT NULL, json TEXT NOT NULL, hash TEXT NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0, UNIQUE(attempt_id,sequence));
       CREATE TABLE IF NOT EXISTS stops (attempt_id TEXT PRIMARY KEY, fence TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS health_samples (event_id TEXT PRIMARY KEY, json TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS health_samples (event_id TEXT PRIMARY KEY, json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY CHECK(id=1), sequence INTEGER NOT NULL, json TEXT, hash TEXT);
+      INSERT OR IGNORE INTO inventory(id,sequence) VALUES(1,-1);`);
     const check = this.db.prepare("PRAGMA quick_check").get() as {
       quick_check: string;
     };
@@ -128,6 +133,49 @@ export class Journal {
     return (
       this.db.prepare("SELECT 1 FROM model WHERE id=1").get() !== undefined
     );
+  }
+  pendingInventory() {
+    return this.db
+      .prepare(
+        "SELECT json,hash FROM inventory WHERE id=1 AND json IS NOT NULL",
+      )
+      .get() as { json: string; hash: string } | undefined;
+  }
+  inventory(input: Omit<OtaInventoryMessage, "sequence" | "eventId">) {
+    this.transaction(() => {
+      if (this.pendingInventory()) return;
+      const { sequence } = this.db
+        .prepare("SELECT sequence FROM inventory WHERE id=1")
+        .get() as { sequence: number };
+      const json = serializeOtaInventory({
+        ...input,
+        sequence: sequence + 1,
+        eventId: randomUUID(),
+      });
+      this.db
+        .prepare("UPDATE inventory SET sequence=?,json=?,hash=? WHERE id=1")
+        .run(
+          sequence + 1,
+          json,
+          createHash("sha256").update(json).digest("hex"),
+        );
+    });
+  }
+  confirmInventory(input: unknown) {
+    const parsed = otaInventoryReceiptSchema.safeParse(input),
+      pending = this.pendingInventory();
+    if (!parsed.success || !pending) return false;
+    const event = JSON.parse(pending.json) as OtaInventoryMessage;
+    if (
+      parsed.data.eventId !== event.eventId ||
+      parsed.data.deviceId !== event.deviceId ||
+      parsed.data.payloadHash !== pending.hash
+    )
+      return false;
+    this.db
+      .prepare("UPDATE inventory SET json=NULL,hash=NULL WHERE id=1")
+      .run();
+    return true;
   }
   read(): Model {
     const row = this.db.prepare("SELECT json FROM model WHERE id=1").get() as

@@ -1,5 +1,6 @@
 import { createDatabase } from "@drone-fleet/database";
 import { createReleaseRepository } from "./release-repository.js";
+import { createOtaMonitor } from "./ota-monitor.js";
 import { createDeploymentRepository } from "./deployment-repository.js";
 
 import { buildApi } from "./app.js";
@@ -39,11 +40,18 @@ async function main(): Promise<void> {
     throw error;
   }
   const commandService = createCommandService(createCommandRepository(db));
-  const outbox = createCommandOutbox(
-    client,
-    createOutboxPublisher(connection),
-    outboxOptions,
-  );
+  const rawPublish = createOutboxPublisher(connection);
+  let publishing = Promise.resolve();
+  const publish: typeof rawPublish = (...args) => {
+    const result = publishing.then(() => rawPublish(...args));
+    publishing = result.catch(() => {});
+    return result;
+  };
+  const outbox = createCommandOutbox(client, publish, outboxOptions);
+  const otaMonitor =
+    process.env.OTA_ENABLED === "true"
+      ? createOtaMonitor(db, publish)
+      : undefined;
   const app = buildApi(createDeviceRepository(db), commandService, {
     ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH
       ? {
@@ -74,7 +82,12 @@ async function main(): Promise<void> {
   });
 
   outbox.start();
-  const shutdown = createShutdown(app, null, client, outbox);
+  otaMonitor?.start();
+  const shutdown = createShutdown(app, null, client, {
+    async stop() {
+      await Promise.all([outbox.stop(), otaMonitor?.stop()]);
+    },
+  });
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 

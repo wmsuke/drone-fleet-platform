@@ -1,6 +1,6 @@
 # 更新配信物の登録とlocal配信
 
-#166で署名付きmanifest v1の登録・参照、検証済みreleaseの保存、専用HTTP配信を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)のうち配信物管理だけが対象である。端末への適用、OTA MQTT、deployment、healthによる更新成功判定は未実装である。
+#166で署名付きmanifest v1の登録・参照、検証済みreleaseの保存、専用HTTP配信を追加した。この文書は[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)のうち配信物管理を扱う。後続で追加した[端末への実適用](ota-device.md)、[deployment受付](deployments-api.md)、[保存receiptと証拠評価](ota-evaluation.md)は各文書を参照する。stage解禁・APPLY配送はまだ未実装である。
 
 ## 責務と安全上の境界
 
@@ -53,7 +53,7 @@ archiveはPOSIX ustarの狭いsubsetを採用する。圧縮32 MiB、展開tar�
 
 入力不正・署名・互換・size/digest不正は400、配信物未配置/読み出し不可は422、同じreleaseIdまたは`(application, version, platform)`への別内容登録は409、未登録IDは404、設定/DB不調・同時検証上限は503。同時検証/配信は各processで2件に制限する。
 
-同時登録はDBの一意制約で直列化し、差し替えを拒否する。migration `0012_legal_swordsman.sql`がrelease tableとUPDATE/DELETE/TRUNCATE拒否triggerを追加する。参照有無にかかわらずreleaseを保持するため、参照中も変更・削除できない。deployment tableはまだ作らず、#169でreleaseIdへの`ON DELETE RESTRICT`参照を追加する。DB管理者によるtrigger無効化やhost上のobject改変までは防げない。
+同時登録はDBの一意制約で直列化し、差し替えを拒否する。migration `0012_legal_swordsman.sql`がrelease tableとUPDATE/DELETE/TRUNCATE拒否triggerを追加する。参照有無にかかわらずreleaseを保持するため、参照中も変更・削除できない。#169でdeploymentのreleaseIdへ`ON DELETE RESTRICT`参照を追加した。DB管理者によるtrigger無効化やhost上のobject改変までは防げない。
 
 成功audit `release.registered`とreleaseは同じtransactionで保存する。HTTP操作者は`anonymous` / actorId nullで、登録時刻・検証結果`VERIFIED`とrequestIdを記録する。拒否/失敗も既存audit hookで理由コード・statusのみを記録し、URL、本文、鍵は残さない。拒否auditの保存失敗時の非必達などは[既存auditの境界](audit-log.md)に従う。
 

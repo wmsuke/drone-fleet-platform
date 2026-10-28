@@ -8,7 +8,7 @@ DB migrationを適用し、配信物管理と同じ`OTA_RELEASE_DIR` / `OTA_TRUS
 
 現段階では先行stageも承認待ちで、全attempt/outboxは`HELD`になる。開始時刻・開始期限・結果期限・送信payloadはnullのまま保存する。HTTP内のMQTT送信、stageの解禁、配送workerは実装していない。#171で理由付き承認と解禁を追加するまで送信は始まらない。通常command outboxとは別tableなので、既存workerがOTAを誤配信することもない。
 
-端末の現在版・能力を保存する`ota_device_states`には既定値を挿入しない。通常simulatorのtelemetryからOTA対応やversionを推測しない。現在はDB integration testで観測済み情報をfixtureとして投入する。実運用向けのversion/能力の観測・登録経路は#170で追加するため、通常デモの機体指定は`DEVICE_OTA_UNCONFIRMED`で拒否される。確認のためにversionや観測時刻を手作業で捏造しない。
+端末の現在版・能力を保存する`ota_device_states`には既定値を挿入しない。通常simulatorのtelemetryからOTA対応やversionを推測しない。#170でopt-in supervisorの実観測INVENTORYを登録する経路を追加した。[観測・評価手順](ota-evaluation.md)を参照する。旧simulatorなど未観測の機体は`DEVICE_OTA_UNCONFIRMED`で拒否する。versionや観測時刻を手作業で捏造しない。
 
 ## 要求
 
@@ -47,11 +47,11 @@ idempotency scopeは`anonymous`、keyはASCII英数字・`_`・`-`の1〜128文�
 
 予約の自動解放・TTLはない。後続の終了/停止/現在版の確認と解放transactionが実装されるまで、受付後に新deploymentや通常commandは通らない。PAUSED/STOPPING/WAITING_FOR_HUMANやlease切れだけで解放してはならない。検証は専用DBで行い、共有デモの機体を試しに予約しない。
 
-`ota_events`は端末eventの保存領域だけを追加した。受付で受領・適用・health・成功eventを生成しない。#170でeventの採否、DB保存receipt、challenge、評価を実装する。元のcommand/ACK・telemetryの意味は変更しない。
+受付で受領・適用・health・成功eventを生成しない。#170でeventの採否、DB保存receipt、challenge、評価と一覧/詳細APIを追加した。`GET /deployments` / `GET /deployments/:deploymentId`の進捗・根拠・期限の見方は[証拠評価](ota-evaluation.md)を参照する。元のcommand/ACK・telemetryの意味は変更しない。
 
 ## 応答とエラー
 
-202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進行・停止APIは#171以降で追加する。
+202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進捗GETは#170、承認・停止操作APIは#171以降の範囲である。
 
 | status | 主なerror |
 | --- | --- |

@@ -634,6 +634,9 @@ export const otaDeviceStates = pgTable(
     highestFence: bigint("highest_fence", { mode: "bigint" })
       .notNull()
       .default(sql`0`),
+    inventorySequence: bigint("inventory_sequence", { mode: "bigint" })
+      .notNull()
+      .default(sql`-1`),
   },
   (t) => [check("ota_device_fence_valid", sql`${t.highestFence} >= 0`)],
 );
@@ -805,6 +808,105 @@ export const otaEvents = pgTable(
       withTimezone: true,
       mode: "date",
     }).notNull(),
+    storedAt: timestamp("stored_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    acceptance: text("acceptance").notNull().default("UNPROCESSED"),
+    reason: text("reason"),
+    receipt: jsonb("receipt").$type<Record<string, unknown>>(),
   },
   (t) => [uniqueIndex("ota_event_sequence_unique").on(t.attemptId, t.sequence)],
+);
+
+export const otaRejections = pgTable(
+  "ota_rejections",
+  {
+    rejectionId: uuid("rejection_id").primaryKey(),
+    eventId: uuid("event_id").notNull(),
+    attemptId: uuid("attempt_id"),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    reason: text("reason").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_rejection_once").on(t.eventId, t.payloadHash, t.reason),
+    index("ota_rejection_attempt").on(t.attemptId),
+  ],
+);
+export const otaQueries = pgTable(
+  "ota_queries",
+  {
+    commandId: uuid("command_id").primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+    challengeId: uuid("challenge_id"),
+    expectedBootId: uuid("expected_boot_id"),
+    expectedSupervisorBootId: uuid("expected_supervisor_boot_id"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    consumedEventId: uuid("consumed_event_id"),
+  },
+  (t) => [
+    uniqueIndex("ota_query_challenge_unique").on(t.challengeId),
+    index("ota_query_attempt_time").on(t.attemptId, t.createdAt),
+  ],
+);
+export const otaEvaluations = pgTable(
+  "ota_evaluations",
+  {
+    evaluationId: uuid("evaluation_id").primaryKey(),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+    specification: text("specification").notNull().default("ota-health-v1"),
+    status: text("status").notNull(),
+    reason: text("reason").notNull(),
+    evidence: jsonb("evidence").$type<string[]>().notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    evaluatedAt: timestamp("evaluated_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_evaluation_once").on(t.attemptId, t.fingerprint),
+    index("ota_evaluation_attempt_time").on(t.attemptId, t.evaluatedAt),
+  ],
+);
+export const otaInventories = pgTable(
+  "ota_inventories",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    sequence: bigint("sequence", { mode: "bigint" }).notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    reason: text("reason").notNull(),
+    receipt: jsonb("receipt").$type<Record<string, unknown>>().notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_inventory_sequence_unique").on(t.deviceId, t.sequence),
+  ],
 );

@@ -17,6 +17,10 @@ export {
   otaAttempts,
   otaOutbox,
   otaEvents,
+  otaRejections,
+  otaQueries,
+  otaEvaluations,
+  otaInventories,
   operationAuditStates,
   alerts,
   alertEvaluationStates,
@@ -49,3 +53,9 @@ export {
   type AuditContext,
 } from "./audit.js";
 export { operationAggregation } from "./operation-aggregation.js";
+export { createOtaRepository, otaDeploymentLock } from "./ota.js";
+export {
+  evaluateOta,
+  type OtaEvidence,
+  type OtaVerdict,
+} from "./ota-evaluation.js";

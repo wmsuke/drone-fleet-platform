@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: drone_fleet
+      POSTGRES_USER: drone_fleet
+      POSTGRES_PASSWORD: local-ota-test-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drone_fleet -d drone_fleet"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  mqtt:
+    image: eclipse-mosquitto:2.0.22
+    volumes:
+      - ./infra/local/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -t fleet/health -m ready"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  runner:
+    build:
+      context: .
+      target: runtime
+    init: true
+    command:
+      [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "apps/api/test/ota-backend.e2e.test.ts",
+        "--hookTimeout",
+        "30000",
+      ]
+    environment:
+      OTA_BACKEND_INTEGRATION: "true"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: drone_fleet
+      POSTGRES_USER: drone_fleet
+      POSTGRES_PASSWORD: local-ota-test-only
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy

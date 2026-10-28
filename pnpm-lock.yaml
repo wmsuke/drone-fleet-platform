@@ -264,6 +264,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@drone-fleet/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(postgres@3.4.9)

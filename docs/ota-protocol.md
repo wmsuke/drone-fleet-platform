@@ -1,6 +1,12 @@
 # OTA通信仕様 v1
 
-#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。#168で[opt-in端末supervisor・実適用・local health](ota-device.md)、#169で[deployment受付とHELD outbox](deployments-api.md)を追加した。backendのOTA観測登録・保存/receipt・評価workerとstage解禁・配送はまだ未実装で、通常起動時にOTAを送信しない。
+#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。#168で[端末の実適用](ota-device.md)、#169で[deployment受付](deployments-api.md)、#170で[観測登録・保存/receipt・証拠評価](ota-evaluation.md)を追加した。stage解禁・APPLY配送はまだ未実装で、通常起動はOTAを無効にする。
+
+## 初回・定期のINVENTORY
+
+#170で初回deployment以前の観測用に、attempt scopeを持たない`otaInventoryMessageSchema`を追加した。旧attempt eventのscopeを省略可能にはしていない。`schemaVersion: 1`、`type: INVENTORY`、deviceId/eventId/永続sequence/supervisorBootId、timestamp/measuredAt/sampleAgeMs、`running: { release, bootId }`とcapabilitiesを持つ。capabilitiesはapplication=simulator、Linux platform、実Node.js version、OTA protocol/supervisor/state schema各1.0.0、healthContractVersion=ota-health-v1に限定する。未知項目を拒否し、測定から報告まで最大5秒とする。
+
+同topicのinventory専用receiptは`otaInventoryReceiptSchema`で、schemaVersion/type/deviceId/eventId/payloadHash/status=STORED/receivedAt/storedAtを持つ。hashは`serializeOtaInventory`のcanonical bytesへ計算する。旧attemptのreceiptとは別schemaで、INVENTORYを更新進捗・health評価・APPLIEDへ変換しない。既存topicの権限は変わらない。新旧consumerを揃えて有効にする。
 
 ## topicと互換性
 
@@ -9,7 +15,7 @@ prefixは`fleet/v1/devices/{deviceId}/`。deviceIdは既存と同じ英数字・
 | suffix | 方向 | payload | QoS | retain |
 | --- | --- | --- | --- | --- |
 | `ota-requests` | API → supervisor | APPLY_RELEASE / STOP_UPDATE / QUERY_STATE | 1 | false |
-| `ota-events` | supervisor → ingestor | PROGRESS / VERSION / HEALTH / STATE | 1 | false |
+| `ota-events` | supervisor → ingestor | PROGRESS / VERSION / HEALTH / STATE / INVENTORY | 1 | false |
 | `ota-receipts` | ingestor → supervisor | DB commit済みeventのSTORED | 1 | false |
 
 topic生成は`createOtaRequestsTopic` / `createOtaEventsTopic` / `createOtaReceiptsTopic`、解析は既存の`parseMqttTopic`を使う。`parseOtaMessage(topic, decodedJson, packet)`はtopic種別・本文のdeviceId・QoS 1・retainなしを照合する。payloadは各Zod schemaで検証し、未知の項目はstripせず拒否する。URL・鍵・任意コマンド・自己申告actorを受け取らない。MQTT送信用`otaMqttOptions`も公開する。
@@ -131,7 +137,7 @@ APPLIED、VERSION一致、単発healthの全PASSEDのどれも更新成功では
 
 ## 重複・順序逆転・矛盾と保存receipt
 
-以下は保存/評価側の契約である。#167はschemaと不変scope照合までで、DBの重複排除・状態遷移・challenge消費は#170で実装する。
+以下は保存/評価側の契約である。#167のschemaとscope照合に加え、#170でDBの重複排除・現在attempt照合・challenge消費・評価履歴を実装した。
 
 | 入力 | 保存/評価側で行うこと |
 | --- | --- |

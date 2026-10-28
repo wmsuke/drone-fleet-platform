@@ -158,6 +158,7 @@ export class Supervisor {
   private reportTimer?: NodeJS.Timeout;
   private publishing = false;
   private reportFailures = 0;
+  private inventoryAt = 0;
   private nextReportAt = 0;
   private lastTelemetrySequence = -1;
   private lastTelemetryAt = 0;
@@ -294,6 +295,11 @@ export class Supervisor {
         const metadata = packet as { qos: number; retain: boolean };
         parseOtaMessage(topic, value, metadata);
         if (topic === createOtaReceiptsTopic(this.config.deviceId)) {
+          if (this.journal.confirmInventory(value)) {
+            this.reportFailures = 0;
+            this.nextReportAt = 0;
+            return;
+          }
           if (this.journal.confirm(value)) {
             this.lastReceipt = performance.now();
             this.reportFailures = 0;
@@ -320,11 +326,45 @@ export class Supervisor {
       performance.now() < this.nextReportAt
     )
       return;
-    const row = this.journal.pending();
-    if (!row) return;
     this.publishing = true;
+    let attempted = false;
     let timeout: NodeJS.Timeout | undefined;
     try {
+      if (
+        performance.now() - this.inventoryAt >= 5000 &&
+        !this.journal.pendingInventory()
+      ) {
+        this.inventoryAt = performance.now();
+        const model = this.journal.read();
+        if (!model.fault && model.childPid !== null) {
+          const probe = await this.child.inspect("HEALTH", model.highestFence);
+          this.journal.inventory({
+            schemaVersion: 1,
+            type: "INVENTORY",
+            deviceId: this.config.deviceId,
+            supervisorBootId: this.journal.bootId,
+            timestamp: new Date().toISOString(),
+            measuredAt: probe.measuredAt,
+            sampleAgeMs: Math.ceil(probe.roundTripMs),
+            running: {
+              release: this.inspectedIdentity(probe),
+              bootId: probe.bootId,
+            },
+            capabilities: {
+              application: "simulator",
+              platform: process.arch === "arm64" ? "linux-arm64" : "linux-x64",
+              nodeVersion: process.versions.node,
+              otaProtocolVersion: "1.0.0",
+              supervisorVersion: "1.0.0",
+              stateSchemaVersion: "1.0.0",
+              healthContractVersion: "ota-health-v1",
+            },
+          });
+        }
+      }
+      const row = this.journal.pending() ?? this.journal.pendingInventory();
+      if (!row) return;
+      attempted = true;
       await Promise.race([
         this.client.publishAsync(
           createOtaEventsTopic(this.config.deviceId),
@@ -339,9 +379,11 @@ export class Supervisor {
       /* PUBACKでも削除せず、同eventを次回再送する */
     } finally {
       clearTimeout(timeout);
-      this.nextReportAt =
-        performance.now() +
-        Math.min(8000, 1000 * 2 ** Math.min(this.reportFailures++, 3));
+      if (attempted)
+        this.nextReportAt =
+          performance.now() +
+          Math.min(8000, 1000 * 2 ** Math.min(this.reportFailures++, 3));
+      else this.nextReportAt = performance.now() + 250;
       this.publishing = false;
     }
   }

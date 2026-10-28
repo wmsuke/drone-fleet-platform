@@ -70,7 +70,7 @@ event loopの応答、telemetry生成の進行、永続SQLiteの読書き、comm
 
 新子では起動を30秒で確認し、5秒間隔で13標本・60秒以上・gap 10秒以下の連続成功をjournalへ保存してからlocal APPLIEDを報告する。FAILED checkや期限超過、別boot・応答不能を成功へ補完しない。QUERY_STATEの一回限りchallengeに対応するHEALTHも採取・永続送信するが、サーバーでのchallenge照合・継続成功評価は#170で行う。
 
-現行の通常ingestorにはOTAの保存/receiptがまだない。そのため、このComposeでbaselineを動かせても、実運用の更新要求を送るのは#169/#170の準備後とする。統合テストは保存/receipt側を限定したfixtureで代用して、端末の実適用だけを確認する。これを本番backendを含むOTA E2Eの成功とは扱わない。
+#170で`OTA_ENABLED=true`のingestorへ保存/receiptを追加し、APIがchallengeと継続healthを評価する経路を追加した。[証拠評価](ota-evaluation.md)を参照する。supervisorは初回deployment前にもINVENTORYで実稼働版・能力を報告する。`compose.ota.yaml`はAPI/ingestorのOTAを明示的に有効にするが、stage解禁とAPPLY配送は#171の範囲で、受付後はまだHELDに留まる。`test:ota-device`の限定fixtureと、実MQTT/DBを使う`test:ota-backend`の確認範囲を区別する。
 
 ## 検証と停止
 

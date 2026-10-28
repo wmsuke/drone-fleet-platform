@@ -240,6 +240,54 @@ export const otaEventMessageSchema = z.discriminatedUnion("type", [
     ),
 ]);
 export type OtaEventMessage = z.infer<typeof otaEventMessageSchema>;
+// 初回deploymentより前の実稼働構成。attemptの進捗・成功証拠ではない。
+export const otaInventoryMessageSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    type: z.literal("INVENTORY"),
+    deviceId: z.string().refine(isValidDeviceId),
+    eventId: id,
+    sequence: count,
+    supervisorBootId: id,
+    timestamp: time,
+    measuredAt: time,
+    sampleAgeMs: count.max(5000),
+    running,
+    capabilities: z
+      .object({
+        application: z.literal("simulator"),
+        platform: z.enum(["linux-arm64", "linux-x64"]),
+        nodeVersion: z
+          .string()
+          .max(64)
+          .refine((v) => semver.valid(v) === v),
+        otaProtocolVersion: z.literal("1.0.0"),
+        supervisorVersion: z.literal("1.0.0"),
+        stateSchemaVersion: z.literal("1.0.0"),
+        healthContractVersion: z.literal("ota-health-v1"),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((v) => {
+    const age = Date.parse(v.timestamp) - Date.parse(v.measuredAt);
+    return age >= 0 && age <= 5000;
+  }, "inventory must be fresh when measured");
+export type OtaInventoryMessage = z.infer<typeof otaInventoryMessageSchema>;
+export const otaInventoryReceiptSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    type: z.literal("INVENTORY"),
+    deviceId: z.string().refine(isValidDeviceId),
+    eventId: id,
+    payloadHash: digest,
+    status: z.literal("STORED"),
+    receivedAt: time,
+    storedAt: time,
+  })
+  .strict()
+  .refine((v) => Date.parse(v.storedAt) >= Date.parse(v.receivedAt));
+export type OtaInventoryReceipt = z.infer<typeof otaInventoryReceiptSchema>;
 export const otaReceiptMessageSchema = z
   .object({
     ...scope,
@@ -273,9 +321,9 @@ export function parseOtaMessage(
     parsed?.kind === "ota-requests"
       ? otaRequestMessageSchema
       : parsed?.kind === "ota-events"
-        ? otaEventMessageSchema
+        ? z.union([otaEventMessageSchema, otaInventoryMessageSchema])
         : parsed?.kind === "ota-receipts"
-          ? otaReceiptMessageSchema
+          ? z.union([otaReceiptMessageSchema, otaInventoryReceiptSchema])
           : null;
   if (!schema) throw new TypeError("not an OTA topic");
   const message = schema.parse(input);
@@ -285,6 +333,12 @@ export function parseOtaMessage(
 }
 // consumerはこのUTF-8 bytesのSHA-256をpayloadHashへ保存する。
 export function serializeOtaEvent(input: OtaEventMessage): string {
+  return serializeSorted(otaEventMessageSchema.parse(input));
+}
+export function serializeOtaInventory(input: OtaInventoryMessage): string {
+  return serializeSorted(otaInventoryMessageSchema.parse(input));
+}
+function serializeSorted(input: unknown): string {
   const sorted = (value: unknown): unknown => {
     if (value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) return value.map(sorted);
@@ -294,7 +348,7 @@ export function serializeOtaEvent(input: OtaEventMessage): string {
         .map(([key, item]) => [key, sorted(item)]),
     );
   };
-  return JSON.stringify(sorted(otaEventMessageSchema.parse(input)));
+  return JSON.stringify(sorted(input));
 }
 // 永続状態・期限・challengeの消費は#170。不変scopeと報告版だけを照合する。
 export function otaEventContextError(
