@@ -10,7 +10,11 @@ import {
   digestOf,
   type Envelope,
 } from "@drone-fleet/releases";
-import { serializeOtaEvent, type OtaApplyRequest } from "@drone-fleet/protocol";
+import {
+  serializeOtaEvent,
+  serializeOtaInventory,
+  type OtaApplyRequest,
+} from "@drone-fleet/protocol";
 import type { SimulatorMqttClient } from "@drone-fleet/simulator";
 import { bundleSimulator } from "../src/bundle.js";
 import type { SupervisorConfig } from "../src/supervisor.js";
@@ -104,6 +108,30 @@ export class Broker extends EventEmitter {
         ),
       );
     if (topic.endsWith("/ota-events")) {
+      if (value.type === "INVENTORY") {
+        setImmediate(() =>
+          this.emit(
+            "message",
+            topic.replace(/ota-events$/, "ota-receipts"),
+            Buffer.from(
+              JSON.stringify({
+                schemaVersion: 1,
+                type: "INVENTORY",
+                deviceId: value.deviceId,
+                eventId: value.eventId,
+                payloadHash: createHash("sha256")
+                  .update(serializeOtaInventory(value))
+                  .digest("hex"),
+                status: "STORED",
+                receivedAt: new Date().toISOString(),
+                storedAt: new Date().toISOString(),
+              }),
+            ),
+            { qos: 1, retain: false },
+          ),
+        );
+        return;
+      }
       const {
         schemaVersion,
         deviceId,

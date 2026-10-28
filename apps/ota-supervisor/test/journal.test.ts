@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { packBundle } from "@drone-fleet/releases";
 import { Journal } from "../src/journal.js";
 import { permittedAddress, validateSource } from "../src/artifacts.js";
@@ -16,6 +16,66 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true });
 });
 describe("OTA journal persistence", () => {
+  it("persists the initial inventory independently and confirms only its exact hash", async () => {
+    const root = await mkdtemp(join(tmpdir(), "ota-inventory-"));
+    roots.push(root);
+    const path = join(root, "journal.sqlite"),
+      envelope = makeEnvelope(
+        packBundle(Buffer.from("console.info('inventory');")),
+      );
+    let journal = new Journal(path);
+    journal.initialize("ota-test", envelope);
+    const { releaseId, digest, version, buildId } = envelope.manifest;
+    const timestamp = new Date().toISOString();
+    const input = {
+      schemaVersion: 1 as const,
+      type: "INVENTORY" as const,
+      deviceId: "ota-test",
+      supervisorBootId: randomUUID(),
+      timestamp,
+      measuredAt: timestamp,
+      sampleAgeMs: 0,
+      running: {
+        release: { releaseId, digest, version, buildId },
+        bootId: randomUUID(),
+      },
+      capabilities: {
+        application: "simulator" as const,
+        platform: "linux-arm64" as const,
+        nodeVersion: "22.13.0",
+        otaProtocolVersion: "1.0.0" as const,
+        supervisorVersion: "1.0.0" as const,
+        stateSchemaVersion: "1.0.0" as const,
+        healthContractVersion: "ota-health-v1" as const,
+      },
+    };
+    journal.inventory(input);
+    const pending = journal.pendingInventory()!;
+    journal.close();
+    journal = new Journal(path);
+    expect(journal.pendingInventory()).toEqual(pending);
+    const event = JSON.parse(pending.json);
+    const receipt = {
+      schemaVersion: 1,
+      type: "INVENTORY",
+      deviceId: "ota-test",
+      eventId: event.eventId,
+      payloadHash: pending.hash,
+      status: "STORED",
+      receivedAt: timestamp,
+      storedAt: timestamp,
+    };
+    expect(
+      journal.confirmInventory({ ...receipt, payloadHash: "0".repeat(64) }),
+    ).toBe(false);
+    expect(journal.confirmInventory(receipt)).toBe(true);
+    expect(journal.pending()).toBeUndefined();
+    journal.inventory(input);
+    expect(JSON.parse(journal.pendingInventory()!.json).sequence).toBe(
+      event.sequence + 1,
+    );
+    journal.close();
+  });
   it("persists identity/fence/events; PUBACK does not confirm and wrong receipt cannot clear the event", async () => {
     const root = await mkdtemp(join(tmpdir(), "ota-journal-"));
     roots.push(root);

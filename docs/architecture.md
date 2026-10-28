@@ -343,7 +343,7 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 既存command/outboxの保存・再送の原則は利用するが、OTAは専用のtable・topic・schemaに分離し、通常commandの30秒開始期限とfleet operationの120秒評価を変更しない。停止は後続送信の抑止と端末の確認を分け、rollbackは別attemptと回復評価を持つ。前試行の未停止・結果不明・非互換schemaでは自動再適用しない。署名の信頼根、状態遷移、healthの数値、段階の分母、crash境界、復旧上限はADRを正とする。
 
-#166で[配信物管理](releases.md)、#167で[OTA通信契約](ota-protocol.md)とIoT Policy定義、#168で[opt-in supervisorと端末の実適用](ota-device.md)を追加した。supervisorがMQTT・公開鍵・独立journalを保持し、低権限の単一機体childはIPCで既存処理を使う。Linux lock、署名/互換検証、atomic切替、version/bootとlocal healthを確認する。#169で[deployment受付API](deployments-api.md)を追加し、不変snapshot・全機体予約・HELD attempt/outbox・auditを同時保存する。通常commandとfleet operationも同じdevice lockで予約を確認する。backendのOTA観測登録・保存/receipt・成功評価と、stage解禁・配送は後続Issueの範囲である。実AWSへのPolicy適用・OTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
+#166で[配信物管理](releases.md)、#167で[OTA通信契約](ota-protocol.md)とIoT Policy定義、#168で[opt-in supervisorと端末の実適用](ota-device.md)を追加した。supervisorがMQTT・公開鍵・独立journalを保持し、低権限の単一機体childはIPCで既存処理を使う。Linux lock、署名/互換検証、atomic切替、version/bootとlocal healthを確認する。#169で[deployment受付API](deployments-api.md)を追加し、不変snapshot・全機体予約・HELD attempt/outbox・auditを同時保存する。通常commandとfleet operationも同じdevice lockで予約を確認する。#170で[実稼働構成の観測、event保存/receipt・challenge・継続health評価と進捗API](ota-evaluation.md)を追加した。段階解禁・APPLY配送・停止確認は#171の範囲である。実AWSへのPolicy適用・OTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
 
 ## Phase 4の設計と実装範囲
 

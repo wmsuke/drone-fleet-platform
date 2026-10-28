@@ -1,4 +1,4 @@
-import { createDatabase } from "@drone-fleet/database";
+import { createDatabase, createOtaRepository } from "@drone-fleet/database";
 
 import { createCommandAcknowledgementRepository } from "./acknowledgement.js";
 import { startTelemetryIngestor } from "./app.js";
@@ -20,6 +20,11 @@ async function main(): Promise<void> {
       repository,
       statusRepository,
       acknowledgementRepository,
+      console,
+      undefined,
+      undefined,
+      undefined,
+      process.env.OTA_ENABLED === "true" ? createOtaRepository(db) : undefined,
     );
   } catch (error) {
     await databaseClient.end();

@@ -8,6 +8,9 @@ import {
   parseOtaMessage,
   serializeOtaEvent,
   otaEventContextError,
+  otaInventoryMessageSchema,
+  otaInventoryReceiptSchema,
+  serializeOtaInventory,
   createOtaEventsTopic,
   createOtaRequestsTopic,
   createOtaReceiptsTopic,
@@ -23,6 +26,63 @@ const release = {
   version: "0.1.0",
   buildId: "build-1",
 };
+it("separates initial inventory from attempt evidence and requires a matching inventory receipt", () => {
+  const time = "2026-10-28T00:00:00.000Z";
+  const inventory = {
+    schemaVersion: 1,
+    type: "INVENTORY",
+    deviceId: "drone-001",
+    eventId: id,
+    sequence: 0,
+    supervisorBootId: other,
+    timestamp: time,
+    measuredAt: time,
+    sampleAgeMs: 0,
+    running: { release, bootId: other },
+    capabilities: {
+      application: "simulator",
+      platform: "linux-arm64",
+      nodeVersion: "22.13.0",
+      otaProtocolVersion: "1.0.0",
+      supervisorVersion: "1.0.0",
+      stateSchemaVersion: "1.0.0",
+      healthContractVersion: "ota-health-v1",
+    },
+  };
+  expect(otaInventoryMessageSchema.safeParse(inventory).success).toBe(true);
+  expect(otaEventMessageSchema.safeParse(inventory).success).toBe(false);
+  expect(
+    parseOtaMessage(createOtaEventsTopic("drone-001"), inventory, {
+      qos: 1,
+      retain: false,
+    }),
+  ).toEqual(inventory);
+  expect(
+    serializeOtaInventory(otaInventoryMessageSchema.parse(inventory)),
+  ).toContain('"type":"INVENTORY"');
+  expect(
+    otaInventoryMessageSchema.safeParse({ ...inventory, secret: "forbidden" })
+      .success,
+  ).toBe(false);
+  expect(
+    otaInventoryMessageSchema.safeParse({
+      ...inventory,
+      measuredAt: "2026-10-27T00:00:00.000Z",
+    }).success,
+  ).toBe(false);
+  const receipt = {
+    schemaVersion: 1,
+    type: "INVENTORY",
+    deviceId: "drone-001",
+    eventId: id,
+    payloadHash: "b".repeat(64),
+    status: "STORED",
+    receivedAt: time,
+    storedAt: time,
+  };
+  expect(otaInventoryReceiptSchema.safeParse(receipt).success).toBe(true);
+  expect(otaReceiptMessageSchema.safeParse(receipt).success).toBe(false);
+});
 const scope = {
   schemaVersion: 1 as const,
   deviceId: "drone-001",

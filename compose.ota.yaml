@@ -1,4 +1,10 @@
 services:
+  api:
+    environment:
+      OTA_ENABLED: "true"
+  telemetry-ingestor:
+    environment:
+      OTA_ENABLED: "true"
   ota-supervisor:
     build:
       context: .

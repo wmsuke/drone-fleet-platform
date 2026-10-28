@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168でopt-in端末supervisor・実適用・local health、#169で固定snapshot受付・device予約・HELD outboxを実装。backendのOTA保存/評価・段階解禁/配送・画面は未実装
+- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168で端末の実適用、#169で固定snapshot受付、#170で観測・保存receipt・証拠評価・進捗APIを実装。段階解禁/APPLY配送・停止確認・画面は未実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -104,6 +104,8 @@ eventはID・attempt内sequence・bootId・release/digest・fence、端末時刻
 AWS Policyは#167で、deviceの自機ota-events publish、自機ota-requests/ota-receipts subscribe/receive、APIのota-requests publish、ingestorのota-events subscribe/receiveとota-receipts publishだけを追加する。retain権限・他機体操作・任意artifact取得権限は付けない。localでも購読先を機体別に限定するが、匿名Mosquitto自体の本人認証にはならない。HTTPの新規権限制御は未実装のため、管理APIはローカル・制限ネットワークのみ。公開・実機運用には別の認証/認可設計が必要である。
 
 ## 5. 起動・version・継続healthによる成功評価
+
+#170の実装・照会予算・保存時刻の意味・進捗API・実MQTT/DB検証の境界は[OTA証拠評価](../ota-evaluation.md)に記録する。初回deployment前の観測に限り、attemptを捏造しないINVENTORYを既存topicへ追加した。旧attempt event/receiptのscopeは変えず、INVENTORYは成功根拠にしない。自動照会は1attempt最大144件・結果期限後60秒までとし、停止中に根拠が失われても新attemptを作らない。保存後receiptと再走査で通知喪失を補う。stageの停止latchを残すが、端末停止確認は#171で行う。
 
 初期評価仕様を`ota-health-v1`としてdeploymentへ固定し、後から閾値を変えない。
 
