@@ -719,7 +719,7 @@ export function createOtaRepository(
         .from(otaAttempts)
         .innerJoin(otaTargets, eq(otaTargets.targetId, otaAttempts.targetId))
         .where(
-          sql`${otaAttempts.startedAt} IS NOT NULL AND (${otaAttempts.evaluationStatus} IN ('PENDING','OBSERVING') OR ${otaAttempts.resultDeadline} > clock_timestamp() - interval '60 seconds')`,
+          sql`${otaAttempts.startedAt} IS NOT NULL AND (${otaAttempts.evaluationStatus} IN ('PENDING','OBSERVING') OR ${otaAttempts.resultDeadline} > clock_timestamp() - interval '60 seconds' OR EXISTS(SELECT 1 FROM ota_stops s WHERE s.attempt_id=${otaAttempts.attemptId} AND s.result_deadline>clock_timestamp() AND s.confirmed_event_id IS NULL))`,
         )
         .orderBy(asc(otaAttempts.resultDeadline))
         .limit(1000);
@@ -767,7 +767,9 @@ export function createOtaRepository(
             .where(eq(otaQueries.attemptId, candidate.id))
             .orderBy(desc(otaQueries.createdAt));
           if (
-            queries.length < 144 &&
+            (stop
+              ? queries.filter((q) => q.createdAt >= stop.createdAt).length < 12
+              : queries.length < 144) &&
             (!queries[0] ||
               now.getTime() - queries[0].createdAt.getTime() >= 5000)
           ) {

@@ -951,6 +951,48 @@ describe.skipIf(!enabled)("deployment acceptance with PostgreSQL", () => {
       [],
     );
   });
+  it("queries a newly requested stop even after the original result observation budget expired", async () => {
+    const repo = repository(),
+      d = await repo.create(request(), randomUUID());
+    const past = new Date(Date.now() - 3600000);
+    await db!
+      .update(otaDeviceStates)
+      .set({ observedAt: past })
+      .where(inArray(otaDeviceStates.deviceId, ids));
+    // 過去に発行済みの要求を専用fixture clockで作る。元期限は変更しない。
+    const old = createOtaRollout(db!, { clock: () => past });
+    await old.act(
+      d.deploymentId,
+      "approve",
+      randomUUID(),
+      "DEMO",
+      d.stages[0]!.stageId,
+    );
+    const [apply] = await old.tick();
+    const issued = JSON.parse(apply!.payload);
+    await db!
+      .update(otaAttempts)
+      .set({ evaluationStatus: "UNCERTAIN" })
+      .where(eq(otaAttempts.attemptId, issued.attemptId));
+    await repo.act(d.deploymentId, "stop", randomUUID(), "OPERATOR_STOP");
+    await createOtaRollout(db!).tick();
+    const queries = await createOtaRepository(db!).tick();
+    expect(
+      queries.some((q) => {
+        const p = JSON.parse(q.payload);
+        return (
+          p.attemptId === issued.attemptId &&
+          p.type === "QUERY_STATE" &&
+          p.challengeId === null
+        );
+      }),
+    ).toBe(true);
+    const after = await repo.find(d.deploymentId, 5);
+    expect(after!.targets[0]!.attempts[0]!.resultDeadline).toBe(
+      issued.resultDeadline,
+    );
+    expect(after!.status).not.toBe("PAUSED");
+  });
   it("rolls back approval, issued deadlines and action when audit cannot be saved", async () => {
     const repo = repository(),
       d = await repo.create(request(), randomUUID());
