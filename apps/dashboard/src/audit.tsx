@@ -152,6 +152,7 @@ function List({ base }: { base: string }) {
                 "telemetry-ingestor",
                 "alert-evaluator",
                 "operation-evaluator",
+                "ota-worker",
               ],
             },
             { name: "action", label: "action", values: auditActions },

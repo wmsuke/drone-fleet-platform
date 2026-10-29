@@ -8,6 +8,9 @@ import {
   otaEvaluations,
   otaDeviceStates,
   otaRejections,
+  otaRollouts,
+  otaActions,
+  otaStops,
   type Database,
 } from "@drone-fleet/database";
 
@@ -69,6 +72,16 @@ export function createDeploymentQueries(db: Database) {
             sql`SELECT clock_timestamp()::text AS now`,
           );
           const now = new Date(time!.now);
+          const [control] = await tx
+            .select()
+            .from(otaRollouts)
+            .where(eq(otaRollouts.deploymentId, id));
+          const actions = await tx
+            .select()
+            .from(otaActions)
+            .where(eq(otaActions.deploymentId, id))
+            .orderBy(desc(otaActions.createdAt))
+            .limit(100);
           const stages = await tx
             .select()
             .from(otaStages)
@@ -97,6 +110,10 @@ export function createDeploymentQueries(db: Database) {
               .orderBy(desc(otaAttempts.ordinal));
             const histories = [];
             for (const attempt of attempts) {
+              const [stop] = await tx
+                .select()
+                .from(otaStops)
+                .where(eq(otaStops.attemptId, attempt.attemptId));
               const events = await tx
                 .select()
                 .from(otaEvents)
@@ -107,10 +124,7 @@ export function createDeploymentQueries(db: Database) {
                 .select()
                 .from(otaEvaluations)
                 .where(eq(otaEvaluations.attemptId, attempt.attemptId))
-                .orderBy(
-                  desc(otaEvaluations.evaluatedAt),
-                  desc(otaEvaluations.evaluationId),
-                )
+                .orderBy(desc(otaEvaluations.revision))
                 .limit(20);
               const rejections = await tx
                 .select()
@@ -167,6 +181,15 @@ export function createDeploymentQueries(db: Database) {
                 expiresAt: attempt.expiresAt?.toISOString() ?? null,
                 resultDeadline: attempt.resultDeadline?.toISOString() ?? null,
                 freshHealth: fresh,
+                stop: stop
+                  ? {
+                      commandId: stop.commandId,
+                      attempts: stop.attempts,
+                      expiresAt: stop.expiresAt.toISOString(),
+                      resultDeadline: stop.resultDeadline.toISOString(),
+                      confirmedEventId: stop.confirmedEventId,
+                    }
+                  : null,
                 counts,
                 rejections: rejections.map((r) => ({
                   ...r,
@@ -215,6 +238,19 @@ export function createDeploymentQueries(db: Database) {
             ...deployment,
             createdAt: deployment.createdAt.toISOString(),
             evaluatedAt: now.toISOString(),
+            control: control
+              ? {
+                  stoppedAt: control.stoppedAt?.toISOString() ?? null,
+                  stopReason: control.stopReason,
+                }
+              : null,
+            actions: actions.map((a) => ({
+              actionId: a.actionId,
+              action: a.action,
+              reason: a.reason,
+              createdAt: a.createdAt.toISOString(),
+              response: a.response,
+            })),
             stages: stageItems,
             targets: items,
           };

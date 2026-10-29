@@ -21,6 +21,10 @@ export {
   otaQueries,
   otaEvaluations,
   otaInventories,
+  otaRollouts,
+  otaActions,
+  otaDispatches,
+  otaStops,
   operationAuditStates,
   alerts,
   alertEvaluationStates,
@@ -54,6 +58,7 @@ export {
 } from "./audit.js";
 export { operationAggregation } from "./operation-aggregation.js";
 export { createOtaRepository, otaDeploymentLock } from "./ota.js";
+export { createOtaRollout, OtaControlError } from "./ota-rollout.js";
 export {
   evaluateOta,
   type OtaEvidence,

@@ -8,7 +8,7 @@ APIとtelemetry-ingestorの両方へ`OTA_ENABLED=true`を設定する。通常�
 
 - supervisor：実配信物の検証・切替・子の起動・health採取・journalと報告再送。
 - telemetry-ingestor：topic/deviceId・QoS 1・retainなし・16 KiB上限・schemaを検証し、DB transactionのcommit後にだけreceiptを送る。
-- APIのmonitor：発行済みattemptを再走査し、QUERY_STATEを保存してから送信する。APPLYの作成/再適用やstageの解禁は行わない。
+- APIのmonitor：発行済みattemptを再走査し、QUERY_STATEを保存してから送信する。#171で[承認済みstageのAPPLY配送と停止確認](ota-rollout.md)を追加した。再適用は勝手に行わない。
 - DB：正本event、衝突/不採用理由、query/challenge、評価履歴を保持する。deployment lockは`ota-deployment:<deploymentId>`で共有する。#171の解禁・停止処理もこのlockと停止latchを確認する必要がある。
 
 新たなAWSサービスやtopic権限は追加していない。管理APIの認証・認可、実機の安全、暗号学的な実行証明も追加していない。localの匿名brokerは端末の本人性を保証しない。署名者・ホスト・supervisorを信頼する境界は従来どおりである。
@@ -47,7 +47,7 @@ receivedAtはMQTT handlerの受信UTC、storedAtと期限走査はDB clockを使
 
 明示health失敗はFAILED、矛盾した終端・scope内のrelease不一致・正本衝突や期限時の根拠不足はUNCERTAINとし、現在targetをWAITING_FOR_HUMAN等へ進める。新しい評価へ根拠ID・理由・仕様versionを記録し、以前の成功記録は削除しない。成功後に届いた不良証拠も新評価と停止latchへ反映する。単なる照会や遅着でFAILED/UNCERTAINを成功へ戻さない。
 
-後続の安全な解禁を防ぐため、不確定・integrity違反、または観測済みFAILEDが固定stage分母の10%以上になった時点でstageをSTOPPING、deploymentをWAITING_FOR_HUMANへ保持する。停止を確認せずPAUSEDにしない。STOP_UPDATE送信・端末停止確認・予約解放、開始期限切れを含む段階全体の集約と操作workflowは#171の範囲である。予約や旧版を勝手に解放・切り戻ししない。
+後続の解禁を防ぐため、不確定・integrity違反、または観測済みFAILEDが固定stage分母の10%以上になった時点でstageをSTOPPING、deploymentをWAITING_FOR_HUMANへ保持する。#171の段階workerがこの停止を永続latchへ引き継ぎ、STOP_UPDATE送信と直接状態照会を行う。確認前はSTOPPING、確認期限後の不明状態はWAITING_FOR_HUMAN、全処理中targetの確認後だけPAUSEDにする。予約や旧版を勝手に解放・切り戻ししない。
 
 ## backend再起動と再照会
 
@@ -68,6 +68,6 @@ QUERYは不変payload・15秒期限をDBへ保存し、送信前に試行回数�
 
 `pnpm test`は評価単体・通信schema・保存後receipt・機密情報を含めない拒否を検証する。専用PostgreSQLの`pnpm api:test:integration`は同時報告、重複/衝突、期限境界、challenge消費、backend再生成とrollbackを確認する。
 
-`pnpm test:ota-backend`は専用ComposeのMQTT/PostgreSQLとLinuxの実bundleを使う。実観測のbaselineから受付し、通常RETURN_HOMEの完了確認、異なる配信物への適用、保存receiptを1回落とした再送、途中のbackend停止/再開と継続healthを確認する。#171の解禁APIは未実装なので、解禁済みsnapshotだけをfixtureで用意する。公開APIによる承認・APPLY worker・段階解禁を含むデモとは扱わない。終了時は専用container/network/volumeを削除する。
+`pnpm test:ota-backend`は専用ComposeのMQTT/PostgreSQLとLinuxの実bundleを使う。実観測のbaselineから受付し、通常RETURN_HOMEの完了確認、公開承認APIとAPPLY worker、異なる配信物への適用、保存receiptを1回落とした再送、途中のbackend停止/再開と継続health、COMPLETEDを確認する。終了時は専用container/network/volumeを削除する。
 
-全crash境界・10台段階配信は#175、段階/停止は#171、承認付き復旧は#172、実AWSのOTA・実機は未検証である。
+全crash境界・10台段階配信は#175、承認付き復旧は#172、実AWSのOTA・実機は未検証である。段階/停止の実装範囲は[段階配信](ota-rollout.md)を参照する。

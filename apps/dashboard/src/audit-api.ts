@@ -1,5 +1,8 @@
 import { ApiError } from "./api.js";
 export const auditActions = [
+  "deployment.approved",
+  "deployment.stopped",
+  "deployment.resumed",
   "deployment.accepted",
   "deployment.replayed",
   "release.registered",
@@ -109,6 +112,7 @@ function valid(v: unknown): v is AuditItem {
           "telemetry-ingestor",
           "alert-evaluator",
           "operation-evaluator",
+          "ota-worker",
         ].includes(v.actorId)) &&
     typeof v.action === "string" &&
     auditActions.some((a) => a === v.action) &&

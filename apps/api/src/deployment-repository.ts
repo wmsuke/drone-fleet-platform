@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createDeploymentQueries } from "./deployment-query.js";
+import { createDeploymentControl } from "./deployment-control.js";
 import { readFile } from "node:fs/promises";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -82,6 +83,7 @@ export function createDeploymentRepository(
 ) {
   return {
     ...createDeploymentQueries(db),
+    ...createDeploymentControl(db, options),
     async create(input: DeploymentRequest, key: string) {
       const request = deploymentRequestSchema.parse(input);
       const requestHash = createHash("sha256")

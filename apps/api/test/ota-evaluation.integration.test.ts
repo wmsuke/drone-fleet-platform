@@ -20,6 +20,9 @@ import {
   otaRejections,
   otaDeviceStates,
   otaInventories,
+  otaRollouts,
+  otaStops,
+  otaDispatches,
 } from "@drone-fleet/database";
 import {
   otaRequestMessageSchema,
@@ -41,6 +44,11 @@ describe.skipIf(!enabled)("OTA evidence storage and progress API", () => {
     if (!f) return;
     const id = f.apply.attemptId,
       deploymentId = f.apply.deploymentId;
+    await db!.delete(otaStops).where(eq(otaStops.attemptId, id));
+    await db!.delete(otaDispatches).where(eq(otaDispatches.attemptId, id));
+    await db!
+      .delete(otaRollouts)
+      .where(eq(otaRollouts.deploymentId, deploymentId));
     await db!.delete(otaQueries).where(eq(otaQueries.attemptId, id));
     await db!.delete(otaEvaluations).where(eq(otaEvaluations.attemptId, id));
     await db!.delete(otaEvents).where(eq(otaEvents.attemptId, id));

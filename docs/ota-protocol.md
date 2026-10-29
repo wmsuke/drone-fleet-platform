@@ -4,6 +4,8 @@
 
 ## 初回・定期のINVENTORY
 
+#171で任意の`readiness`（eventLoop/telemetry/sqlite/commandReady/mqtt/subscriptions/receipts各PASSED/FAILED）を追加した。旧形式は受信・観測登録できるが、未適用機体の再開には15秒未満・現在boot/versionに一致する全check成功を要求する。receiptsは子のtelemetry receiptと直近のINVENTORY保存receiptに基づく。attemptの更新成功、60秒health評価、切替前のattempt receiptへは流用しない。
+
 #170で初回deployment以前の観測用に、attempt scopeを持たない`otaInventoryMessageSchema`を追加した。旧attempt eventのscopeを省略可能にはしていない。`schemaVersion: 1`、`type: INVENTORY`、deviceId/eventId/永続sequence/supervisorBootId、timestamp/measuredAt/sampleAgeMs、`running: { release, bootId }`とcapabilitiesを持つ。capabilitiesはapplication=simulator、Linux platform、実Node.js version、OTA protocol/supervisor/state schema各1.0.0、healthContractVersion=ota-health-v1に限定する。未知項目を拒否し、測定から報告まで最大5秒とする。
 
 同topicのinventory専用receiptは`otaInventoryReceiptSchema`で、schemaVersion/type/deviceId/eventId/payloadHash/status=STORED/receivedAt/storedAtを持つ。hashは`serializeOtaInventory`のcanonical bytesへ計算する。旧attemptのreceiptとは別schemaで、INVENTORYを更新進捗・health評価・APPLIEDへ変換しない。既存topicの権限は変わらない。新旧consumerを揃えて有効にする。

@@ -1,0 +1,2 @@
+ALTER TABLE "audit_logs" DROP CONSTRAINT "audit_logs_actor_valid";--> statement-breakpoint
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actor_valid" CHECK (("audit_logs"."actor_kind"='anonymous' AND "audit_logs"."actor_id" IS NULL) OR ("audit_logs"."actor_kind"='system' AND "audit_logs"."actor_id" IS NOT NULL AND "audit_logs"."actor_id" IN ('telemetry-ingestor','alert-evaluator','operation-evaluator','ota-worker')));

@@ -6,7 +6,7 @@
 
 DB migrationを適用し、配信物管理と同じ`OTA_RELEASE_DIR` / `OTA_TRUST_STORE_PATH`をAPIへ設定する。両方が未設定ならこのrouteは登録しない。署名鍵はAPIへ渡さない。認証・認可は追加していないため、管理APIを外部公開しない。
 
-現段階では先行stageも承認待ちで、全attempt/outboxは`HELD`になる。開始時刻・開始期限・結果期限・送信payloadはnullのまま保存する。HTTP内のMQTT送信、stageの解禁、配送workerは実装していない。#171で理由付き承認と解禁を追加するまで送信は始まらない。通常command outboxとは別tableなので、既存workerがOTAを誤配信することもない。
+受付時は先行stageも承認待ちで、全attempt/outboxは`HELD`になる。開始時刻・開始期限・結果期限・送信payloadはnullのまま保存する。#171で[理由付き承認・段階配信・停止/再開](ota-rollout.md)を追加した。HTTP内ではMQTT送信せず、明示承認後にopt-inのOTA workerが配送する。通常command outboxとは別tableなので、既存workerがOTAを誤配信することもない。
 
 端末の現在版・能力を保存する`ota_device_states`には既定値を挿入しない。通常simulatorのtelemetryからOTA対応やversionを推測しない。#170でopt-in supervisorの実観測INVENTORYを登録する経路を追加した。[観測・評価手順](ota-evaluation.md)を参照する。旧simulatorなど未観測の機体は`DEVICE_OTA_UNCONFIRMED`で拒否する。versionや観測時刻を手作業で捏造しない。
 
@@ -29,7 +29,7 @@ Idempotency-Key: ota-demo-001
 - deviceIdをASCII順に固定し、既定stageは先行1台、次に最大3台、残り全台。10台なら1/3/6で、空stageは作らない。
 - 明示する場合は`stages: [{ "deviceIds": ["ota-drone-001"] }, { "deviceIds": ["ota-drone-002"] }]`の順序付き配列を使う。各stage内は正規化してASCII順にし、stageを連結した列が全対象のASCII順と一致する必要がある。漏れ・重複・空stage・逆順を拒否する。
 - 100台・10stageが上限。複数groupの重複、groupと明示deviceの重複も全件拒否し、暗黙の重複除去や一部受付はしない。空groupも拒否する。
-- health/停止閾値を弱める任意設定は受け付けない。`evaluationVersion`は省略時も`ota-health-v1`。30秒の起動確認、5秒間隔・13標本・60秒・gap最大10秒・鮮度15秒、全対象成功による昇格、失敗率10%以上/不確定・integrity失敗時の停止latch、承認必須、同時適用上限2台をsnapshotに持つ。復旧は自動無効・rollbackは明示承認とし、将来の復旧予算15分/256 MiB・新attempt最大1回を保持する。これらの評価・停止・復旧の実行は後続Issueで実装する。
+- health/停止閾値を弱める任意設定は受け付けない。`evaluationVersion`は省略時も`ota-health-v1`。30秒の起動確認、5秒間隔・13標本・60秒・gap最大10秒・鮮度15秒、全対象成功による昇格、失敗率10%以上/不確定・integrity失敗時の停止latch、承認必須、同時適用上限2台をsnapshotに持つ。復旧は自動無効・rollbackは明示承認とし、将来の復旧予算15分/256 MiB・新attempt最大1回を保持する。評価は#170、段階/停止は#171で実装し、制限付き復旧は#172で追加する。
 
 ## 冪等性と検証
 
@@ -45,13 +45,13 @@ idempotency scopeは`anonymous`、keyはASCII英数字・`_`・`-`の1〜128文�
 
 予約中の機体への`POST /devices/:deviceId/commands`は409、予約機体を1台でも含む`POST /fleet-operations`も全受付を409で拒否する。fleet operationの同key再送は新操作ではないため元応答を返す。予約前に受付済みの通常commandを取消したことにはせず、端末側gateと終了確認を併用する。
 
-予約の自動解放・TTLはない。後続の終了/停止/現在版の確認と解放transactionが実装されるまで、受付後に新deploymentや通常commandは通らない。PAUSED/STOPPING/WAITING_FOR_HUMANやlease切れだけで解放してはならない。検証は専用DBで行い、共有デモの機体を試しに予約しない。
+予約の自動TTLはない。#171で全対象の目的release成功と現在状態を確認したCOMPLETED transactionだけで解放する。PAUSED/STOPPING/WAITING_FOR_HUMANやlease切れだけでは解放しない。検証は専用DBで行い、共有デモの機体を試しに予約しない。
 
 受付で受領・適用・health・成功eventを生成しない。#170でeventの採否、DB保存receipt、challenge、評価と一覧/詳細APIを追加した。`GET /deployments` / `GET /deployments/:deploymentId`の進捗・根拠・期限の見方は[証拠評価](ota-evaluation.md)を参照する。元のcommand/ACK・telemetryの意味は変更しない。
 
 ## 応答とエラー
 
-202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進捗GETは#170、承認・停止操作APIは#171以降の範囲である。
+202はdeploymentId、`status: ACCEPTED`、targetCount、createdAt、不変release envelope、policy、stageId/順序/初期状態/deviceIdsを返す。同key再送でも「元の受付事実」を返すため、これを進行状況の照会として使わない。進捗GETは[証拠評価](ota-evaluation.md)、承認・停止・再開APIは[段階配信](ota-rollout.md)を参照する。
 
 | status | 主なerror |
 | --- | --- |

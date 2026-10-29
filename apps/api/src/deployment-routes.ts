@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { auditContext } from "@drone-fleet/database";
+import { auditContext, OtaControlError } from "@drone-fleet/database";
 import { deploymentRequestSchema } from "./deployment-schema.js";
 import { idempotencyKeySchema } from "./fleet-operation-schema.js";
 import {
@@ -12,6 +12,53 @@ export function registerDeploymentRoutes(
   app: FastifyInstance,
   repository: DeploymentRepository,
 ) {
+  for (const action of ["approve", "stop", "resume"] as const) {
+    app.post(
+      `/deployments/:deploymentId/${action === "approve" ? "stages/:stageId/approve" : action}`,
+      { bodyLimit: 2048 },
+      async (request, reply) => {
+        const params = z
+          .object({
+            deploymentId: z.uuid().transform((v) => v.toLowerCase()),
+            ...(action === "approve"
+              ? { stageId: z.uuid().transform((v) => v.toLowerCase()) }
+              : {}),
+          })
+          .safeParse(request.params);
+        const body = z
+          .object({ reason: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/) })
+          .strict()
+          .safeParse(request.body);
+        const key = idempotencyKeySchema.safeParse(
+          request.headers["idempotency-key"],
+        );
+        if (!params.success || !body.success || !key.success)
+          return reply.code(400).send({ error: "INVALID_DEPLOYMENT_ACTION" });
+        try {
+          return reply
+            .code(202)
+            .send(
+              await repository.act(
+                params.data.deploymentId,
+                action,
+                key.data,
+                body.data.reason,
+                "stageId" in params.data
+                  ? (params.data.stageId as string)
+                  : undefined,
+              ),
+            );
+        } catch (error) {
+          if (error instanceof OtaControlError) {
+            const context = auditContext.getStore();
+            if (context) context.rejectionReason = error.reason;
+            return reply.code(error.status).send({ error: error.reason });
+          }
+          return reply.code(503).send({ error: "DEPLOYMENT_UNAVAILABLE" });
+        }
+      },
+    );
+  }
   app.get("/deployments", async (request, reply) => {
     const query = z
       .object({

@@ -3,6 +3,9 @@ import type { AuditEvent } from "@drone-fleet/database";
 type AuditAction = AuditEvent["action"];
 import { deviceIdSchema } from "./schema.js";
 export const auditActions = [
+  "deployment.approved",
+  "deployment.stopped",
+  "deployment.resumed",
   "deployment.accepted",
   "deployment.replayed",
   "release.registered",
@@ -54,6 +57,9 @@ export const publicMetadataSchema = z
   .strict();
 type Metadata = z.infer<typeof publicMetadataSchema>;
 const allowed: Record<AuditAction, readonly (keyof Metadata)[]> = {
+  "deployment.approved": ["reason", "afterStatus"],
+  "deployment.stopped": ["reason", "afterStatus"],
+  "deployment.resumed": ["reason", "afterStatus"],
   "deployment.accepted": ["targetCount", "afterStatus"],
   "deployment.replayed": ["targetCount"],
   "release.registered": ["afterStatus"],
@@ -98,7 +104,12 @@ export const auditQuerySchema = z
     to: timestamp.optional(),
     actorKind: z.enum(["anonymous", "system"]).optional(),
     actorId: z
-      .enum(["telemetry-ingestor", "alert-evaluator", "operation-evaluator"])
+      .enum([
+        "telemetry-ingestor",
+        "alert-evaluator",
+        "operation-evaluator",
+        "ota-worker",
+      ])
       .optional(),
     action: z.enum(auditActions).optional(),
     targetKind: z
