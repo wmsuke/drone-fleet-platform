@@ -1,5 +1,7 @@
 import { ApiError } from "./api.js";
 export const auditActions = [
+  "deployment.recovery_requested",
+  "deployment.recovery_changed",
   "deployment.approved",
   "deployment.stopped",
   "deployment.resumed",

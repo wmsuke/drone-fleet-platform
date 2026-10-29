@@ -2,6 +2,7 @@ import { createDatabase } from "@drone-fleet/database";
 import { createReleaseRepository } from "./release-repository.js";
 import { createOtaMonitor } from "./ota-monitor.js";
 import { createDeploymentRepository } from "./deployment-repository.js";
+import { createDeploymentRecovery } from "./deployment-control.js";
 
 import { buildApi } from "./app.js";
 import {
@@ -21,6 +22,11 @@ import { createDeviceRepository } from "./repository.js";
 import { createShutdown } from "./shutdown.js";
 
 async function main(): Promise<void> {
+  if (
+    process.env.OTA_ENABLED === "true" &&
+    (!process.env.OTA_RELEASE_DIR || !process.env.OTA_TRUST_STORE_PATH)
+  )
+    throw new Error("OTA_ENABLEDには配信物と信頼根の設定が必要です");
   if (
     Boolean(process.env.OTA_RELEASE_DIR) !==
     Boolean(process.env.OTA_TRUST_STORE_PATH)
@@ -49,8 +55,18 @@ async function main(): Promise<void> {
   };
   const outbox = createCommandOutbox(client, publish, outboxOptions);
   const otaMonitor =
-    process.env.OTA_ENABLED === "true"
-      ? createOtaMonitor(db, publish)
+    process.env.OTA_ENABLED === "true" &&
+    process.env.OTA_RELEASE_DIR &&
+    process.env.OTA_TRUST_STORE_PATH
+      ? createOtaMonitor(
+          db,
+          publish,
+          undefined,
+          createDeploymentRecovery(db, {
+            directory: process.env.OTA_RELEASE_DIR,
+            trustStorePath: process.env.OTA_TRUST_STORE_PATH,
+          }),
+        )
       : undefined;
   const app = buildApi(createDeviceRepository(db), commandService, {
     ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH

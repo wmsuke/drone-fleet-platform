@@ -134,6 +134,13 @@
       "when": 1793174344529,
       "tag": "0018_steep_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793239211205,
+      "tag": "0019_clever_phalanx",
+      "breakpoints": true
     }
   ]
 }

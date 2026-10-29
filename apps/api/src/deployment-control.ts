@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   createOtaRollout,
+  createOtaRecovery,
   OtaControlError,
   type Database,
 } from "@drone-fleet/database";
@@ -15,6 +16,44 @@ import {
 } from "@drone-fleet/releases";
 import { otaDeviceSnapshotSchema } from "./deployment-schema.js";
 import type { DeploymentOptions } from "./deployment-repository.js";
+
+export function createDeploymentRecovery(
+  db: Database,
+  options: DeploymentOptions,
+  clock?: () => Date,
+) {
+  return createOtaRecovery(db, {
+    clock,
+    async validate(input, current, kind, currentEnvelope) {
+      const envelope = envelopeSchema.parse(input);
+      verifyEnvelope(
+        envelope,
+        parseTrustStore(await readFile(options.trustStorePath, "utf8")),
+      );
+      await verifyStoredArtifact(
+        await artifactRoot(options.directory),
+        envelope.manifest,
+      );
+      const state = otaDeviceSnapshotSchema.parse(current);
+      if (
+        !(kind === "RETRY"
+          ? compatibleUpgrade(envelope.manifest, state)
+          : compatibleRuntime(envelope.manifest, state))
+      )
+        throw new OtaControlError(409, "INCOMPATIBLE_DEVICE");
+      if (kind === "ROLLBACK") {
+        const previous = envelopeSchema.parse(currentEnvelope);
+        if (
+          !envelope.manifest.rollbackCompatible ||
+          !previous.manifest.rollbackCompatible ||
+          envelope.manifest.stateSchemaRange !==
+            previous.manifest.stateSchemaRange
+        )
+          throw new OtaControlError(409, "ROLLBACK_UNAVAILABLE");
+      }
+    },
+  });
+}
 
 export function createDeploymentControl(
   db: Database,
@@ -52,5 +91,8 @@ export function createDeploymentControl(
       }
     },
   });
-  return { act: rollout.act };
+  return {
+    act: rollout.act,
+    recover: createDeploymentRecovery(db, options).request,
+  };
 }

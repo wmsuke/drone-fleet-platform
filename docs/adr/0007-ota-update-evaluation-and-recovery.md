@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168で端末の実適用、#169で固定snapshot受付、#170で観測・保存receipt・証拠評価・進捗API、#171で段階承認/APPLY配送・停止確認と再開を実装。制限付き復旧・介入詳細・OTA画面は未実装
+- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168で端末の実適用、#169で固定snapshot受付、#170で観測・保存receipt・証拠評価・進捗API、#171で段階承認/APPLY配送・停止確認と再開、#172で制限付きretry/rollbackと復旧評価を実装。intervention詳細とOTA画面は未実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -66,14 +66,14 @@ deployment受付は全targetのdevice予約、snapshot、初期stage、初期att
 
 HTTP操作者は現在anonymous / actorId nullのまま。idempotency scopeもanonymousとし、同一key・正規化本文hashなら元deployment、異なる本文は409。これは認証・認可の代わりではない。後述の別操作APIもidempotency key・理由を必須にする。
 
-| 軸         | 状態と意味                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 配送       | HELD（stage未解禁）/ PENDING / SENT / ACKNOWLEDGED / EXPIRED / FAILED / TIMED_OUT。受領は適用・評価の成功ではない                                             |
-| 適用事実   | RECEIVED → DOWNLOADING → VERIFIED → QUIESCING → SWITCHING → BOOTING → HEALTH_CHECKING → APPLIED。各段階からFAILED、停止可能地点でSTOPPED、判定不能でUNCERTAIN |
-| 評価       | PENDING / OBSERVING / SUCCEEDED / FAILED / UNCERTAIN。APPLIED報告だけではSUCCEEDEDにしない                                                                    |
-| target     | QUEUED / UPDATING / SUCCEEDED / FAILED / RECOVERING / WAITING_FOR_HUMAN / CANCELLED。UNCERTAIN評価はWAITING_FOR_HUMANとし、事実は別に保持                     |
-| stage      | PENDING / RUNNING / AWAITING_APPROVAL / PASSED / STOPPING / PAUSED / FAILED                                                                                   |
-| deployment | ACCEPTED / RUNNING / STOPPING / PAUSED / WAITING_FOR_HUMAN / COMPLETED / FAILED / CANCELLED                                                                   |
+| 軸         | 状態と意味                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 配送       | HELD（stage未解禁）/ PENDING / SENT / ACKNOWLEDGED / EXPIRED / FAILED / TIMED_OUT。受領は適用・評価の成功ではない                                                                     |
+| 適用事実   | RECEIVED → DOWNLOADING → VERIFIED → QUIESCING → SWITCHING → BOOTING → HEALTH_CHECKING → APPLIED。各段階からFAILED、停止可能地点でSTOPPED、判定不能でUNCERTAIN                         |
+| 評価       | PENDING / OBSERVING / SUCCEEDED / FAILED / UNCERTAIN。APPLIED報告だけではSUCCEEDEDにしない                                                                                            |
+| target     | QUEUED / UPDATING / SUCCEEDED / FAILED / RECOVERING / RECOVERED / WAITING_FOR_HUMAN / CANCELLED。RECOVEREDは旧版回復で元releaseの成功ではない。UNCERTAIN評価はWAITING_FOR_HUMANとする |
+| stage      | PENDING / RUNNING / AWAITING_APPROVAL / PASSED / STOPPING / PAUSED / FAILED                                                                                                           |
+| deployment | ACCEPTED / RUNNING / STOPPING / PAUSED / WAITING_FOR_HUMAN / COMPLETED / FAILED / CANCELLED                                                                                           |
 
 確かな失敗はFAILED、不足・矛盾・適用の有無が不明ならUNCERTAIN。新しい試行で元attemptを上書きしない。rollbackで旧版へ回復しても元の更新成功率へ加えない。全targetの目的release成功でだけCOMPLETEDとし、旧版回復や未着手取消を全件更新成功に含めない。
 
@@ -168,6 +168,8 @@ OTA開始前は通常commandの実行中・STARTED/UNCERTAINがないことと�
 子の更新可能応答はgateを閉じた後の新しい要求に対するものに限定し、bootId・fenceとIPC要求IDを照合する。古いIDLE応答やIPC内の未処理commandを残したまま旧子の停止へ進めない。
 
 ## 8. 制限付き再試行・rollbackと介入
+
+#172の[復旧API・永続予算・端末の既知正常版・評価と検証範囲](../ota-recovery.md)を参照する。自動実行は理由付きの復旧許可後に限り、障害検出だけでは開始しない。初期knownGoodは手動bootstrap版で、backend成功から自動昇格しない。通貨費用は未取得としてnullを保持し、256 MiBの受信body上限を課金全体の厳密な保証とは扱わない。実MQTTの通常更新E2E、実Linuxのrollback、保存証拠によるbackend復旧評価を分けて記録する。
 
 同じattemptのdownload再取得・event配送は適用をやり直す新attemptではない。新attemptには新attemptId・commandId・fenceを付け、原因attempt/recoveryIdへ関連付ける。
 

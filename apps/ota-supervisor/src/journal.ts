@@ -100,6 +100,7 @@ export class Journal {
       CREATE TABLE IF NOT EXISTS stops (attempt_id TEXT PRIMARY KEY, fence TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS health_samples (event_id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY CHECK(id=1), sequence INTEGER NOT NULL, json TEXT, hash TEXT);
+      CREATE TABLE IF NOT EXISTS target_budgets (target_id TEXT PRIMARY KEY, root_attempt_id TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, detected_at TEXT, deadline TEXT, retry_used INTEGER NOT NULL DEFAULT 0, rollback_used INTEGER NOT NULL DEFAULT 0);
       INSERT OR IGNORE INTO inventory(id,sequence) VALUES(1,-1);`);
     const check = this.db.prepare("PRAGMA quick_check").get() as {
       quick_check: string;
@@ -253,6 +254,112 @@ export class Journal {
         )
         .get(id) !== undefined
     );
+  }
+  budget(targetId: string) {
+    return this.db
+      .prepare("SELECT * FROM target_budgets WHERE target_id=?")
+      .get(targetId) as
+      | {
+          target_id: string;
+          root_attempt_id: string;
+          bytes: number;
+          detected_at: string | null;
+          deadline: string | null;
+          retry_used: number;
+          rollback_used: number;
+        }
+      | undefined;
+  }
+  authorize(request: OtaApplyRequest) {
+    const r = request.recovery;
+    if (!r) {
+      const existing = this.budget(request.targetId);
+      if (existing && existing.root_attempt_id !== request.attemptId)
+        throw new OtaError("RESULT_UNKNOWN");
+      this.db
+        .prepare(
+          "INSERT OR IGNORE INTO target_budgets(target_id,root_attempt_id) VALUES(?,?)",
+        )
+        .run(request.targetId, request.attemptId);
+      return;
+    }
+    const b = this.budget(request.targetId),
+      m = this.read();
+    if (
+      !b ||
+      b.root_attempt_id !== r.rootAttemptId ||
+      m.apply?.attemptId !== r.previousAttemptId ||
+      !["FAILED", "STOPPED", "APPLIED"].includes(m.phase)
+    )
+      throw new OtaError("RESULT_UNKNOWN");
+    if (
+      !b.deadline ||
+      b.bytes >= 268435456 ||
+      Date.now() >=
+        Math.min(Date.parse(b.deadline), Date.parse(r.budgetDeadline)) ||
+      Date.parse(request.resultDeadline) > Date.parse(b.deadline)
+    )
+      throw new OtaError("CAPACITY_EXCEEDED");
+    if ((r.kind === "RETRY" ? b.retry_used : b.rollback_used) >= 1)
+      throw new OtaError("CAPACITY_EXCEEDED");
+    if (r.kind === "RETRY") {
+      const events = this.events().filter(
+        (e) => e.attemptId === r.previousAttemptId,
+      );
+      if (
+        !events.some(
+          (e) =>
+            e.type === "PROGRESS" &&
+            e.state === "FAILED" &&
+            e.reason === "DOWNLOAD_FAILED",
+        ) ||
+        events.some(
+          (e) =>
+            e.type === "VERSION" ||
+            (e.type === "PROGRESS" &&
+              [
+                "VERIFIED",
+                "QUIESCING",
+                "SWITCHING",
+                "BOOTING",
+                "HEALTH_CHECKING",
+                "APPLIED",
+              ].includes(e.state)),
+        )
+      )
+        throw new OtaError("RESULT_UNKNOWN");
+    }
+    this.db
+      .prepare(
+        r.kind === "RETRY"
+          ? "UPDATE target_budgets SET retry_used=retry_used+1 WHERE target_id=?"
+          : "UPDATE target_budgets SET rollback_used=rollback_used+1 WHERE target_id=?",
+      )
+      .run(request.targetId);
+  }
+  accountBytes(targetId: string, n: number) {
+    this.transaction(() => {
+      const b = this.budget(targetId);
+      if (!b || !Number.isSafeInteger(n) || n < 0)
+        throw new OtaError("JOURNAL_CORRUPT");
+      this.db
+        .prepare("UPDATE target_budgets SET bytes=bytes+? WHERE target_id=?")
+        .run(n, targetId);
+    });
+    if (this.budget(targetId)!.bytes > 268435456)
+      throw new OtaError("CAPACITY_EXCEEDED");
+  }
+  failure(targetId: string) {
+    const now = new Date();
+    this.db
+      .prepare(
+        "UPDATE target_budgets SET detected_at=COALESCE(detected_at,?),deadline=COALESCE(deadline,?) WHERE target_id=?",
+      )
+      .run(
+        now.toISOString(),
+        new Date(now.getTime() + 900000).toISOString(),
+        targetId,
+      );
   }
   remember(request: OtaRequestMessage): boolean {
     const json = canonical(request);

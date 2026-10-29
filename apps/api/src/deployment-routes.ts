@@ -12,6 +12,46 @@ export function registerDeploymentRoutes(
   app: FastifyInstance,
   repository: DeploymentRepository,
 ) {
+  app.post(
+    "/deployments/:deploymentId/targets/:targetId/recover",
+    { bodyLimit: 2048 },
+    async (request, reply) => {
+      const params = z
+        .object({
+          deploymentId: z.uuid().transform((v) => v.toLowerCase()),
+          targetId: z.uuid().transform((v) => v.toLowerCase()),
+        })
+        .safeParse(request.params);
+      const body = z
+        .object({
+          kind: z.enum(["RETRY", "ROLLBACK"]),
+          reason: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        })
+        .strict()
+        .safeParse(request.body);
+      const key = idempotencyKeySchema.safeParse(
+        request.headers["idempotency-key"],
+      );
+      if (!params.success || !body.success || !key.success)
+        return reply.code(400).send({ error: "INVALID_RECOVERY_REQUEST" });
+      try {
+        const result = await repository.recover(
+          params.data.deploymentId,
+          params.data.targetId,
+          key.data,
+          body.data.kind,
+          body.data.reason,
+        );
+        return reply
+          .code(result.status === "UNAVAILABLE" ? 409 : 202)
+          .send(result);
+      } catch (error) {
+        if (error instanceof OtaControlError)
+          return reply.code(error.status).send({ error: error.reason });
+        return reply.code(503).send({ error: "RECOVERY_UNAVAILABLE" });
+      }
+    },
+  );
   for (const action of ["approve", "stop", "resume"] as const) {
     app.post(
       `/deployments/:deploymentId/${action === "approve" ? "stages/:stageId/approve" : action}`,

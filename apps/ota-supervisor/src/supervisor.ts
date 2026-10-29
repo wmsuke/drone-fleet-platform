@@ -93,12 +93,14 @@ export async function fetchEnvelope(
   config: SupervisorConfig,
   identity: OtaApplyRequest["release"],
   signal: AbortSignal,
+  onBytes: (n: number) => void = () => {},
 ) {
   const response = await fetchBytes(
     config.metadataSource,
     `/releases/${identity.releaseId}`,
     16384,
     signal,
+    onBytes,
   );
   const envelope = parseEnvelope(
     canonical(JSON.parse(response.toString("utf8")).envelope),
@@ -338,8 +340,15 @@ export class Supervisor {
       ) {
         this.inventoryAt = performance.now();
         const model = this.journal.read();
-        if (!model.fault && model.childPid !== null) {
+        if (
+          (!model.fault || model.phase === "FAILED") &&
+          model.childPid !== null
+        ) {
           const probe = await this.child.inspect("HEALTH", model.highestFence);
+          const budget =
+            model.apply?.type === "APPLY_RELEASE"
+              ? this.journal.budget(model.apply.targetId)
+              : undefined;
           this.journal.inventory({
             schemaVersion: 1,
             type: "INVENTORY",
@@ -348,6 +357,21 @@ export class Supervisor {
             timestamp: new Date().toISOString(),
             measuredAt: probe.measuredAt,
             sampleAgeMs: Math.ceil(probe.roundTripMs),
+            ...(budget
+              ? {
+                  recovery: {
+                    knownGood: this.identity(model.knownGood),
+                    attemptId: model.apply!.attemptId,
+                    phase:
+                      model.phase === "IDLE"
+                        ? ("RECEIVED" as const)
+                        : model.phase,
+                    downloadedBytes: budget.bytes,
+                    detectedAt: budget.detected_at,
+                    budgetDeadline: budget.deadline,
+                  },
+                }
+              : {}),
             readiness: {
               ...this.checks(probe),
               receipts:
@@ -412,7 +436,15 @@ export class Supervisor {
       throw new OtaError("CLOCK_UNTRUSTED");
     const m = this.journal.read();
     if (request.type === "APPLY_RELEASE") {
-      if (m.phase === "UNCERTAIN" || m.fault)
+      if (
+        m.phase === "UNCERTAIN" ||
+        (m.fault &&
+          !(
+            request.purpose === "ROLLBACK" &&
+            m.phase === "FAILED" &&
+            ["HEALTH_FAILED", "RESULT_UNKNOWN"].includes(m.fault)
+          ))
+      )
         throw new OtaError("RESULT_UNKNOWN");
       if (
         this.work ||
@@ -422,11 +454,31 @@ export class Supervisor {
         throw new OtaError("DEVICE_BUSY");
       if (BigInt(request.fence) <= BigInt(m.highestFence))
         throw new OtaError("FENCE_CONFLICT");
-      if (request.purpose !== "APPLY")
-        throw new OtaError("ROLLBACK_UNAVAILABLE");
-      if (!semver.gt(request.release.version, m.active.manifest.version))
+      if (request.purpose === "ROLLBACK") {
+        if (
+          !request.recovery ||
+          canonical(request.release) !==
+            canonical(this.identity(m.knownGood)) ||
+          request.release.digest === m.active.manifest.digest ||
+          !m.knownGood.manifest.rollbackCompatible ||
+          !m.active.manifest.rollbackCompatible ||
+          m.knownGood.manifest.stateSchemaRange !==
+            m.active.manifest.stateSchemaRange
+        )
+          throw new OtaError("ROLLBACK_UNAVAILABLE");
+        await verifyCompatible(m.knownGood, this.config.trustPath);
+        await verifyInstalled(this.config.root, m.knownGood);
+        this.inspectedIdentity(
+          await this.child.inspect("HEALTH", m.highestFence),
+        );
+      }
+      if (
+        request.purpose === "APPLY" &&
+        !semver.gt(request.release.version, m.active.manifest.version)
+      )
         throw new OtaError("INCOMPATIBLE_RELEASE");
       this.journal.transaction(() => {
+        this.journal.authorize(request);
         this.journal.remember(request);
         this.journal.change(
           {
@@ -439,6 +491,7 @@ export class Supervisor {
             downloadAttempts: 0,
             downloadStartedAt: null,
             health: null,
+            fault: null,
           },
           {
             type: "PROGRESS",
@@ -543,13 +596,20 @@ export class Supervisor {
     }
     if (Date.now() >= Date.parse(request.expiresAt)) return;
     if (this.journal.read().apply?.commandId !== apply.commandId) return;
-    if (request.challengeId)
+    if (request.challengeId) {
+      if (
+        Object.values(this.checks(probe)).includes("FAILED") &&
+        this.journal.read().phase === "APPLIED"
+      ) {
+        this.journal.failure(apply.targetId);
+        this.journal.change({ phase: "FAILED", fault: "HEALTH_FAILED" });
+      }
       this.journal.change(
         {},
         this.healthEvent(probe, request.commandId, request.challengeId),
         apply,
       );
-    else
+    } else
       this.journal.change(
         {},
         {
@@ -599,47 +659,78 @@ export class Supervisor {
     this.journal.change({ downloadStartedAt: started });
     const signal = AbortSignal.any([
       this.abort!.signal,
-      AbortSignal.timeout(60000),
+      AbortSignal.timeout(
+        Math.max(
+          1,
+          Math.min(
+            60000,
+            request.recovery
+              ? Date.parse(request.recovery.budgetDeadline) - Date.now()
+              : 60000,
+          ),
+        ),
+      ),
     ]);
     this.progress("DOWNLOADING");
-    const envelope = await fetchEnvelope(this.config, request.release, signal);
+    if (
+      request.purpose !== "ROLLBACK" &&
+      this.journal.budget(request.targetId)!.bytes + 16384 > 268435456
+    )
+      throw new OtaError("CAPACITY_EXCEEDED");
+    const account = (size: number) => {
+      this.journal.accountBytes(request.targetId, size);
+      const next = this.journal.read().downloadedBytes + size;
+      if (next > 268435456) throw new OtaError("CAPACITY_EXCEEDED");
+      this.journal.change({ downloadedBytes: next });
+    };
+    const envelope =
+      request.purpose === "ROLLBACK"
+        ? this.journal.read().knownGood
+        : await fetchEnvelope(this.config, request.release, signal, account);
+    await verifyCompatible(envelope, this.config.trustPath);
     await checkCapacity(this.config.root, envelope.manifest.size);
     let bytes: Buffer | undefined;
-    while (this.journal.read().downloadAttempts < 3) {
-      this.journal.change({
-        downloadAttempts: this.journal.read().downloadAttempts + 1,
-      });
-      try {
-        bytes = await fetchBytes(
-          this.config.artifactSource,
-          `/objects/${request.release.digest}.tar.gz`,
-          envelope.manifest.size,
-          signal,
-          (size) => {
-            const next = this.journal.read().downloadedBytes + size;
-            if (next > 256 * 1024 * 1024)
-              throw new OtaError("CAPACITY_EXCEEDED");
-            this.journal.change({ downloadedBytes: next });
-          },
-        );
-        break;
-      } catch (e) {
-        if (
-          e instanceof ReleaseError ||
-          e instanceof OtaError ||
-          signal.aborted ||
-          this.journal.read().downloadAttempts >= 3
-        )
-          throw e;
+    if (request.purpose === "ROLLBACK") {
+      await verifyInstalled(this.config.root, envelope);
+    } else
+      while (this.journal.read().downloadAttempts < 3) {
+        this.journal.change({
+          downloadAttempts: this.journal.read().downloadAttempts + 1,
+        });
+        try {
+          if (
+            this.journal.budget(request.targetId)!.bytes +
+              envelope.manifest.size >
+            268435456
+          )
+            throw new OtaError("CAPACITY_EXCEEDED");
+          bytes = await fetchBytes(
+            this.config.artifactSource,
+            `/objects/${request.release.digest}.tar.gz`,
+            envelope.manifest.size,
+            signal,
+            account,
+          );
+          break;
+        } catch (e) {
+          if (
+            (e instanceof ReleaseError && e.reason !== "DOWNLOAD_FAILED") ||
+            e instanceof OtaError ||
+            signal.aborted ||
+            this.journal.read().downloadAttempts >= 3
+          )
+            throw e;
+        }
       }
-    }
-    if (!bytes) throw new OtaError("DOWNLOAD_FAILED");
-    const partial = join(this.config.root, "private/download.partial");
-    await writeFile(partial, bytes, { mode: 0o600 });
-    try {
-      await stageArtifact(this.config.root, envelope, bytes);
-    } finally {
-      await unlink(partial);
+    if (request.purpose !== "ROLLBACK") {
+      if (!bytes) throw new OtaError("DOWNLOAD_FAILED");
+      const partial = join(this.config.root, "private/download.partial");
+      await writeFile(partial, bytes, { mode: 0o600 });
+      try {
+        await stageArtifact(this.config.root, envelope, bytes);
+      } finally {
+        await unlink(partial);
+      }
     }
     this.progress("VERIFIED", { candidate: envelope });
     if (this.closing) throw new OtaError("RESULT_UNKNOWN");
@@ -841,8 +932,10 @@ export class Supervisor {
     const reason =
       error instanceof ReleaseError || error instanceof OtaError
         ? error.reason
-        : "DOWNLOAD_FAILED";
+        : "RESULT_UNKNOWN";
     const m = this.journal.read();
+    if (m.apply?.type === "APPLY_RELEASE")
+      this.journal.failure(m.apply.targetId);
     const uncertain =
       ["QUIESCING", "SWITCHING", "BOOTING"].includes(m.phase) ||
       reason === "RESULT_UNKNOWN";
@@ -871,6 +964,7 @@ export class Supervisor {
               "INCOMPATIBLE_RELEASE",
               "INVALID_ARCHIVE",
               "DOWNLOAD_FAILED",
+              "DOWNLOAD_REJECTED",
               "CAPACITY_EXCEEDED",
               "CLOCK_UNTRUSTED",
               "FENCE_CONFLICT",

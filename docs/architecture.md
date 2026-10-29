@@ -345,6 +345,8 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 #166で[配信物管理](releases.md)、#167で[OTA通信契約](ota-protocol.md)とIoT Policy定義、#168で[opt-in supervisorと端末の実適用](ota-device.md)を追加した。supervisorがMQTT・公開鍵・独立journalを保持し、低権限の単一機体childはIPCで既存処理を使う。Linux lock、署名/互換検証、atomic切替、version/bootとlocal healthを確認する。#169で[deployment受付API](deployments-api.md)を追加し、不変snapshot・全機体予約・HELD attempt/outbox・auditを同時保存する。通常commandとfleet operationも同じdevice lockで予約を確認する。#170で[実稼働構成の観測、event保存/receipt・challenge・継続health評価と進捗API](ota-evaluation.md)、#171で[理由付きの段階解禁・永続APPLY配送・停止確認と再開](ota-rollout.md)を追加した。実AWSへのPolicy適用・OTA、実機、無停止移行、管理者への改ざん耐性は未検証または対象外とし、#135の既存AWS経路確認をOTAの検証へ読み替えない。
 
+#172で[OTAの制限付き復旧](ota-recovery.md)を追加した。APIが理由付きの許可と新attempt・fence・予算・outboxを同時保存し、永続workerが停止latchを維持したまま許可targetだけを配送する。supervisorのSQLiteでも累計転送・期限・retry/rollback回数を維持し、保持した既知正常bundleだけを戻す。backendは元更新失敗とrollback後の回復成功を別の評価に残す。
+
 ## Phase 4の設計と実装範囲
 
 #137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)、#143で一覧・詳細・確認APIと画面を実装した。#144で操作と状態変更のauditを同時commitする。
