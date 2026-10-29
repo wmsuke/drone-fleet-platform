@@ -974,3 +974,70 @@ export const otaStops = pgTable("ota_stops", {
   attempts: integer("attempts").notNull().default(0),
   confirmedEventId: uuid("confirmed_event_id"),
 });
+
+export const otaRecoveries = pgTable(
+  "ota_recoveries",
+  {
+    recoveryId: uuid("recovery_id").primaryKey(),
+    deploymentId: uuid("deployment_id")
+      .notNull()
+      .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => otaTargets.targetId, { onDelete: "restrict" }),
+    previousAttemptId: uuid("previous_attempt_id")
+      .notNull()
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+    rootAttemptId: uuid("root_attempt_id")
+      .notNull()
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" }),
+    attemptId: uuid("attempt_id")
+      .references(() => otaAttempts.attemptId, { onDelete: "restrict" })
+      .unique(),
+    kind: text("kind").notNull(),
+    key: varchar("key", { length: 128 }).notNull(),
+    requestHash: text("request_hash").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status").notNull(),
+    failureReason: text("failure_reason"),
+    requiredAction: text("required_action"),
+    releaseSnapshot: jsonb("release_snapshot").$type<Record<string, unknown>>(),
+    previousBootId: uuid("previous_boot_id"),
+    detectedAt: timestamp("detected_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    budgetDeadline: timestamp("budget_deadline", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    notBefore: timestamp("not_before", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    finishedAt: timestamp("finished_at", { withTimezone: true, mode: "date" }),
+    approvedAt: timestamp("approved_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    bytesAtApproval: bigint("bytes_at_approval", { mode: "number" }),
+    downloadedBytes: bigint("downloaded_bytes", { mode: "number" }),
+    cost: jsonb("cost").$type<{ amount: number; currency: string }>(),
+    evidence: jsonb("evidence").$type<string[]>().notNull(),
+    response: jsonb("response").$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [
+    uniqueIndex("ota_recovery_key_unique").on(t.deploymentId, t.key),
+    uniqueIndex("ota_recovery_active_unique")
+      .on(t.targetId)
+      .where(sql`${t.status} IN ('WAITING','RUNNING')`),
+    uniqueIndex("ota_recovery_attempt_limit")
+      .on(t.targetId, t.kind)
+      .where(sql`${t.attemptId} IS NOT NULL`),
+    check(
+      "ota_recovery_budget_valid",
+      sql`${t.budgetDeadline}=${t.detectedAt}+interval '900 seconds' AND ${t.kind} IN ('RETRY','ROLLBACK')`,
+    ),
+  ],
+);

@@ -40,7 +40,7 @@ STOP受領だけ、PUBACKだけ、期限超過だけでは停止完了にしな�
 
 未適用機体の再開には、現在INVENTORYの任意`readiness`にある7項目すべての成功も要求する。旧形式・チェック不足・別boot/version・15秒以上前の観測は`HEALTH_UNCONFIRMED`で拒否する。これは適用前の現状確認であり、更新成功の13標本/60秒を代替しない。
 
-未送信のまま止めた未期限切れattemptは、現在状態の検証後に元payloadと期限のまま再開できる。未解禁stageは承認待ちを維持する。STOPを発行したattempt、失敗・不確定、期限切れの再適用には新attemptが必要で、今回は409で拒否する。自動retry/rollbackと予算管理は#172の範囲である。残予算が存在しないことを架空の0消費や新しい期限で補わない。
+未送信のまま止めた未期限切れattemptは、現在状態の検証後に元payloadと期限のまま再開できる。未解禁stageは承認待ちを維持する。STOPを発行したattempt、失敗・不確定、期限切れの再適用を同じattemptで再開しない。#172で[許可条件・予算内の新attemptとrollback](ota-recovery.md)を追加した。不確定のまま自動実行せず、残予算が存在しないことを架空の0消費や新しい期限で補わない。
 
 `ota_actions`は理由・冪等要求hash・元応答を不変記録にし、成功auditも同じtransactionで保存する。必須承認、手動停止/再開、自動停止（system `ota-worker`）を区別する。`ota_rollouts`は現在の停止latch、`ota_dispatches`は全worker共通のclaim、`ota_stops`は不変STOP payload・再送・確認eventを保持する。評価はrevision採番で並べ、同一ミリ秒内の評価がUUID順で逆転しないようにする。既存評価はmigration時に従来の時刻/ID順で採番し直す。
 

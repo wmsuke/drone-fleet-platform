@@ -4,6 +4,8 @@
 
 ## 初回・定期のINVENTORY
 
+#172でAPPLYに任意のrecovery（recoveryId/previousAttemptId/rootAttemptId/kind/detectedAt/budgetDeadline/maxDownloadBytes）を追加した。ROLLBACKでは必須、kindとpurposeの一致、900秒の総期限、自己参照しないattempt、結果期限が総期限内であることを検証する。STOP/QUERYへこの項目を流用しない。INVENTORYにも任意のrecovery観測（knownGood/attemptId/phase/累計downloadedBytes/検出・総期限）を追加し、旧形式の未確認予算を0にしない。DOWNLOAD_FAILEDは一時的な取得失敗、DOWNLOAD_REJECTEDは恒久HTTP拒否・redirect等とし、後者はretryのallowlistに含めない。[復旧の条件](ota-recovery.md)を参照する。
+
 #171で任意の`readiness`（eventLoop/telemetry/sqlite/commandReady/mqtt/subscriptions/receipts各PASSED/FAILED）を追加した。旧形式は受信・観測登録できるが、未適用機体の再開には15秒未満・現在boot/versionに一致する全check成功を要求する。receiptsは子のtelemetry receiptと直近のINVENTORY保存receiptに基づく。attemptの更新成功、60秒health評価、切替前のattempt receiptへは流用しない。
 
 #170で初回deployment以前の観測用に、attempt scopeを持たない`otaInventoryMessageSchema`を追加した。旧attempt eventのscopeを省略可能にはしていない。`schemaVersion: 1`、`type: INVENTORY`、deviceId/eventId/永続sequence/supervisorBootId、timestamp/measuredAt/sampleAgeMs、`running: { release, bootId }`とcapabilitiesを持つ。capabilitiesはapplication=simulator、Linux platform、実Node.js version、OTA protocol/supervisor/state schema各1.0.0、healthContractVersion=ota-health-v1に限定する。未知項目を拒否し、測定から報告まで最大5秒とする。

@@ -174,7 +174,28 @@ describe("OTA v1 requests", () => {
     expect(
       otaRequestMessageSchema.safeParse({ ...apply, purpose: "ROLLBACK" })
         .success,
+    ).toBe(false);
+    const recovery = {
+      recoveryId: other,
+      previousAttemptId: other,
+      rootAttemptId: other,
+      kind: "ROLLBACK",
+      detectedAt: apply.createdAt,
+      budgetDeadline: new Date(
+        Date.parse(apply.createdAt) + 900000,
+      ).toISOString(),
+      maxDownloadBytes: 268435456,
+    };
+    expect(
+      otaRequestMessageSchema.safeParse({
+        ...apply,
+        purpose: "ROLLBACK",
+        recovery,
+      }).success,
     ).toBe(true);
+    expect(
+      otaRequestMessageSchema.safeParse({ ...apply, recovery }).success,
+    ).toBe(false);
     const control = {
       ...scope,
       commandId: other,

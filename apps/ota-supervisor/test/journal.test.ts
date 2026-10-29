@@ -16,6 +16,101 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true });
 });
 describe("OTA journal persistence", () => {
+  it("keeps recovery bytes, original deadline and retry/rollback limits after reopening SQLite", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ota-recovery-journal-"));
+    roots.push(directory);
+    const path = join(directory, "journal.sqlite"),
+      envelope = makeEnvelope(
+        packBundle(Buffer.from("console.info('budget');")),
+      );
+    let journal = new Journal(path);
+    journal.initialize("ota-test", envelope);
+    const root = applyRequest(envelope);
+    journal.transaction(() => {
+      journal.authorize(root);
+      journal.remember(root);
+      journal.change(
+        { apply: root, phase: "FAILED", highestFence: "1" },
+        {
+          type: "PROGRESS",
+          requestType: "APPLY_RELEASE",
+          commandId: root.commandId,
+          state: "FAILED",
+          reason: "DOWNLOAD_FAILED",
+          downloadedBytes: 0,
+        },
+      );
+    });
+    journal.failure(root.targetId);
+    journal.accountBytes(root.targetId, 100);
+    const original = journal.budget(root.targetId)!;
+    journal.close();
+    journal = new Journal(path);
+    const issuedAt = Date.now();
+    const retry = {
+      ...root,
+      createdAt: new Date(issuedAt).toISOString(),
+      expiresAt: new Date(issuedAt + 300000).toISOString(),
+      resultDeadline: new Date(issuedAt + 600000).toISOString(),
+      attemptId: randomUUID(),
+      commandId: randomUUID(),
+      fence: "2",
+      recovery: {
+        recoveryId: randomUUID(),
+        previousAttemptId: root.attemptId,
+        rootAttemptId: root.attemptId,
+        kind: "RETRY" as const,
+        detectedAt: original.detected_at!,
+        budgetDeadline: original.deadline!,
+        maxDownloadBytes: 268435456 as const,
+      },
+    };
+    journal.transaction(() => {
+      journal.authorize(retry);
+      journal.remember(retry);
+      journal.change({ apply: retry, phase: "FAILED", highestFence: "2" });
+    });
+    journal.failure(root.targetId);
+    journal.accountBytes(root.targetId, 50);
+    journal.close();
+    journal = new Journal(path);
+    expect(journal.budget(root.targetId)).toMatchObject({
+      bytes: 150,
+      retry_used: 1,
+      rollback_used: 0,
+      deadline: original.deadline,
+    });
+    expect(() =>
+      journal.authorize({
+        ...retry,
+        recovery: { ...retry.recovery, previousAttemptId: retry.attemptId },
+      }),
+    ).toThrow("CAPACITY_EXCEEDED");
+    const rollback = {
+      ...retry,
+      attemptId: randomUUID(),
+      commandId: randomUUID(),
+      purpose: "ROLLBACK" as const,
+      fence: "3",
+      recovery: {
+        ...retry.recovery,
+        kind: "ROLLBACK" as const,
+        previousAttemptId: retry.attemptId,
+      },
+    };
+    journal.transaction(() => {
+      journal.authorize(rollback);
+      journal.remember(rollback);
+      journal.change({ apply: rollback, highestFence: "3" });
+    });
+    expect(journal.budget(root.targetId)!.rollback_used).toBe(1);
+    journal.accountBytes(root.targetId, 268435456 - 150);
+    expect(() => journal.accountBytes(root.targetId, 1)).toThrow(
+      "CAPACITY_EXCEEDED",
+    );
+    expect(journal.budget(root.targetId)!.bytes).toBe(268435457);
+    journal.close();
+  });
   it("persists the initial inventory independently and confirms only its exact hash", async () => {
     const root = await mkdtemp(join(tmpdir(), "ota-inventory-"));
     roots.push(root);
@@ -190,7 +285,7 @@ describe("fixed-origin connection allowlist", () => {
           1024,
           AbortSignal.timeout(2000),
         ),
-      ).rejects.toThrow("DOWNLOAD_FAILED");
+      ).rejects.toThrow("DOWNLOAD_REJECTED");
       expect(hits).toBe(1);
       f.server.removeAllListeners("request");
       f.server.on("request", (_req, res) => res.end(Buffer.alloc(2048)));

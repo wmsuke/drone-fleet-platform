@@ -51,6 +51,18 @@ export const otaRequestMessageSchema = z
         ...request,
         type: z.literal("APPLY_RELEASE"),
         purpose: z.enum(["APPLY", "ROLLBACK"]),
+        recovery: z
+          .object({
+            recoveryId: id,
+            previousAttemptId: id,
+            rootAttemptId: id,
+            kind: z.enum(["RETRY", "ROLLBACK"]),
+            detectedAt: time,
+            budgetDeadline: time,
+            maxDownloadBytes: z.literal(268435456),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
     z
@@ -71,6 +83,35 @@ export const otaRequestMessageSchema = z
   ])
   .superRefine((v, ctx) => {
     const created = Date.parse(v.createdAt);
+    if (
+      v.type === "APPLY_RELEASE" &&
+      v.recovery &&
+      (v.recovery.previousAttemptId === v.attemptId ||
+        v.recovery.rootAttemptId === v.attemptId ||
+        created < Date.parse(v.recovery.detectedAt))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "invalid recovery ancestry or time",
+      });
+    if (
+      v.type === "APPLY_RELEASE" &&
+      v.recovery &&
+      (v.purpose !== (v.recovery.kind === "ROLLBACK" ? "ROLLBACK" : "APPLY") ||
+        Date.parse(v.recovery.budgetDeadline) -
+          Date.parse(v.recovery.detectedAt) !==
+          900000 ||
+        Date.parse(v.resultDeadline) > Date.parse(v.recovery.budgetDeadline))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "invalid recovery scope or budget",
+      });
+    if (v.type === "APPLY_RELEASE" && v.purpose === "ROLLBACK" && !v.recovery)
+      ctx.addIssue({
+        code: "custom",
+        message: "rollback requires recovery approval",
+      });
     const [start, result] =
       v.type === "APPLY_RELEASE"
         ? [300000, 600000]
@@ -131,6 +172,7 @@ const failureReason = z.enum([
   "INCOMPATIBLE_RELEASE",
   "INVALID_ARCHIVE",
   "DOWNLOAD_FAILED",
+  "DOWNLOAD_REJECTED",
   "CAPACITY_EXCEEDED",
   "CLOCK_UNTRUSTED",
   "FENCE_CONFLICT",
@@ -252,6 +294,17 @@ export const otaInventoryMessageSchema = z
     timestamp: time,
     measuredAt: time,
     sampleAgeMs: count.max(5000),
+    recovery: z
+      .object({
+        knownGood: otaReleaseIdentitySchema,
+        attemptId: id.nullable(),
+        phase: state,
+        downloadedBytes: count,
+        detectedAt: time.nullable(),
+        budgetDeadline: time.nullable(),
+      })
+      .strict()
+      .optional(),
     // readinessは再開の現状確認だけに使い、更新成功や継続healthへ流用しない。
     readiness: z
       .object({

@@ -11,6 +11,7 @@ import {
   otaRollouts,
   otaActions,
   otaStops,
+  otaRecoveries,
   type Database,
 } from "@drone-fleet/database";
 
@@ -72,6 +73,11 @@ export function createDeploymentQueries(db: Database) {
             sql`SELECT clock_timestamp()::text AS now`,
           );
           const now = new Date(time!.now);
+          const recoveries = await tx
+            .select()
+            .from(otaRecoveries)
+            .where(eq(otaRecoveries.deploymentId, id))
+            .orderBy(desc(otaRecoveries.approvedAt));
           const [control] = await tx
             .select()
             .from(otaRollouts)
@@ -238,6 +244,28 @@ export function createDeploymentQueries(db: Database) {
             ...deployment,
             createdAt: deployment.createdAt.toISOString(),
             evaluatedAt: now.toISOString(),
+            recoveries: recoveries.map((r) => ({
+              recoveryId: r.recoveryId,
+              targetId: r.targetId,
+              previousAttemptId: r.previousAttemptId,
+              rootAttemptId: r.rootAttemptId,
+              attemptId: r.attemptId,
+              kind: r.kind,
+              status: r.status,
+              reason: r.reason,
+              failureReason: r.failureReason,
+              requiredAction: r.requiredAction,
+              detectedAt: r.detectedAt.toISOString(),
+              approvedAt: r.approvedAt.toISOString(),
+              notBefore: r.notBefore.toISOString(),
+              startedAt: r.startedAt?.toISOString() ?? null,
+              finishedAt: r.finishedAt?.toISOString() ?? null,
+              budgetDeadline: r.budgetDeadline.toISOString(),
+              bytesAtApproval: r.bytesAtApproval,
+              downloadedBytes: r.downloadedBytes,
+              cost: r.cost,
+              evidence: r.evidence,
+            })),
             control: control
               ? {
                   stoppedAt: control.stoppedAt?.toISOString() ?? null,

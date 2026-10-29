@@ -474,6 +474,7 @@ docker compose down --volumes
 - [OTA deploymentの受付API](docs/deployments-api.md)
 - [OTA進捗の保存と証拠評価](docs/ota-evaluation.md)
 - [OTAの段階承認・配信停止と再開](docs/ota-rollout.md)
+- [OTAの制限付きretry・rollbackと復旧評価](docs/ota-recovery.md)
 - [端末の実更新と起動後health（opt-in simulator）](docs/ota-device.md)
 - [ADR 0007: OTAの実更新・成功評価・復旧境界](docs/adr/0007-ota-update-evaluation-and-recovery.md)
 

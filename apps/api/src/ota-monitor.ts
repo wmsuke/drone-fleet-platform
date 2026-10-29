@@ -1,6 +1,7 @@
 import {
   createOtaRepository,
   createOtaRollout,
+  createOtaRecovery,
   type Database,
 } from "@drone-fleet/database";
 
@@ -8,6 +9,7 @@ export function createOtaMonitor(
   db: Database,
   publish: (topic: string, payload: string, expiresAt: Date) => Promise<void>,
   repository = createOtaRepository(db),
+  recovery = createOtaRecovery(db),
 ) {
   const rollout = createOtaRollout(db);
   let stopped = false,
@@ -30,6 +32,14 @@ export function createOtaMonitor(
         await publish(send.topic, send.payload, send.expiresAt);
       } catch {
         /* 保存した同QUERYの再送だけを次回走査へ残す */
+      }
+    }
+    for (const send of await recovery.tick()) {
+      if (stopped) break;
+      try {
+        await recovery.deliver(send, publish);
+      } catch {
+        /* 同じ復旧attemptの配送再送だけを残す */
       }
     }
   }

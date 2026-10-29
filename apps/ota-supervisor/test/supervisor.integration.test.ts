@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rm, readFile } from "node:fs/promises";
+import { rm, readFile, writeFile } from "node:fs/promises";
 import { randomUUID, sign } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { canonical } from "@drone-fleet/releases";
@@ -66,7 +66,7 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
       await rm(f.root, { recursive: true, force: true });
     }
   });
-  it("runs a different signed bundle, preserves REBOOT/RETURN_HOME, and records 60 seconds of real health", async () => {
+  it("runs a signed bundle and explicitly rolls back to the retained old bundle after a health failure", async () => {
     const app = await setup();
     const before = await app.child.inspect("HEALTH", "0");
     expect(before.behavior).toBe("baseline");
@@ -157,7 +157,88 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
     expect((await supervisor.child.inspect("HEALTH", "1")).version).toBe(
       "0.2.0",
     );
-  }, 110000);
+    await normal("RETURN_HOME");
+    broker.receiptEnabled = false;
+    await delay(16000);
+    const failureTime = Date.now();
+    await supervisor.handle({
+      ...queryBase,
+      type: "QUERY_STATE",
+      commandId: randomUUID(),
+      applyCommandId: request.commandId,
+      challengeId: randomUUID(),
+      createdAt: new Date(failureTime).toISOString(),
+      expiresAt: new Date(failureTime + 15000).toISOString(),
+      resultDeadline: new Date(failureTime + 15000).toISOString(),
+    });
+    expect(supervisor.journal.read().phase).toBe("FAILED");
+    expect(supervisor.journal.events().at(-1)).toMatchObject({
+      type: "HEALTH",
+      checks: { receipts: "FAILED" },
+    });
+    broker.receiptEnabled = true;
+    await normal("RETURN_HOME");
+    const observed = await supervisor.child.inspect("HEALTH", "1"),
+      budget = supervisor.journal.budget(request.targetId)!;
+    const start = Date.now(),
+      rollback = {
+        ...request,
+        purpose: "ROLLBACK" as const,
+        release: identity(f.baseline),
+        attemptId: randomUUID(),
+        commandId: randomUUID(),
+        fence: "2",
+        createdAt: new Date(start).toISOString(),
+        expiresAt: new Date(start + 300000).toISOString(),
+        resultDeadline: new Date(start + 600000).toISOString(),
+        recovery: {
+          recoveryId: randomUUID(),
+          previousAttemptId: request.attemptId,
+          rootAttemptId: request.attemptId,
+          kind: "ROLLBACK" as const,
+          detectedAt: budget.detected_at!,
+          budgetDeadline: budget.deadline!,
+          maxDownloadBytes: 268435456 as const,
+        },
+      };
+    const trust = await readFile(f.config.trustPath, "utf8");
+    try {
+      await writeFile(f.config.trustPath, JSON.stringify({ keys: [] }));
+      await expect(supervisor.handle(rollback)).rejects.toThrow(
+        "UNTRUSTED_KEY",
+      );
+    } finally {
+      await writeFile(f.config.trustPath, trust);
+    }
+    expect(supervisor.journal.budget(request.targetId)!.rollback_used).toBe(0);
+    await supervisor.handle(rollback);
+    await supervisor.wait();
+    expect(supervisor.journal.read()).toMatchObject({
+      phase: "APPLIED",
+      active: f.baseline,
+      knownGood: f.baseline,
+      health: { count: 13 },
+    });
+    const restored = await supervisor.child.inspect("HEALTH", "2");
+    expect(restored.version).toBe("0.1.0");
+    expect(restored.bootId).not.toBe(observed.bootId);
+    expect(restored.behavior).toBe("baseline");
+    expect(supervisor.journal.budget(request.targetId)).toMatchObject({
+      rollback_used: 1,
+      bytes: budget.bytes,
+      deadline: budget.deadline,
+    });
+    expect(
+      supervisor.journal
+        .events()
+        .some(
+          (e) =>
+            e.attemptId === rollback.attemptId &&
+            e.type === "VERSION" &&
+            e.running.release.releaseId === f.baseline.manifest.releaseId,
+        ),
+    ).toBe(true);
+  }, 200000);
   it.each(["signature", "digest", "compatibility"])(
     "keeps the active bundle when %s verification fails",
     async (kind) => {

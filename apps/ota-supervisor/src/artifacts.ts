@@ -150,7 +150,13 @@ export async function fetchBytes(
             response.headers["content-encoding"] !== "identity")
         ) {
           response.destroy();
-          reject(new ReleaseError("DOWNLOAD_FAILED"));
+          reject(
+            new ReleaseError(
+              response.statusCode === 429 || (response.statusCode ?? 0) >= 500
+                ? "DOWNLOAD_FAILED"
+                : "DOWNLOAD_REJECTED",
+            ),
+          );
           return;
         }
         const chunks: Buffer[] = [];
@@ -182,7 +188,23 @@ export async function fetchBytes(
       );
     });
     request.setTimeout(10000, () => request.destroy(new Error("idle timeout")));
-    request.once("error", reject);
+    request.once("error", (error: Error & { code?: string }) =>
+      reject(
+        error instanceof ReleaseError
+          ? error
+          : new ReleaseError(
+              [
+                "ECONNRESET",
+                "ECONNREFUSED",
+                "ETIMEDOUT",
+                "EAI_AGAIN",
+                "ABORT_ERR",
+              ].includes(error.code ?? "") || error.message.includes("timeout")
+                ? "DOWNLOAD_FAILED"
+                : "DOWNLOAD_REJECTED",
+            ),
+      ),
+    );
     request.once("close", () => clearTimeout(connectTimer));
     request.end();
   });
@@ -216,6 +238,7 @@ export async function verifyCompatible(envelope: Envelope, trustPath: string) {
     m.application !== "simulator" ||
     !semver.satisfies(process.versions.node, m.nodeRange) ||
     !semver.satisfies("1.0.0", m.supervisorRange) ||
+    !semver.satisfies("1.0.0", m.otaProtocolRange) ||
     !semver.satisfies("1.0.0", m.stateSchemaRange)
   )
     throw new ReleaseError("INCOMPATIBLE_RELEASE");

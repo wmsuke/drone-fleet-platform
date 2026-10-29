@@ -29,10 +29,12 @@ import {
   otaDeviceStates,
   otaInventories,
   otaReservations,
+  otaRecoveries,
   devices,
   releases,
 } from "./schema.js";
 import { evaluateOta, type OtaVerdict } from "./ota-evaluation.js";
+import { appendAudit } from "./audit.js";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 const hash = (json: string) => createHash("sha256").update(json).digest("hex");
@@ -77,10 +79,12 @@ async function context(tx: Tx, id: string) {
   );
   const parsed =
     apply.success && apply.data.type === "APPLY_RELEASE" ? apply.data : null;
-  const manifest = row.deployment.releaseSnapshot.manifest as Record<
-    string,
-    unknown
-  >;
+  const [recovery] = await tx
+    .select()
+    .from(otaRecoveries)
+    .where(eq(otaRecoveries.attemptId, id));
+  const manifest = (recovery?.releaseSnapshot ?? row.deployment.releaseSnapshot)
+    .manifest as Record<string, unknown>;
   const assigned =
     parsed &&
     parsed.deviceId === row.target.deviceId &&
@@ -89,6 +93,14 @@ async function context(tx: Tx, id: string) {
     parsed.targetId === row.target.targetId &&
     parsed.attemptId === id &&
     parsed.commandId === row.attempt.commandId &&
+    parsed.purpose === row.attempt.purpose &&
+    Boolean(parsed.recovery) === Boolean(recovery) &&
+    (!recovery ||
+      (parsed.recovery?.recoveryId === recovery.recoveryId &&
+        parsed.recovery.previousAttemptId === recovery.previousAttemptId &&
+        parsed.recovery.rootAttemptId === recovery.rootAttemptId &&
+        parsed.recovery.budgetDeadline ===
+          recovery.budgetDeadline.toISOString())) &&
     parsed.fence === row.attempt.fence.toString() &&
     parsed.createdAt === row.attempt.startedAt?.toISOString() &&
     parsed.resultDeadline === row.attempt.resultDeadline?.toISOString() &&
@@ -98,6 +110,7 @@ async function context(tx: Tx, id: string) {
     );
   return {
     ...row,
+    recovery,
     current:
       current?.attemptId === id &&
       reservation?.targetId === row.target.targetId &&
@@ -199,12 +212,64 @@ export function createOtaRepository(
       .update(otaAttempts)
       .set({ evaluationStatus: verdict.status })
       .where(eq(otaAttempts.attemptId, id));
+    if (c.recovery) {
+      const terminal = ["SUCCEEDED", "FAILED", "UNCERTAIN"].includes(
+        verdict.status,
+      );
+      if (terminal) {
+        await appendAudit(tx, {
+          action: "deployment.recovery_changed",
+          targetKind: "deployment",
+          targetId: c.target.deploymentId,
+          system: "ota-worker",
+          metadata: { afterStatus: verdict.status, reason: verdict.reason },
+        });
+        const receivedBytes = rows
+          .filter(
+            (r) => r.acceptance === "ACCEPTED" && r.payload.type === "PROGRESS",
+          )
+          .map((r) => Number(r.payload.downloadedBytes));
+        await tx
+          .update(otaRecoveries)
+          .set({
+            status: verdict.status,
+            failureReason:
+              verdict.status === "SUCCEEDED" ? null : verdict.reason,
+            requiredAction:
+              verdict.status === "SUCCEEDED"
+                ? null
+                : "INSPECT_BACKUP_OR_REPLACE_DEVICE",
+            finishedAt: now,
+            downloadedBytes:
+              receivedBytes.length && c.recovery.bytesAtApproval !== null
+                ? c.recovery.bytesAtApproval + Math.max(...receivedBytes)
+                : null,
+            evidence: [
+              ...new Set([...c.recovery.evidence, ...verdict.evidence]),
+            ],
+          })
+          .where(eq(otaRecoveries.recoveryId, c.recovery.recoveryId));
+        await tx
+          .update(otaDeployments)
+          .set({
+            status:
+              verdict.status === "SUCCEEDED" &&
+              c.recovery.kind === "RETRY" &&
+              c.deployment.status === "PAUSED"
+                ? "PAUSED"
+                : "WAITING_FOR_HUMAN",
+          })
+          .where(eq(otaDeployments.deploymentId, c.target.deploymentId));
+      }
+    }
     await tx
       .update(otaTargets)
       .set({
         status:
           verdict.status === "SUCCEEDED"
-            ? "SUCCEEDED"
+            ? c.recovery?.kind === "ROLLBACK"
+              ? "RECOVERED"
+              : "SUCCEEDED"
             : verdict.status === "FAILED"
               ? "FAILED"
               : verdict.status === "UNCERTAIN"
@@ -797,7 +862,9 @@ export function createOtaRepository(
                   : null;
             const payload = otaRequestMessageSchema.parse({
               ...Object.fromEntries(
-                Object.entries(c.apply).filter(([key]) => key !== "purpose"),
+                Object.entries(c.apply).filter(
+                  ([key]) => !["purpose", "recovery"].includes(key),
+                ),
               ),
               type: "QUERY_STATE",
               commandId,

@@ -22,6 +22,7 @@ import {
   otaDeviceStates,
   otaReservations,
   otaInventories,
+  otaRecoveries,
 } from "./schema.js";
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -243,6 +244,15 @@ export function createOtaRollout(
   }
   async function reconcile(tx: Tx, d: Deployment, now: Date) {
     if (["COMPLETED", "CANCELLED", "FAILED"].includes(d.status)) return;
+    const recoveries = await tx
+      .select()
+      .from(otaRecoveries)
+      .where(eq(otaRecoveries.deploymentId, d.deploymentId));
+    if (
+      d.status === "PAUSED" &&
+      recoveries.some((r) => ["WAITING", "RUNNING"].includes(r.status))
+    )
+      return;
     const all = await rows(tx, d.deploymentId);
     for (const r of all) {
       if (
@@ -329,7 +339,9 @@ export function createOtaRollout(
             );
             const payload = otaRequestMessageSchema.parse({
               ...Object.fromEntries(
-                Object.entries(apply).filter(([k]) => k !== "purpose"),
+                Object.entries(apply).filter(
+                  ([k]) => !["purpose", "recovery"].includes(k),
+                ),
               ),
               type: "STOP_UPDATE",
               commandId: randomUUID(),
@@ -366,11 +378,22 @@ export function createOtaRollout(
       await tx
         .update(otaDeployments)
         .set({
-          status: confirmed
-            ? "PAUSED"
-            : timedOut
-              ? "WAITING_FOR_HUMAN"
-              : "STOPPING",
+          status: recoveries.some(
+            (r) =>
+              (r.kind === "ROLLBACK" && r.status === "SUCCEEDED") ||
+              (["FAILED", "UNCERTAIN", "UNAVAILABLE"].includes(r.status) &&
+                ![
+                  "RECOVERY_ACTIVE",
+                  "DEPLOYMENT_NOT_PAUSED",
+                  "FAILURE_UNCONFIRMED",
+                ].includes(r.failureReason ?? "")),
+          )
+            ? "WAITING_FOR_HUMAN"
+            : confirmed
+              ? "PAUSED"
+              : timedOut
+                ? "WAITING_FOR_HUMAN"
+                : "STOPPING",
         })
         .where(eq(otaDeployments.deploymentId, d.deploymentId));
       if (confirmed)
@@ -389,7 +412,11 @@ export function createOtaRollout(
       const targets = all.filter((r) => r.target.stageId === stage.stageId);
       if (
         targets.length === stage.deviceIds.length &&
-        targets.every((r) => r.attempt.evaluationStatus === "SUCCEEDED")
+        targets.every(
+          (r) =>
+            r.attempt.evaluationStatus === "SUCCEEDED" &&
+            r.attempt.purpose === "APPLY",
+        )
       ) {
         if (
           !(await Promise.all(targets.map((r) => healthy(tx, r, now)))).every(
@@ -424,7 +451,11 @@ export function createOtaRollout(
     if (
       updated.length &&
       updated.every((s) => s.status === "PASSED") &&
-      all.every((r) => r.attempt.evaluationStatus === "SUCCEEDED") &&
+      all.every(
+        (r) =>
+          r.attempt.evaluationStatus === "SUCCEEDED" &&
+          r.attempt.purpose === "APPLY",
+      ) &&
       (await Promise.all(all.map((r) => healthy(tx, r, now)))).every(Boolean)
     ) {
       await tx
@@ -470,6 +501,20 @@ export function createOtaRollout(
           return previous.response;
         }
         const now = await clock(tx);
+        if (action === "stop")
+          await tx
+            .update(otaRecoveries)
+            .set({
+              status: "CANCELLED",
+              finishedAt: now,
+              failureReason: "OPERATOR_STOP",
+            })
+            .where(
+              and(
+                eq(otaRecoveries.deploymentId, id),
+                sql`${otaRecoveries.status} IN ('WAITING','RUNNING')`,
+              ),
+            );
         await reconcile(tx, d, now);
         const [current] = await tx
           .select()
@@ -487,6 +532,8 @@ export function createOtaRollout(
           await latch(tx, d, now, reason, false);
           status = "STOPPING";
         } else if (action === "resume") {
+          if (all.some((r) => r.attempt.purpose === "ROLLBACK"))
+            fail("ROLLBACK_REQUIRES_NEW_DEPLOYMENT");
           if (current!.status !== "PAUSED" || !control?.stoppedAt)
             fail("STOP_UNCONFIRMED");
           await validate(tx, d, all, now);
@@ -729,6 +776,16 @@ export function createOtaRollout(
           const all = await rows(tx, d.deploymentId);
           if (control?.stoppedAt) {
             for (const r of all) {
+              const [recovering] = await tx
+                .select()
+                .from(otaRecoveries)
+                .where(
+                  and(
+                    eq(otaRecoveries.attemptId, r.attempt.attemptId),
+                    sql`${otaRecoveries.status} IN ('WAITING','RUNNING')`,
+                  ),
+                );
+              if (recovering && current!.status === "PAUSED") continue;
               const [stop] = await tx
                 .select()
                 .from(otaStops)

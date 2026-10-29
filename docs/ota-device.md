@@ -10,7 +10,7 @@
 - 同機体のCLIはLinux `flock`で排他にする。新attemptは最高fenceを超える必要があり、同commandIdの同本文は再適用しない。別本文、古いfence、同attemptの別APPLYは拒否する。受信STOPのtombstoneを残し、後着APPLYを始めない。
 - progress、VERSION、QUERYへのHEALTH/STATE、未確認eventをSQLiteへ保存する。eventはDB保存receiptのscope/eventId/hashがすべて一致して初めて確認済みにする。PUBACKでは消さず、同じeventを再送する。
 
-`APPLIED`は端末内の適用・health確認の事実で、deploymentの成功ではない。サーバー側のchallenge消費・期限内DB保存・継続評価は#170、device予約とcommand受付gateは#169、段階/停止集約は#171、承認付きrollbackは#172の範囲である。端末のROLLBACK要求は現段階では拒否し、失敗時にも旧版へ自動で切り戻さない。
+`APPLIED`は端末内の適用・health確認の事実で、deploymentの成功ではない。サーバー側のchallenge消費・期限内DB保存・継続評価は#170、device予約とcommand受付gateは#169、段階/停止集約は#171で実装した。#172で[承認付きrollbackと永続予算](ota-recovery.md)を追加した。独立した新attemptと予算・旧既知正常版・排他の確認を必要とし、失敗時に自動で切り戻さない。
 
 ## bundleの生成とbaseline導入
 
@@ -70,7 +70,7 @@ event loopの応答、telemetry生成の進行、永続SQLiteの読書き、comm
 
 新子では起動を30秒で確認し、5秒間隔で13標本・60秒以上・gap 10秒以下の連続成功をjournalへ保存してからlocal APPLIEDを報告する。FAILED checkや期限超過、別boot・応答不能を成功へ補完しない。QUERY_STATEの一回限りchallengeに対応するHEALTHも採取・永続送信するが、サーバーでのchallenge照合・継続成功評価は#170で行う。
 
-#170で`OTA_ENABLED=true`のingestorへ保存/receiptを追加し、APIがchallengeと継続healthを評価する経路を追加した。[証拠評価](ota-evaluation.md)を参照する。supervisorは初回deployment前にもINVENTORYで実稼働版・能力を報告する。`compose.ota.yaml`はAPI/ingestorのOTAを明示的に有効にするが、stage解禁とAPPLY配送は#171の範囲で、受付後はまだHELDに留まる。`test:ota-device`の限定fixtureと、実MQTT/DBを使う`test:ota-backend`の確認範囲を区別する。
+#170で`OTA_ENABLED=true`のingestorへ保存/receiptを追加し、APIがchallengeと継続healthを評価する経路を追加した。[証拠評価](ota-evaluation.md)を参照する。supervisorは初回deployment前にもINVENTORYで実稼働版・能力を報告する。`compose.ota.yaml`はAPI/ingestorのOTAを明示的に有効にする。#171で承認後のstage解禁とAPPLY配送、#172で許可した復旧attemptとrollbackを追加した。`test:ota-device`の限定fixtureと、実MQTT/DBを使う`test:ota-backend`の確認範囲を区別する。
 
 ## 検証と停止
 
