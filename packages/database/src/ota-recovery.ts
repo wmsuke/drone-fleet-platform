@@ -542,6 +542,9 @@ export function createOtaRecovery(
             c = await view(tx, r.targetId);
           if (now < r.notBefore) return;
           if (c.a.attemptId !== r.attemptId || c.d.status !== "PAUSED") {
+            // 別targetの失敗で配信停止した場合、既に適用中の復旧を「不能/終了」に補完しない。
+            // 通常の停止workerへ引き継ぎ、実際の終端/停止結果を待つ。
+            if (fresh.status === "RUNNING") return;
             await unavailable(tx, fresh, now, "RECOVERY_STOPPED_OR_SUPERSEDED");
             return;
           }

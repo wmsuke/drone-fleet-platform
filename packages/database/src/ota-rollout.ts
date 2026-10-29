@@ -248,7 +248,10 @@ export function createOtaRollout(
       .select()
       .from(otaRecoveries)
       .where(eq(otaRecoveries.deploymentId, d.deploymentId));
-    if (recoveries.some((r) => ["WAITING", "RUNNING"].includes(r.status)))
+    if (
+      d.status === "PAUSED" &&
+      recoveries.some((r) => ["WAITING", "RUNNING"].includes(r.status))
+    )
       return;
     const all = await rows(tx, d.deploymentId);
     for (const r of all) {
@@ -782,7 +785,7 @@ export function createOtaRollout(
                     sql`${otaRecoveries.status} IN ('WAITING','RUNNING')`,
                   ),
                 );
-              if (recovering) continue;
+              if (recovering && current!.status === "PAUSED") continue;
               const [stop] = await tx
                 .select()
                 .from(otaStops)

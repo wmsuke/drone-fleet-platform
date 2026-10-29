@@ -253,7 +253,9 @@ export function createOtaRepository(
           .update(otaDeployments)
           .set({
             status:
-              verdict.status === "SUCCEEDED" && c.recovery.kind === "RETRY"
+              verdict.status === "SUCCEEDED" &&
+              c.recovery.kind === "RETRY" &&
+              c.deployment.status === "PAUSED"
                 ? "PAUSED"
                 : "WAITING_FOR_HUMAN",
           })

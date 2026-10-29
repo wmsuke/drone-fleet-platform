@@ -474,6 +474,23 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
     await inventory(old, 256, { ...ready, sqlite: "FAILED" });
     expect((await request()).failureReason).toBe("HEALTH_UNCONFIRMED");
   });
+  it("hands an in-flight recovery to stop processing when another target stops the deployment", async () => {
+    const { sends } = await releaseRetry();
+    expect(sends).toHaveLength(1);
+    await db!
+      .update(otaDeployments)
+      .set({ status: "WAITING_FOR_HUMAN" })
+      .where(eq(otaDeployments.deploymentId, root.deploymentId));
+    expect(await repository.tick()).toEqual([]);
+    expect((await db!.select().from(otaRecoveries))[0]).toMatchObject({
+      status: "RUNNING",
+      finishedAt: null,
+    });
+    const stops = await createOtaRollout(db!, { clock: () => now }).tick();
+    expect(stops).toHaveLength(1);
+    expect(JSON.parse(stops[0]!.payload).type).toBe("STOP_UPDATE");
+    expect((await db!.select().from(otaRecoveries))[0]!.finishedAt).toBeNull();
+  });
   it("rejects bytes and time budget exhaustion and leaves a human action with unknown cost", async () => {
     await inventory(old, 268435456);
     const rejected = await request();
@@ -577,12 +594,7 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
       ) as OtaApplyRequest,
     };
   }
-  it("records rollback success separately from the original failure only after old-version health evidence", async () => {
-    const { accepted, apply } = await rollback();
-    expect(apply.purpose).toBe("ROLLBACK");
-    expect(apply.release).toEqual(identity(old));
-    const [r] = await db!.select().from(otaRecoveries);
-    expect(r!.finishedAt).toBeNull();
+  async function finish(apply: OtaApplyRequest) {
     const fixture = otaFixture(Date.parse(apply.createdAt));
     const events = fixture.events.map((e) => ({
       ...e,
@@ -636,6 +648,14 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
         fixture.rows[n]!.receivedAt,
       );
     }
+  }
+  it("records rollback success separately from the original failure only after old-version health evidence", async () => {
+    const { accepted, apply } = await rollback();
+    expect(apply.purpose).toBe("ROLLBACK");
+    expect(apply.release).toEqual(identity(old));
+    const [r] = await db!.select().from(otaRecoveries);
+    expect(r!.finishedAt).toBeNull();
+    await finish(apply);
     const after = (
       await db!
         .select()
@@ -667,6 +687,28 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
         trustStorePath: "/unused",
       }).find(root.deploymentId, 1))!.recoveries[0]!.status,
     ).toBe("SUCCEEDED");
+  });
+  it("does not clear a deployment-wide stop when one retry later succeeds", async () => {
+    const { sends } = await releaseRetry();
+    const apply = otaRequestMessageSchema.parse(
+      JSON.parse(sends[0]!.payload),
+    ) as OtaApplyRequest;
+    await db!
+      .update(otaDeployments)
+      .set({ status: "WAITING_FOR_HUMAN" })
+      .where(eq(otaDeployments.deploymentId, root.deploymentId));
+    await finish(apply);
+    expect((await db!.select().from(otaRecoveries))[0]!.status).toBe(
+      "SUCCEEDED",
+    );
+    expect(
+      (
+        await db!
+          .select()
+          .from(otaDeployments)
+          .where(eq(otaDeployments.deploymentId, root.deploymentId))
+      )[0]!.status,
+    ).toBe("WAITING_FOR_HUMAN");
   });
   it("records rollback failure without recursive rollback or success by acceptance", async () => {
     const { apply } = await rollback();
