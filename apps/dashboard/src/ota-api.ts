@@ -315,6 +315,7 @@ async function request(
 ): Promise<unknown> {
   const response = await fetch(`${base}${path}`, {
     method: pending ? "POST" : "GET",
+    cache: "no-store",
     headers: {
       Accept: "application/json",
       ...(pending

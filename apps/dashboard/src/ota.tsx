@@ -107,7 +107,11 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
   });
   const detail = useQuery({
     queryKey: ["ota-detail", base, id, evidenceLimit],
-    queryFn: ({ signal }) => fetchDeployment(base, id!, signal, evidenceLimit),
+    queryFn: async ({ signal }) => {
+      const requestedAt = performance.now();
+      const data = await fetchDeployment(base, id!, signal, evidenceLimit);
+      return { ...data, requestedAt };
+    },
     enabled: !!id && valid,
     retry: false,
     refetchInterval: 5000,
@@ -126,7 +130,7 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
   const q = id ? detail : list;
   const now = detail.data
     ? Date.parse(detail.data.evaluatedAt) +
-      Math.max(0, Date.now() - detail.dataUpdatedAt)
+      Math.max(0, performance.now() - detail.data.requestedAt)
     : Date.now();
   const unavailable =
     action.blocked ||
@@ -134,7 +138,7 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
       (detail.isError ||
         detail.isFetching ||
         !detail.data ||
-        Date.now() - detail.dataUpdatedAt >= 10000));
+        performance.now() - detail.data.requestedAt >= 10000));
   const previewTargetId =
     preview && "targetId" in preview.intent
       ? preview.intent.targetId

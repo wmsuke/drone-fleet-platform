@@ -31,7 +31,11 @@ it("passes the stable two-field cursor and abort signal to the list API", async 
   );
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining(`beforeId=${f.data.deploymentId}`),
-    expect.objectContaining({ signal: controller.signal, method: "GET" }),
+    expect.objectContaining({
+      signal: controller.signal,
+      method: "GET",
+      cache: "no-store",
+    }),
   );
 });
 it("rejects an inconsistent release identity and never treats registration as present-day verification", async () => {

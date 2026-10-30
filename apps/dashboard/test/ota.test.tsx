@@ -103,6 +103,31 @@ it.each([408, 503])(
     expect(sessionStorage.getItem(`ota-pending:${base}`)).not.toBeNull();
   },
 );
+it("includes the full request latency in freshness and does not enable operations on a slow response", async () => {
+  let elapsed = 100;
+  vi.spyOn(performance, "now").mockImplementation(() => elapsed);
+  let resolve!: (r: Response) => void;
+  const waiting = new Promise<Response>((r) => {
+    resolve = r;
+  });
+  const normal = serve().getMockImplementation()!;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, options?: RequestInit) =>
+      String(url).includes(`/deployments/${f.data.deploymentId}?`)
+        ? waiting
+        : normal(url, options),
+    ),
+  );
+  mount();
+  await screen.findByText("配信情報を読み込み中…");
+  elapsed += 11000;
+  resolve(json(f.data));
+  expect(await screen.findByLabelText("操作理由コード")).toBeDisabled();
+  expect(
+    screen.getAllByRole("button", { name: "段階承認を確認" })[0],
+  ).toBeDisabled();
+});
 it("does not send when the confirmed request cannot be saved", async () => {
   const mock = serve();
   mount();
