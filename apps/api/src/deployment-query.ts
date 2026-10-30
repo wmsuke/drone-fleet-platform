@@ -73,6 +73,19 @@ export function createDeploymentQueries(db: Database) {
             sql`SELECT clock_timestamp()::text AS now`,
           );
           const now = new Date(time!.now);
+          const [interventionSummary] = await tx.execute<{
+            recordedCount: number;
+            requiredApprovalCount: number;
+            faultResponseCount: number;
+            openReviewCount: number;
+            legacyOperationCount: number;
+          }>(sql`SELECT
+            (SELECT count(*)::int FROM ota_interventions WHERE deployment_id=${id}) AS "recordedCount",
+            (SELECT count(*)::int FROM ota_interventions WHERE deployment_id=${id} AND category='REQUIRED_APPROVAL') AS "requiredApprovalCount",
+            (SELECT count(*)::int FROM ota_interventions WHERE deployment_id=${id} AND category='FAULT_RESPONSE') AS "faultResponseCount",
+            (SELECT count(*)::int FROM ota_interventions WHERE deployment_id=${id} AND kind='HUMAN_REVIEW' AND finished_at IS NULL) AS "openReviewCount",
+            ((SELECT count(*) FROM ota_actions a WHERE deployment_id=${id} AND NOT EXISTS (SELECT 1 FROM ota_interventions i WHERE i.action_id=a.action_id)) +
+             (SELECT count(*) FROM ota_recoveries r WHERE deployment_id=${id} AND NOT EXISTS (SELECT 1 FROM ota_interventions i WHERE i.recovery_id=r.recovery_id)))::int AS "legacyOperationCount"`);
           const recoveries = await tx
             .select()
             .from(otaRecoveries)
@@ -244,6 +257,12 @@ export function createDeploymentQueries(db: Database) {
             ...deployment,
             createdAt: deployment.createdAt.toISOString(),
             evaluatedAt: now.toISOString(),
+            interventionSummary: {
+              ...interventionSummary!,
+              excludesAutonomousCompletion:
+                interventionSummary!.recordedCount > 0 ||
+                interventionSummary!.legacyOperationCount > 0,
+            },
             recoveries: recoveries.map((r) => ({
               recoveryId: r.recoveryId,
               targetId: r.targetId,

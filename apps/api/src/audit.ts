@@ -17,6 +17,14 @@ function id(value: unknown) {
 }
 const routes: Record<string, [AuditEvent["action"], AuditEvent["targetKind"]]> =
   {
+    "POST /deployments/:deploymentId/interventions": [
+      "deployment.intervention_started",
+      "deployment",
+    ],
+    "POST /deployments/:deploymentId/interventions/:interventionId/complete": [
+      "deployment.intervention_completed",
+      "deployment",
+    ],
     "POST /releases": ["release.registered", "release"],
     "POST /deployments": ["deployment.accepted", "deployment"],
     "POST /deployments/:deploymentId/stages/:stageId/approve": [

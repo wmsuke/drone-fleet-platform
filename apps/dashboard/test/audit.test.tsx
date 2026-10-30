@@ -54,6 +54,31 @@ afterEach(() => {
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
 });
+it("accepts intervention audit identifiers and review lifecycle actions", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json({
+        items: [
+          {
+            ...item,
+            action: "deployment.intervention_completed",
+            targetKind: "deployment",
+            metadata: {
+              interventionId: id,
+              reason: "INSPECTED",
+              afterStatus: "KEEP_STOPPED",
+            },
+          },
+        ],
+        limit: 20,
+        nextCursor: null,
+      }),
+    ),
+  );
+  const page = await fetchAuditPage("http://api.test", "");
+  expect(page.items[0]!.metadata.interventionId).toBe(id);
+});
 it("accepts deployment audit records without breaking the existing audit list", async () => {
   vi.stubGlobal(
     "fetch",

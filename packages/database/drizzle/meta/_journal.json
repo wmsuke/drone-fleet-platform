@@ -141,6 +141,13 @@
       "when": 1793239211205,
       "tag": "0019_clever_phalanx",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793327656840,
+      "tag": "0020_slim_mandrill",
+      "breakpoints": true
     }
   ]
 }

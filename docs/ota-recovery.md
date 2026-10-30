@@ -55,7 +55,7 @@ rollbackも新attemptId/commandId・高いfenceを使い、目的ROLLBACKと原�
 
 ## 照会と移行
 
-`GET /deployments/:deploymentId`のrecoveriesに、kind・status・原因/root/new attempt、検出/承認/待機/開始/終了時刻、総期限、bytes、cost、評価根拠、failureReason/requiredActionを追加した。元の評価履歴は残し、受付応答と実際の回復結果を分ける。interventionの詳細な管理は#173、操作画面は#174で追加する。
+`GET /deployments/:deploymentId`のrecoveriesに、kind・status・原因/root/new attempt、検出/承認/待機/開始/終了時刻、総期限、bytes、cost、評価根拠、failureReason/requiredActionを追加した。元の評価履歴は残し、受付応答と実際の回復結果を分ける。#173の[人間介入記録](ota-interventions.md)で理由付き承認・拒否・判断対応をauditへ関連付ける。操作画面は#174の対象とする。
 
 代表的な拒否理由はDEPLOYMENT_NOT_PAUSED、PREVIOUS_ATTEMPT_UNCONFIRMED、RECOVERY_OBSERVATION_MISSING、STOP_UNCONFIRMED、HEALTH_UNCONFIRMED、RETRY_NOT_ALLOWLISTED、RECOVERY_ACTIVE、RECOVERY_LIMIT_REACHED、DOWNLOAD_BUDGET_EXCEEDED、RECOVERY_TIME_BUDGET_EXCEEDED、ROLLBACK_UNAVAILABLEである。原因を確認し、必要に応じて手動の退避・復元・交換へ引き継ぐ。元の予算や同IDの期限を延長して解消しない。
 

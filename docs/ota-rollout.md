@@ -44,7 +44,7 @@ STOP受領だけ、PUBACKだけ、期限超過だけでは停止完了にしな�
 
 `ota_actions`は理由・冪等要求hash・元応答を不変記録にし、成功auditも同じtransactionで保存する。必須承認、手動停止/再開、自動停止（system `ota-worker`）を区別する。`ota_rollouts`は現在の停止latch、`ota_dispatches`は全worker共通のclaim、`ota_stops`は不変STOP payload・再送・確認eventを保持する。評価はrevision採番で並べ、同一ミリ秒内の評価がUUID順で逆転しないようにする。既存評価はmigration時に従来の時刻/ID順で採番し直す。
 
-`GET /deployments/:deploymentId`にcontrol（停止時刻/理由）、直近100件の手動操作、attemptごとのSTOP期限・再送数・確認eventIdを追加した。既存の実稼働構成・評価根拠と併せて参照する。画面とinterventionの詳細は#173/#174で追加する。
+`GET /deployments/:deploymentId`にcontrol（停止時刻/理由）、直近100件の手動操作、attemptごとのSTOP期限・再送数・確認eventIdを追加した。既存の実稼働構成・評価根拠と併せて参照する。#173の[人間介入記録](ota-interventions.md)で操作とauditの関連を追跡できる。OTA専用画面は#174の対象とする。
 
 成功評価用の自動QUERYは144件/attempt・元結果期限後60秒までという既存予算を維持する。別のSTOP確認には、元結果期限後もSTOPの60秒確認期限まで最大12件のSTATE照会を追加できる。停止のために過去の適用期限や成功評価予算は延長しない。長時間承認待ち等で成功評価の照会予算が尽きてhealthが古い場合は昇格・再開を拒否する。成功履歴を鮮度の代わりにしない。未確認状態を運用者が照合する経路・新attemptは後続Issueが必要となる。
 

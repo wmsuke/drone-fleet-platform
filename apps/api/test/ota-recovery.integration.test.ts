@@ -5,13 +5,16 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, beforeEach, afterAll, describe, it, expect } from "vitest";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { eq, sql, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import {
   createDatabase,
   createOtaRecovery,
   createOtaRepository,
   createOtaRollout,
   otaRecoveries,
+  otaInterventions,
+  auditLogs,
+  createOtaInterventions,
   otaAttempts,
   otaTargets,
   otaDeployments,
@@ -75,6 +78,9 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
   } as const;
   async function cleanup() {
     if (!root) return;
+    await db!
+      .delete(otaInterventions)
+      .where(eq(otaInterventions.deploymentId, root.deploymentId));
     const attempts = await db!
         .select()
         .from(otaAttempts)
@@ -350,6 +356,477 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
     if (database) {
       await cleanup();
       await database.client.end();
+    }
+  });
+
+  it("records recovery approval once, links anonymous audit and keeps observed recovery separate", async () => {
+    const key = randomUUID();
+    const [a, b] = await Promise.all([
+      repository.request(
+        root.deploymentId,
+        root.targetId,
+        key,
+        "RETRY",
+        "CHECKED_FAILURE",
+      ),
+      repository.request(
+        root.deploymentId,
+        root.targetId,
+        key,
+        "RETRY",
+        "CHECKED_FAILURE",
+      ),
+    ]);
+    expect(a).toEqual(b);
+    const records = createOtaInterventions(db!);
+    const page = await records.interventions(root.deploymentId, 20);
+    expect(page!.items).toHaveLength(1);
+    const i = page!.items[0]!;
+    expect(i).toMatchObject({
+      interventionId: a.interventionId,
+      actorKind: "anonymous",
+      actorId: null,
+      category: "FAULT_RESPONSE",
+      kind: "RETRY_APPROVAL",
+      operationResult: "ACCEPTED",
+      durationMs: null,
+      cost: null,
+      durationSource: null,
+      excludesAutonomousCompletion: true,
+      scope: [{ targetId: root.targetId, attemptId: a.attemptId }],
+      recovery: {
+        recoveryId: a.recoveryId,
+        status: "WAITING",
+        downloadedBytes: null,
+        cost: null,
+      },
+    });
+    expect(i).not.toHaveProperty("key");
+    const [audit] = await db!
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.eventId, i.auditEventId));
+    expect(audit).toMatchObject({
+      actorKind: "anonymous",
+      actorId: null,
+      action: "deployment.recovery_requested",
+      targetId: root.deploymentId,
+      metadata: { interventionId: i.interventionId, reason: "CHECKED_FAILURE" },
+    });
+    now = new Date(String(a.notBefore));
+    await inventory();
+    await repository.tick();
+    await repository.tick();
+    const after = await records.interventions(root.deploymentId, 20);
+    expect(after!.items).toHaveLength(1);
+    expect(after!.items[0]!.recovery!.status).toBe("RUNNING");
+    expect(
+      (await createDeploymentRepository(db!, {
+        directory: "/unused",
+        trustStorePath: "/unused",
+      }).find(root.deploymentId, 1))!.interventionSummary,
+    ).toMatchObject({
+      recordedCount: 1,
+      faultResponseCount: 1,
+      excludesAutonomousCompletion: true,
+      legacyOperationCount: 0,
+    });
+  });
+  it("records rejected rollback as intervention without claiming restoration or known cost", async () => {
+    const result = await repository.request(
+      root.deploymentId,
+      root.targetId,
+      randomUUID(),
+      "ROLLBACK",
+      "INSPECTED",
+    );
+    expect(result.status).toBe("UNAVAILABLE");
+    const page = await createOtaInterventions(db!).interventions(
+      root.deploymentId,
+      20,
+    );
+    expect(page!.items[0]).toMatchObject({
+      interventionId: result.interventionId,
+      kind: "ROLLBACK_APPROVAL",
+      operationResult: "REJECTED",
+      cost: null,
+      durationMs: null,
+      recovery: { status: "UNAVAILABLE", startedAt: null },
+    });
+  });
+  it("does not treat legacy operations without intervention records as autonomous", async () => {
+    await db!.insert(otaActions).values({
+      actionId: randomUUID(),
+      deploymentId: root.deploymentId,
+      key: randomUUID(),
+      requestHash: "a".repeat(64),
+      action: "stop",
+      reason: "LEGACY_STOP",
+      response: {},
+      createdAt: now,
+    });
+    const repo = createDeploymentRepository(db!, {
+      directory: "/unused",
+      trustStorePath: "/unused",
+    });
+    expect(
+      (await repo.find(root.deploymentId, 1))!.interventionSummary,
+    ).toMatchObject({
+      recordedCount: 0,
+      legacyOperationCount: 1,
+      excludesAutonomousCompletion: true,
+    });
+  });
+  it("tracks open and completed human review idempotently without clearing uncertainty or reservations", async () => {
+    await db!
+      .update(otaDeployments)
+      .set({ status: "WAITING_FOR_HUMAN" })
+      .where(eq(otaDeployments.deploymentId, root.deploymentId));
+    const r = createOtaInterventions(db!),
+      key = randomUUID();
+    const [a, b] = await Promise.all([
+      r.startReview(root.deploymentId, key, "INSPECTING"),
+      r.startReview(root.deploymentId, key, "INSPECTING"),
+    ]);
+    expect(a).toEqual(b);
+    expect(
+      (await r.interventions(root.deploymentId, 20))!.items[0],
+    ).toMatchObject({
+      operationResult: "OPEN",
+      finishedAt: null,
+      durationMs: null,
+      cost: null,
+    });
+    await expect(
+      r.startReview(root.deploymentId, randomUUID(), "OTHER_REVIEW"),
+    ).rejects.toMatchObject({ reason: "HUMAN_REVIEW_ACTIVE" });
+    await expect(
+      r.startReview(root.deploymentId, key, "OTHER_REASON"),
+    ).rejects.toMatchObject({ reason: "IDEMPOTENCY_CONFLICT" });
+    const finishKey = randomUUID(),
+      input = {
+        reason: "NEEDS_ONSITE_INSPECTION",
+        outcome: "ESCALATED" as const,
+      };
+    const [c, d] = await Promise.all([
+      r.completeReview(root.deploymentId, a.interventionId, finishKey, input),
+      r.completeReview(root.deploymentId, a.interventionId, finishKey, input),
+    ]);
+    expect(c).toEqual(d);
+    await expect(
+      r.completeReview(root.deploymentId, a.interventionId, finishKey, {
+        ...input,
+        outcome: "KEEP_STOPPED",
+      }),
+    ).rejects.toMatchObject({ reason: "IDEMPOTENCY_CONFLICT" });
+    expect(await r.startReview(root.deploymentId, key, "INSPECTING")).toEqual(
+      a,
+    );
+    const i = (await r.interventions(root.deploymentId, 20))!.items[0]!;
+    expect(i).toMatchObject({
+      operationResult: "ESCALATED",
+      durationMs: null,
+      cost: null,
+      completionReason: "NEEDS_ONSITE_INSPECTION",
+    });
+    expect(i.finishedAt).not.toBeNull();
+    const [audit] = await db!
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.eventId, i.completionAuditEventId!));
+    expect(audit!.metadata.interventionId).toBe(i.interventionId);
+    expect(
+      (
+        await db!
+          .select()
+          .from(otaDeployments)
+          .where(eq(otaDeployments.deploymentId, root.deploymentId))
+      )[0]!.status,
+    ).toBe("WAITING_FOR_HUMAN");
+    expect(
+      await db!
+        .select()
+        .from(otaReservations)
+        .where(eq(otaReservations.targetId, root.targetId)),
+    ).toHaveLength(1);
+  });
+  it("requires a new same-deployment recovery for review resolution and distinguishes reported duration from unknown", async () => {
+    const r = createOtaInterventions(db!);
+    const start = await r.startReview(
+      root.deploymentId,
+      randomUUID(),
+      "INSPECTING",
+    );
+    await expect(
+      r.completeReview(root.deploymentId, start.interventionId, randomUUID(), {
+        reason: "CHECKED",
+        outcome: "RECOVERY_REQUESTED",
+        recoveryId: randomUUID(),
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_RECOVERY_REFERENCE" });
+    await expect(
+      r.completeReview(root.deploymentId, start.interventionId, randomUUID(), {
+        reason: "CHECKED",
+        outcome: "KEEP_STOPPED",
+        durationMs: Number.MAX_SAFE_INTEGER,
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_INTERVENTION_DURATION" });
+    now = new Date(Math.max(Date.now() + 10, now.getTime() + 1));
+    await inventory();
+    const recovery = await request();
+    await r.completeReview(
+      root.deploymentId,
+      start.interventionId,
+      randomUUID(),
+      {
+        reason: "APPROVED_RETRY",
+        outcome: "RECOVERY_REQUESTED",
+        recoveryId: String(recovery.recoveryId),
+        durationMs: 1,
+      },
+    );
+    const i = (await r.interventions(root.deploymentId, 20))!.items.find(
+      (i) => i.interventionId === start.interventionId,
+    )!;
+    expect(i).toMatchObject({
+      resolutionRecoveryId: recovery.recoveryId,
+      durationMs: 1,
+      durationSource: "OPERATOR_REPORTED",
+      cost: null,
+      operationResult: "RECOVERY_REQUESTED",
+    });
+    expect(await r.interventions(randomUUID(), 20)).toBeNull();
+    await expect(
+      r.completeReview(randomUUID(), start.interventionId, randomUUID(), {
+        reason: "CHECKED",
+        outcome: "KEEP_STOPPED",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it("does not keep the new recovery, fence or audit if intervention persistence fails", async () => {
+    await db!.execute(
+      sql`CREATE FUNCTION issue173_reject_intervention() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test failure'; END $$`,
+    );
+    await db!.execute(
+      sql`CREATE TRIGGER issue173_reject_intervention BEFORE INSERT ON ota_interventions FOR EACH ROW EXECUTE FUNCTION issue173_reject_intervention()`,
+    );
+    try {
+      await expect(request()).rejects.toThrow();
+      expect(
+        await db!
+          .select()
+          .from(otaRecoveries)
+          .where(eq(otaRecoveries.deploymentId, root.deploymentId)),
+      ).toHaveLength(0);
+      expect(
+        await db!
+          .select()
+          .from(otaAttempts)
+          .where(eq(otaAttempts.targetId, root.targetId)),
+      ).toHaveLength(1);
+      expect(
+        await db!
+          .select()
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.targetId, root.deploymentId),
+              eq(auditLogs.action, "deployment.recovery_requested"),
+            ),
+          ),
+      ).toHaveLength(0);
+      expect(
+        (
+          await db!
+            .select()
+            .from(otaDeviceStates)
+            .where(eq(otaDeviceStates.deviceId, root.deviceId))
+        )[0]!.highestFence,
+      ).toBe(1n);
+    } finally {
+      await db!.execute(
+        sql`DROP TRIGGER issue173_reject_intervention ON ota_interventions`,
+      );
+      await db!.execute(sql`DROP FUNCTION issue173_reject_intervention()`);
+    }
+  });
+  it("keeps a review open when completion audit fails and protects completed history", async () => {
+    const r = createOtaInterventions(db!),
+      start = await r.startReview(
+        root.deploymentId,
+        randomUUID(),
+        "INSPECTING",
+      );
+    await db!.execute(
+      sql`CREATE FUNCTION issue173_reject_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='deployment.intervention_completed' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$`,
+    );
+    await db!.execute(
+      sql`CREATE TRIGGER issue173_reject_completion BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION issue173_reject_completion()`,
+    );
+    const key = randomUUID(),
+      input = { reason: "CHECKED", outcome: "KEEP_STOPPED" as const };
+    try {
+      await expect(
+        r.completeReview(root.deploymentId, start.interventionId, key, input),
+      ).rejects.toThrow();
+      expect(
+        (await r.interventions(root.deploymentId, 20))!.items[0]!.finishedAt,
+      ).toBeNull();
+    } finally {
+      await db!.execute(
+        sql`DROP TRIGGER issue173_reject_completion ON audit_logs`,
+      );
+      await db!.execute(sql`DROP FUNCTION issue173_reject_completion()`);
+    }
+    await expect(
+      db!
+        .update(otaInterventions)
+        .set({ actorId: "admin" })
+        .where(eq(otaInterventions.interventionId, start.interventionId)),
+    ).rejects.toThrow();
+    await r.completeReview(root.deploymentId, start.interventionId, key, input);
+    await expect(
+      db!
+        .update(otaInterventions)
+        .set({ durationMs: 0 })
+        .where(eq(otaInterventions.interventionId, start.interventionId)),
+    ).rejects.toThrow();
+  });
+  it("validates intervention HTTP bodies, ignores forged actor headers and paginates without duplicates", async () => {
+    const repo = createDeploymentRepository(db!, {
+      directory: "/unused",
+      trustStorePath: "/unused",
+    });
+    const app = buildApi(
+      createDeviceRepository(db!),
+      createCommandService(createCommandRepository(db!)),
+      { deploymentRepository: repo, auditDatabase: db! },
+    );
+    const url = `/deployments/${root.deploymentId}/interventions`,
+      headers = {
+        "Idempotency-Key": randomUUID(),
+        "X-Actor-Id": "administrator",
+        "X-Request-Id": randomUUID(),
+      };
+    try {
+      for (const payload of [
+        { reason: "CHECKED", actorId: "admin" },
+        { reason: "token=secret" },
+        { reason: "CHECKED", cost: 0 },
+        { reason: "CHECKED", startedAt: new Date().toISOString() },
+      ])
+        expect(
+          (await app.inject({ method: "POST", url, headers, payload }))
+            .statusCode,
+        ).toBe(400);
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url,
+            payload: { reason: "CHECKED" },
+          })
+        ).statusCode,
+      ).toBe(400);
+      const start = await app.inject({
+        method: "POST",
+        url,
+        headers,
+        payload: { reason: "CHECKED" },
+      });
+      expect(start.statusCode).toBe(202);
+      expect(start.headers["x-request-id"]).not.toBe(headers["X-Request-Id"]);
+      const finishUrl = `${url}/${start.json().interventionId}/complete`,
+        endHeaders = { "Idempotency-Key": randomUUID() };
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url: finishUrl,
+            headers: endHeaders,
+            payload: { reason: "CHECKED", outcome: "SUCCEEDED" },
+          })
+        ).statusCode,
+      ).toBe(400);
+      const payload = { reason: "NEEDS_INSPECTION", outcome: "KEEP_STOPPED" };
+      const end = await app.inject({
+        method: "POST",
+        url: finishUrl,
+        headers: endHeaders,
+        payload,
+      });
+      expect(end.statusCode).toBe(202);
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url: finishUrl,
+            headers: endHeaders,
+            payload,
+          })
+        ).json(),
+      ).toEqual(end.json());
+      await repo.startReview(root.deploymentId, randomUUID(), "SECOND_CHECK");
+      const first = (
+        await app.inject({ method: "GET", url: `${url}?limit=1` })
+      ).json();
+      expect(first.items[0]).toMatchObject({
+        actorKind: "anonymous",
+        actorId: null,
+        durationMs: null,
+      });
+      const cursor = first.nextCursor;
+      const second = (
+        await app.inject({
+          method: "GET",
+          url: `${url}?limit=1&before=${cursor.startedAt}&beforeId=${cursor.interventionId}`,
+        })
+      ).json();
+      expect(second.items[0].interventionId).not.toBe(
+        first.items[0].interventionId,
+      );
+      expect(second.nextCursor).toBeNull();
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `${url}?beforeId=${randomUUID()}`,
+          })
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `/deployments/${randomUUID()}/interventions`,
+          })
+        ).statusCode,
+      ).toBe(404);
+      const [audit] = await db!
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.eventId, second.items[0].auditEventId));
+      expect(audit).toMatchObject({
+        actorKind: "anonymous",
+        actorId: null,
+        requestId: start.headers["x-request-id"],
+      });
+      await db!
+        .update(otaDeployments)
+        .set({ status: "RUNNING" })
+        .where(eq(otaDeployments.deploymentId, root.deploymentId));
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url,
+            headers: { "Idempotency-Key": randomUUID() },
+            payload: { reason: "NEW_REVIEW" },
+          })
+        ).statusCode,
+      ).toBe(409);
+    } finally {
+      await app.close();
     }
   });
   it("persists one explicitly approved retry with jitter, a new identity and unchanged snapshots; replay is stable", async () => {

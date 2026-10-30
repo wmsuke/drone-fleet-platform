@@ -347,6 +347,8 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 #172で[OTAの制限付き復旧](ota-recovery.md)を追加した。APIが理由付きの許可と新attempt・fence・予算・outboxを同時保存し、永続workerが停止latchを維持したまま許可targetだけを配送する。supervisorのSQLiteでも累計転送・期限・retry/rollback回数を維持し、保持した既知正常bundleだけを戻す。backendは元更新失敗とrollback後の回復成功を別の評価に残す。
 
+#173で[OTAの人間介入記録](ota-interventions.md)を追加した。必須の段階承認と障害対応を分け、操作・介入・auditを同時保存する。判断対応の開始/終了は機体の停止確認や回復成功の代替にせず、本人未確認・作業時間/費用の欠測を残す。
+
 ## Phase 4の設計と実装範囲
 
 #137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)、#143で一覧・詳細・確認APIと画面を実装した。#144で操作と状態変更のauditを同時commitする。

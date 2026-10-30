@@ -5,6 +5,8 @@ import { auditLogs, fleetOperationTargets, fleetOperations } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 export type AuditAction =
+  | "deployment.intervention_started"
+  | "deployment.intervention_completed"
   | "deployment.recovery_requested"
   | "deployment.recovery_changed"
   | "deployment.approved"
@@ -59,6 +61,7 @@ export interface AuditEvent {
   commandId?: string | null;
   alertId?: string | null;
   metadata?: {
+    interventionId?: string;
     beforeName?: string;
     afterName?: string;
     descriptionChanged?: boolean;
@@ -96,6 +99,7 @@ function auditRow(event: AuditEvent): typeof auditLogs.$inferInsert {
         "afterStatus",
         "beforeReason",
         "reason",
+        "interventionId",
       ].includes(key)
     ) {
       if (
@@ -135,6 +139,7 @@ export async function appendAudits(writer: AuditWriter, events: AuditEvent[]) {
     const rows = events.map(auditRow);
     try {
       await writer.insert(auditLogs).values(rows);
+      return rows.map((row) => row.eventId);
     } catch (error) {
       writeFailures++;
       try {
@@ -152,9 +157,10 @@ export async function appendAudits(writer: AuditWriter, events: AuditEvent[]) {
       throw error;
     }
   }
+  return [];
 }
 export async function appendAudit(writer: AuditWriter, event: AuditEvent) {
-  await appendAudits(writer, [event]);
+  return (await appendAudits(writer, [event]))[0]!;
 }
 export async function commandAuditLinks(
   reader: Pick<Database, "select">,

@@ -12,6 +12,103 @@ export function registerDeploymentRoutes(
   app: FastifyInstance,
   repository: DeploymentRepository,
 ) {
+  const uuid = z.uuid().transform((v) => v.toLowerCase());
+  const reason = z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/);
+  const completionSchema = z
+    .object({
+      reason,
+      outcome: z.enum(["KEEP_STOPPED", "ESCALATED", "RECOVERY_REQUESTED"]),
+      recoveryId: uuid.optional(),
+      durationMs: z
+        .number()
+        .int()
+        .min(0)
+        .max(Number.MAX_SAFE_INTEGER)
+        .optional(),
+    })
+    .strict();
+  app.get(
+    "/deployments/:deploymentId/interventions",
+    async (request, reply) => {
+      const params = z.object({ deploymentId: uuid }).safeParse(request.params);
+      const query = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).default(20),
+          before: z.iso.datetime({ precision: 3 }).optional(),
+          beforeId: uuid.optional(),
+        })
+        .strict()
+        .refine((q) => Boolean(q.before) === Boolean(q.beforeId))
+        .safeParse(request.query);
+      if (!params.success || !query.success)
+        return reply.code(400).send({ error: "INVALID_INTERVENTION_QUERY" });
+      try {
+        const rows = await repository.interventions(
+          params.data.deploymentId,
+          query.data.limit,
+          query.data.before
+            ? {
+                startedAt: query.data.before,
+                interventionId: query.data.beforeId!,
+              }
+            : undefined,
+        );
+        return rows ?? reply.code(404).send({ error: "DEPLOYMENT_NOT_FOUND" });
+      } catch {
+        return reply.code(503).send({ error: "INTERVENTIONS_UNAVAILABLE" });
+      }
+    },
+  );
+  for (const complete of [false, true]) {
+    app.post(
+      `/deployments/:deploymentId/interventions${complete ? "/:interventionId/complete" : ""}`,
+      { bodyLimit: 2048 },
+      async (request, reply) => {
+        const params = z
+          .object({ deploymentId: uuid, interventionId: uuid.optional() })
+          .safeParse(request.params);
+        const key = idempotencyKeySchema.safeParse(
+          request.headers["idempotency-key"],
+        );
+        const schema = complete
+          ? completionSchema
+          : z.object({ reason }).strict();
+        const body = schema.safeParse(request.body);
+        if (
+          !params.success ||
+          !key.success ||
+          !body.success ||
+          (complete && !params.data.interventionId)
+        )
+          return reply
+            .code(400)
+            .send({ error: "INVALID_INTERVENTION_REQUEST" });
+        try {
+          const result =
+            "outcome" in body.data
+              ? await repository.completeReview(
+                  params.data.deploymentId,
+                  params.data.interventionId!,
+                  key.data,
+                  completionSchema.parse(body.data),
+                )
+              : await repository.startReview(
+                  params.data.deploymentId,
+                  key.data,
+                  body.data.reason,
+                );
+          return reply.code(202).send(result);
+        } catch (error) {
+          if (error instanceof OtaControlError) {
+            const context = auditContext.getStore();
+            if (context) context.rejectionReason = error.reason;
+            return reply.code(error.status).send({ error: error.reason });
+          }
+          return reply.code(503).send({ error: "INTERVENTION_UNAVAILABLE" });
+        }
+      },
+    );
+  }
   app.post(
     "/deployments/:deploymentId/targets/:targetId/recover",
     { bodyLimit: 2048 },

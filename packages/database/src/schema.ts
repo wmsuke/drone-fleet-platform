@@ -1041,3 +1041,88 @@ export const otaRecoveries = pgTable(
     ),
   ],
 );
+
+export const otaInterventions = pgTable(
+  "ota_interventions",
+  {
+    interventionId: uuid("intervention_id").primaryKey(),
+    deploymentId: uuid("deployment_id")
+      .notNull()
+      .references(() => otaDeployments.deploymentId, { onDelete: "restrict" }),
+    stageId: uuid("stage_id").references(() => otaStages.stageId, {
+      onDelete: "restrict",
+    }),
+    targetId: uuid("target_id").references(() => otaTargets.targetId, {
+      onDelete: "restrict",
+    }),
+    attemptId: uuid("attempt_id").references(() => otaAttempts.attemptId, {
+      onDelete: "restrict",
+    }),
+    recoveryId: uuid("recovery_id")
+      .references(() => otaRecoveries.recoveryId, { onDelete: "restrict" })
+      .unique(),
+    actionId: uuid("action_id")
+      .references(() => otaActions.actionId, { onDelete: "restrict" })
+      .unique(),
+    scope: jsonb("scope")
+      .$type<{ targetId: string; attemptId: string }[]>()
+      .notNull(),
+    actorKind: text("actor_kind").notNull().default("anonymous"),
+    actorId: text("actor_id"),
+    kind: text("kind").notNull(),
+    category: text("category").notNull(),
+    reason: text("reason").notNull(),
+    operationResult: text("operation_result").notNull(),
+    startedAt: timestamp("started_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true, mode: "date" }),
+    // HTTP処理時間・復旧待ち時間を人間の作業時間と見なさない。
+    durationMs: bigint("duration_ms", { mode: "number" }),
+    cost: jsonb("cost").$type<{ amount: number; currency: string }>(),
+    auditEventId: uuid("audit_event_id")
+      .notNull()
+      .references(() => auditLogs.eventId, { onDelete: "restrict" })
+      .unique(),
+    completionAuditEventId: uuid("completion_audit_event_id")
+      .references(() => auditLogs.eventId, { onDelete: "restrict" })
+      .unique(),
+    completionReason: text("completion_reason"),
+    resolutionRecoveryId: uuid("resolution_recovery_id").references(
+      () => otaRecoveries.recoveryId,
+      { onDelete: "restrict" },
+    ),
+    key: varchar("key", { length: 128 }),
+    requestHash: text("request_hash"),
+    completionKey: varchar("completion_key", { length: 128 }),
+    completionHash: text("completion_hash"),
+  },
+  (t) => [
+    index("ota_intervention_time_idx").on(
+      t.deploymentId,
+      t.startedAt.desc(),
+      t.interventionId.desc(),
+    ),
+    uniqueIndex("ota_intervention_key_unique").on(t.deploymentId, t.key),
+    uniqueIndex("ota_intervention_open_review_unique")
+      .on(t.deploymentId)
+      .where(sql`${t.kind}='HUMAN_REVIEW' AND ${t.finishedAt} IS NULL`),
+    check(
+      "ota_intervention_actor_valid",
+      sql`${t.actorKind}='anonymous' AND ${t.actorId} IS NULL`,
+    ),
+    check(
+      "ota_intervention_kind_valid",
+      sql`(${t.kind}='STAGE_APPROVAL' AND ${t.category}='REQUIRED_APPROVAL') OR (${t.kind} IN ('STOP','RESUME','RETRY_APPROVAL','ROLLBACK_APPROVAL','HUMAN_REVIEW') AND ${t.category}='FAULT_RESPONSE')`,
+    ),
+    check(
+      "ota_intervention_times_valid",
+      sql`(${t.finishedAt} IS NULL OR ${t.finishedAt}>=${t.startedAt}) AND (${t.durationMs} IS NULL OR (${t.durationMs}>=0 AND ${t.finishedAt} IS NOT NULL AND ${t.durationMs}<=extract(epoch FROM (${t.finishedAt}-${t.startedAt}))*1000))`,
+    ),
+    check(
+      "ota_intervention_reason_valid",
+      sql`${t.reason} ~ '^[A-Z][A-Z0-9_]{0,63}$' AND (${t.completionReason} IS NULL OR ${t.completionReason} ~ '^[A-Z][A-Z0-9_]{0,63}$')`,
+    ),
+  ],
+);

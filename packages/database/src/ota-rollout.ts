@@ -8,6 +8,7 @@ import {
 import type { Database } from "./connection.js";
 import { otaDeploymentLock } from "./ota.js";
 import { appendAudit } from "./audit.js";
+import { recordOtaIntervention } from "./ota-intervention.js";
 import {
   otaDeployments,
   otaStages,
@@ -709,6 +710,7 @@ export function createOtaRollout(
             .where(eq(otaDeployments.deploymentId, id));
         }
         const response = {
+          interventionId: randomUUID(),
           actionId: randomUUID(),
           deploymentId: id,
           stageId: stageId ?? null,
@@ -726,17 +728,44 @@ export function createOtaRollout(
           response,
           createdAt: now,
         });
-        await appendAudit(tx, {
-          action:
-            action === "approve"
-              ? "deployment.approved"
-              : action === "stop"
-                ? "deployment.stopped"
-                : "deployment.resumed",
-          targetKind: "deployment",
-          targetId: id,
-          metadata: { reason, afterStatus: status },
-        });
+        await recordOtaIntervention(
+          tx,
+          {
+            interventionId: response.interventionId,
+            deploymentId: id,
+            stageId: stageId ?? null,
+            actionId: response.actionId,
+            scope: all
+              .filter((r) => !stageId || r.target.stageId === stageId)
+              .map((r) => ({
+                targetId: r.target.targetId,
+                attemptId: r.attempt.attemptId,
+              })),
+            kind:
+              action === "approve"
+                ? "STAGE_APPROVAL"
+                : action === "stop"
+                  ? "STOP"
+                  : "RESUME",
+            category:
+              action === "approve" ? "REQUIRED_APPROVAL" : "FAULT_RESPONSE",
+            reason,
+            operationResult: "ACCEPTED",
+            startedAt: now,
+            finishedAt: now,
+          },
+          {
+            action:
+              action === "approve"
+                ? "deployment.approved"
+                : action === "stop"
+                  ? "deployment.stopped"
+                  : "deployment.resumed",
+            targetKind: "deployment",
+            targetId: id,
+            metadata: { reason, afterStatus: status },
+          },
+        );
         return response;
       });
     },

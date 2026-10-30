@@ -65,4 +65,6 @@ idempotency scopeは`anonymous`、keyはASCII英数字・`_`・`-`の1〜128文�
 
 ## 検証
 
+承認・停止・再開・復旧要求のinterventionIdと判断対応・履歴取得APIは[人間介入記録](ota-interventions.md)を参照する。deployment詳細にはinterventionSummaryを追加し、既存の操作に介入詳細がない場合も自律完了から除外する根拠を残す。
+
 `pnpm check`と専用PostgreSQL上の`pnpm api:test:integration`で、snapshot保持、同keyの同時受付、予約gate、上限・重複・非互換・失効鍵、途中保存失敗のrollbackを確認する。実MQTT配送・端末適用・backend成功評価・実AWSのOTAをこのAPIの検証済み範囲に含めない。
