@@ -10,6 +10,7 @@ import type { Database } from "./connection.js";
 import { otaDeploymentLock } from "./ota.js";
 import { OtaControlError } from "./ota-rollout.js";
 import { appendAudit } from "./audit.js";
+import { recordOtaIntervention } from "./ota-intervention.js";
 import {
   otaRecoveries,
   otaAttempts,
@@ -425,6 +426,7 @@ export function createOtaRecovery(
               : 0),
         );
         const response = {
+          interventionId: randomUUID(),
           recoveryId,
           deploymentId: id,
           targetId,
@@ -500,16 +502,33 @@ export function createOtaRecovery(
             .update(otaDeployments)
             .set({ status: "WAITING_FOR_HUMAN" })
             .where(eq(otaDeployments.deploymentId, id));
-        await appendAudit(tx, {
-          action: "deployment.recovery_requested",
-          targetKind: "deployment",
-          targetId: id,
-          result: failureReason ? "REJECTED" : "SUCCEEDED",
-          metadata: {
-            reason: failureReason ?? reason,
-            afterStatus: response.status,
+        await recordOtaIntervention(
+          tx,
+          {
+            interventionId: response.interventionId,
+            deploymentId: id,
+            targetId,
+            attemptId: attemptId ?? c.a.attemptId,
+            recoveryId,
+            scope: [{ targetId, attemptId: attemptId ?? c.a.attemptId }],
+            kind: kind === "RETRY" ? "RETRY_APPROVAL" : "ROLLBACK_APPROVAL",
+            category: "FAULT_RESPONSE",
+            reason,
+            operationResult: failureReason ? "REJECTED" : "ACCEPTED",
+            startedAt: now,
+            finishedAt: now,
           },
-        });
+          {
+            action: "deployment.recovery_requested",
+            targetKind: "deployment",
+            targetId: id,
+            result: failureReason ? "REJECTED" : "SUCCEEDED",
+            metadata: {
+              reason: failureReason ?? reason,
+              afterStatus: response.status,
+            },
+          },
+        );
         return response;
       });
     },

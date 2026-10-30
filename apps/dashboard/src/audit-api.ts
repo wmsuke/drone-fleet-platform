@@ -1,5 +1,7 @@
 import { ApiError } from "./api.js";
 export const auditActions = [
+  "deployment.intervention_started",
+  "deployment.intervention_completed",
   "deployment.recovery_requested",
   "deployment.recovery_changed",
   "deployment.approved",
@@ -27,6 +29,7 @@ export const auditActions = [
   "operation.status_changed",
 ] as const;
 export const metadataLabels = {
+  interventionId: "介入ID",
   beforeName: "変更前の名前",
   afterName: "変更後の名前",
   descriptionChanged: "説明の変更",
@@ -88,6 +91,7 @@ function metadata(v: unknown) {
       return typeof value === "string" && value.length <= 100;
     if (key === "descriptionChanged") return typeof value === "boolean";
     if (key === "memberDeviceId") return device(value);
+    if (key === "interventionId") return uuid(value);
     if (key === "targetCount" || key === "statusCode")
       return (
         typeof value === "number" && Number.isSafeInteger(value) && value >= 0

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   appendAudit,
+  createOtaInterventions,
   devices,
   groups,
   groupMemberships,
@@ -84,6 +85,7 @@ export function createDeploymentRepository(
   return {
     ...createDeploymentQueries(db),
     ...createDeploymentControl(db, options),
+    ...createOtaInterventions(db),
     async create(input: DeploymentRequest, key: string) {
       const request = deploymentRequestSchema.parse(input);
       const requestHash = createHash("sha256")

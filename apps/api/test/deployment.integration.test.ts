@@ -23,6 +23,7 @@ import {
   otaOutbox,
   otaEvents,
   otaActions,
+  otaInterventions,
   otaRollouts,
   otaDispatches,
   otaStops,
@@ -129,6 +130,9 @@ describe.skipIf(!enabled)("deployment acceptance with PostgreSQL", () => {
       .where(inArray(otaTargets.deviceId, ids));
     const deployments = [...new Set(targets.map((t) => t.deploymentId))];
     if (deployments.length) {
+      await db!
+        .delete(otaInterventions)
+        .where(inArray(otaInterventions.deploymentId, deployments));
       const attempts = await db!
         .select()
         .from(otaAttempts)
@@ -229,7 +233,7 @@ describe.skipIf(!enabled)("deployment acceptance with PostgreSQL", () => {
     await db!.insert(otaDeviceStates).values(
       ids.map((deviceId) => ({
         deviceId,
-        observedAt: new Date(),
+        observedAt: sql`clock_timestamp()`,
         snapshot: {
           application: "simulator",
           platform: "linux-arm64",
@@ -270,7 +274,10 @@ describe.skipIf(!enabled)("deployment acceptance with PostgreSQL", () => {
       subscriptions: "PASSED",
       receipts: "PASSED",
     };
-    const now = new Date();
+    const [time] = await db!.execute<{ now: string }>(
+      sql`SELECT clock_timestamp()::text AS now`,
+    );
+    const now = new Date(time!.now);
     await db!.insert(otaInventories).values(
       states.map((s) => ({
         eventId: randomUUID(),
@@ -631,6 +638,40 @@ describe.skipIf(!enabled)("deployment acceptance with PostgreSQL", () => {
     const after = await db!.select().from(otaOutbox);
     expect(after).toEqual(before);
     expect(approved.status).toBe("RUNNING");
+    const page = await repo.interventions(d.deploymentId, 20);
+    expect(page!.items).toHaveLength(3);
+    expect(
+      page!.items.find((i) => i.interventionId === approved.interventionId),
+    ).toMatchObject({
+      kind: "STAGE_APPROVAL",
+      category: "REQUIRED_APPROVAL",
+      actorKind: "anonymous",
+      actorId: null,
+      operationResult: "ACCEPTED",
+      durationMs: null,
+      cost: null,
+    });
+    expect(page!.items.map((i) => i.kind).sort()).toEqual([
+      "RESUME",
+      "STAGE_APPROVAL",
+      "STOP",
+    ]);
+    expect(
+      page!.items.find((i) => i.kind === "STAGE_APPROVAL")!.scope,
+    ).toHaveLength(1);
+    expect(
+      page!.items
+        .filter((i) => i.kind !== "STAGE_APPROVAL")
+        .every((i) => i.scope.length === 10),
+    ).toBe(true);
+    expect(
+      (await repo.find(d.deploymentId, 1))!.interventionSummary,
+    ).toMatchObject({
+      recordedCount: 3,
+      requiredApprovalCount: 1,
+      faultResponseCount: 2,
+      excludesAutonomousCompletion: true,
+    });
   });
   it("revalidates revoked releases before resume and rejects invalid HTTP action bodies", async () => {
     const repo = repository(),

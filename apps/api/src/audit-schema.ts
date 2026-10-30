@@ -3,6 +3,8 @@ import type { AuditEvent } from "@drone-fleet/database";
 type AuditAction = AuditEvent["action"];
 import { deviceIdSchema } from "./schema.js";
 export const auditActions = [
+  "deployment.intervention_started",
+  "deployment.intervention_completed",
   "deployment.recovery_requested",
   "deployment.recovery_changed",
   "deployment.approved",
@@ -43,6 +45,7 @@ const precise = (value: string) =>
   );
 export const publicMetadataSchema = z
   .object({
+    interventionId: uuid,
     beforeName: z.string().max(100),
     afterName: z.string().max(100),
     descriptionChanged: z.boolean(),
@@ -59,11 +62,21 @@ export const publicMetadataSchema = z
   .strict();
 type Metadata = z.infer<typeof publicMetadataSchema>;
 const allowed: Record<AuditAction, readonly (keyof Metadata)[]> = {
-  "deployment.recovery_requested": ["reason", "afterStatus"],
+  "deployment.intervention_started": [
+    "reason",
+    "afterStatus",
+    "interventionId",
+  ],
+  "deployment.intervention_completed": [
+    "reason",
+    "afterStatus",
+    "interventionId",
+  ],
+  "deployment.recovery_requested": ["reason", "afterStatus", "interventionId"],
   "deployment.recovery_changed": ["reason", "afterStatus"],
-  "deployment.approved": ["reason", "afterStatus"],
-  "deployment.stopped": ["reason", "afterStatus"],
-  "deployment.resumed": ["reason", "afterStatus"],
+  "deployment.approved": ["reason", "afterStatus", "interventionId"],
+  "deployment.stopped": ["reason", "afterStatus", "interventionId"],
+  "deployment.resumed": ["reason", "afterStatus", "interventionId"],
   "deployment.accepted": ["targetCount", "afterStatus"],
   "deployment.replayed": ["targetCount"],
   "release.registered": ["afterStatus"],
@@ -91,7 +104,9 @@ export function publicMetadata(
   input: Record<string, unknown>,
 ): Metadata {
   const keys =
-    result === "SUCCEEDED" || action === "command.conflict"
+    result === "SUCCEEDED" ||
+    action === "command.conflict" ||
+    action === "deployment.recovery_requested"
       ? allowed[action]
       : (["statusCode", "reason"] as const);
   const projected: Record<string, unknown> = {};
