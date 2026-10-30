@@ -54,6 +54,7 @@ import { buildApi } from "../src/app.js";
 import { createDeviceRepository } from "../src/repository.js";
 import { createCommandService } from "../src/command-service.js";
 import { createCommandRepository } from "../src/command-repository.js";
+import { deploymentSchema as dashboardDeploymentSchema } from "../../dashboard/src/ota-api.js";
 const enabled = process.env.DATABASE_INTEGRATION === "true";
 describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
   const database = enabled ? createDatabase() : undefined,
@@ -476,6 +477,29 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
       legacyOperationCount: 1,
       excludesAutonomousCompletion: true,
     });
+  });
+  it("paginates deployments with the same timestamp by ID without losing a deployment", async () => {
+    const [row] = await db!
+      .select()
+      .from(otaDeployments)
+      .where(eq(otaDeployments.deploymentId, root.deploymentId));
+    const otherId = randomUUID();
+    await db!
+      .insert(otaDeployments)
+      .values({ ...row!, deploymentId: otherId, idempotencyKey: randomUUID() });
+    try {
+      const ids = [otherId, root.deploymentId].sort().reverse();
+      const repo = createDeploymentRepository(db!, {
+        directory: "/unused",
+        trustStorePath: "/unused",
+      });
+      const page = await repo.list(1, row!.createdAt.toISOString(), ids[0]);
+      expect(page.items[0]!.deploymentId).toBe(ids[1]);
+    } finally {
+      await db!
+        .delete(otaDeployments)
+        .where(eq(otaDeployments.deploymentId, otherId));
+    }
   });
   it("tracks open and completed human review idempotently without clearing uncertainty or reservations", async () => {
     await db!
@@ -1338,6 +1362,13 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
       const detail = (
         await app.inject({ url: `/deployments/${root.deploymentId}` })
       ).json();
+      const dashboard = dashboardDeploymentSchema.parse(detail);
+      expect(
+        dashboard.targets[0]!.observation!.payload.recovery!.attemptId,
+      ).toBe(root.attemptId);
+      expect(dashboard.targets[0]!.observation!.payload.running.bootId).toBe(
+        bootId,
+      );
       expect(detail.recoveries[0]).toMatchObject({
         status: "WAITING",
         cost: null,

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 
 import { DeviceDetailPage } from "./device-detail.js";
@@ -7,9 +7,20 @@ import { GroupsPage } from "./groups.js";
 import { FleetOperationsPage } from "./fleet-operations.js";
 import { AlertsPage } from "./alerts.js";
 import { AuditPage } from "./audit.js";
+const OtaPage = lazy(async () => ({
+  default: (await import("./ota.js")).OtaPage,
+}));
 
 export interface DashboardAppProps {
   apiBaseUrl: string | null;
+}
+
+function OtaRoute({ apiBaseUrl }: DashboardAppProps) {
+  return (
+    <Suspense fallback={<p role="status">OTA画面を読み込み中…</p>}>
+      <OtaPage apiBaseUrl={apiBaseUrl} />
+    </Suspense>
+  );
 }
 
 function Layout({ children }: { children: ReactNode }) {
@@ -26,6 +37,7 @@ function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/fleet-operations">グループ操作</NavLink>
           <NavLink to="/alerts">alert</NavLink>
           <NavLink to="/audit-logs">監査ログ</NavLink>
+          <NavLink to="/deployments">OTA配信</NavLink>
         </nav>
       </header>
       <main>{children}</main>
@@ -69,6 +81,14 @@ export function DashboardApp({ apiBaseUrl }: DashboardAppProps) {
   return (
     <Layout>
       <Routes>
+        <Route
+          path="/deployments"
+          element={<OtaRoute apiBaseUrl={apiBaseUrl} />}
+        />
+        <Route
+          path="/deployments/:deploymentId"
+          element={<OtaRoute apiBaseUrl={apiBaseUrl} />}
+        />
         <Route
           path="/audit-logs"
           element={<AuditPage apiBaseUrl={apiBaseUrl} />}
