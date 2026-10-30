@@ -393,9 +393,14 @@ export const fetchDeployment = async (
   base: string,
   id: string,
   signal?: AbortSignal,
+  eventLimit: 20 | 100 = 20,
 ) => {
   const data = deploymentSchema.parse(
-    await request(base, `/deployments/${uuid.parse(id)}?eventLimit=20`, signal),
+    await request(
+      base,
+      `/deployments/${uuid.parse(id)}?eventLimit=${eventLimit}`,
+      signal,
+    ),
   );
   if (data.deploymentId !== id) throw new TypeError("deployment ID mismatch");
   return data;

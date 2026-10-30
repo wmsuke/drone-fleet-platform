@@ -431,6 +431,31 @@ it("offers only an eligible retry and displays a persisted rejection as rejectio
   });
   expect(sessionStorage.getItem(`ota-pending:${base}`)).toBeNull();
 });
+it("can reload up to 100 evidence events before allowing a rollback with a complete history", async () => {
+  f.failed("ROLLBACK");
+  f.data.targets[0]!.attempts[0]!.eventsTruncated = true;
+  const mock = serve();
+  mount();
+  await readyReason();
+  expandTarget();
+  expect(
+    await screen.findByRole("button", { name: "rollback承認を確認" }),
+  ).toBeDisabled();
+  f.data.targets[0]!.attempts[0]!.eventsTruncated = false;
+  fireEvent.click(
+    screen.getByRole("button", { name: "根拠を100件まで読み直す" }),
+  );
+  await readyReason();
+  expandTarget();
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "rollback承認を確認" }),
+    ).toBeEnabled(),
+  );
+  expect(
+    mock.mock.calls.some(([url]) => String(url).includes("eventLimit=100")),
+  ).toBe(true);
+});
 it("keeps intervention classification, missing time/cost and audit links and records a review disposition only", async () => {
   f.failed();
   f.data.status = "WAITING_FOR_HUMAN";

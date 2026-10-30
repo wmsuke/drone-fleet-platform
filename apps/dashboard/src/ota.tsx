@@ -90,11 +90,14 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
     [, tick] = useState(0);
   const before = params.get("before") ?? undefined,
     beforeId = params.get("beforeId") ?? undefined;
+  const evidenceLimitText = params.get("evidenceLimit") ?? "20";
+  const evidenceLimit = evidenceLimitText === "100" ? 100 : 20;
   const valid =
     (!before ||
       (/^\d{4}-\d{2}-\d{2}T/.test(before) &&
         Number.isFinite(Date.parse(before)))) &&
-    (!beforeId || (!!before && uuid.safeParse(beforeId).success));
+    (!beforeId || (!!before && uuid.safeParse(beforeId).success)) &&
+    (!id || ["20", "100"].includes(evidenceLimitText));
   const list = useQuery({
     queryKey: ["ota-list", base, before, beforeId],
     queryFn: ({ signal }) => fetchDeployments(base, before, beforeId, signal),
@@ -103,9 +106,9 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
     refetchInterval: 5000,
   });
   const detail = useQuery({
-    queryKey: ["ota-detail", base, id],
-    queryFn: ({ signal }) => fetchDeployment(base, id!, signal),
-    enabled: !!id,
+    queryKey: ["ota-detail", base, id, evidenceLimit],
+    queryFn: ({ signal }) => fetchDeployment(base, id!, signal, evidenceLimit),
+    enabled: !!id && valid,
     retry: false,
     refetchInterval: 5000,
   });
@@ -169,6 +172,19 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
         5秒ごとに更新する。停止要求・停止確認、更新成功・旧版回復、人間判断の終了は別の事実です。管理APIは本人認証なしのローカル・制限ネットワーク専用です。
       </p>
       {action.panel}
+      {id && evidenceLimit === 20 && (
+        <button
+          type="button"
+          disabled={detail.isFetching || !valid}
+          onClick={() => {
+            const copy = new URLSearchParams(params);
+            copy.set("evidenceLimit", "100");
+            setParams(copy);
+          }}
+        >
+          根拠を100件まで読み直す
+        </button>
+      )}
       <button
         type="button"
         disabled={q.isFetching || !valid}
@@ -181,7 +197,7 @@ function ConnectedOta({ base, id }: { base: string; id?: string }) {
           ページ条件が不正です。<Link to="/deployments">一覧へ戻る</Link>
         </p>
       )}
-      {q.isPending && <p role="status">配信情報を読み込み中…</p>}
+      {valid && q.isPending && <p role="status">配信情報を読み込み中…</p>}
       {q.isError && (
         <p role="alert">
           配信情報を取得できません。古い表示からは操作できません。
