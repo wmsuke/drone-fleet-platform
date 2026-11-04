@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { rm, readFile, writeFile, open } from "node:fs/promises";
 import { randomUUID, sign } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -66,6 +66,76 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
       await rm(f.root, { recursive: true, force: true });
     }
   });
+  it("keeps a challenged failure terminal while an observation is in flight", async () => {
+    const app = await setup();
+    await normal("RETURN_HOME");
+    const request = applyRequest(f.candidate);
+    await app.handle(request);
+    await until(() => app.journal.read().health?.count === 1, 30000);
+    const inspect = app.child.inspect.bind(app.child);
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inspecting = 0;
+    // 次のobserveと定期INVENTORYの両方を待たせ、QUERYだけに一時異常を返す。
+    const heldInspection = async (...args: Parameters<typeof inspect>) => {
+      const healthy = await inspect(...args);
+      inspecting++;
+      await barrier;
+      return healthy;
+    };
+    const spy = vi
+      .spyOn(app.child, "inspect")
+      .mockImplementationOnce(heldInspection)
+      .mockImplementationOnce(heldInspection);
+    try {
+      await until(() => inspecting === 2);
+      expect(app.journal.read()).toMatchObject({
+        phase: "HEALTH_CHECKING",
+        health: { count: 1 },
+      });
+      spy.mockImplementationOnce(async (...args) => ({
+        ...(await inspect(...args)),
+        sqlite: false,
+      }));
+      const { purpose, ...queryBase } = request;
+      expect(purpose).toBe("APPLY");
+      const now = Date.now();
+      await app.handle({
+        ...queryBase,
+        type: "QUERY_STATE",
+        commandId: randomUUID(),
+        applyCommandId: request.commandId,
+        challengeId: randomUUID(),
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 15000).toISOString(),
+        resultDeadline: new Date(now + 15000).toISOString(),
+      });
+      expect(app.journal.events().at(-1)).toMatchObject({
+        type: "HEALTH",
+        checks: { sqlite: "FAILED" },
+      });
+      expect((await inspect("HEALTH", request.fence)).sqlite).toBe(true);
+      release();
+      await app.wait();
+      expect(app.journal.read()).toMatchObject({
+        phase: "FAILED",
+        fault: "HEALTH_FAILED",
+        health: { count: 1 },
+      });
+      expect(
+        app.journal
+          .events()
+          .some(
+            (event) => event.type === "PROGRESS" && event.state === "APPLIED",
+          ),
+      ).toBe(false);
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  }, 100000);
   it.each(["APPLIED", "HEALTH_CHECKING"] as const)(
     "runs a signed bundle and rolls back after a challenged health failure during %s",
     async (phase) => {

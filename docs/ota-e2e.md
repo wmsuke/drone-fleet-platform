@@ -27,6 +27,7 @@
 | rollback失敗/不能、報告欠落・停止競合・人間引継ぎ、旧attemptの重複遅着 | `test:ota-fleet` 実MQTT/DB/Linux |
 | 保存receipt欠落と重複受信 | `test:ota-backend` 実MQTT/DB/Linux |
 | 不正署名・破損artifact・非互換・容量不足、receipt断、download停止、切替前後と起動時の不明状態 | `test:ota-device` 実Linux・Broker代替、journal境界fixtureを含む |
+| 実行中のhealth観測と一時異常のQUERYの競合、失敗確定後の成功抑止 | `test:ota-device` 実Linux・検査応答の順序制御 |
 | 遅延/古いattempt、停止競合、retry予算、rollback失敗/不能・人間引継ぎ | `api:test:integration` 実DB・制御clock/証拠fixture |
 
 コンポーネント検証を10台すべてへの物理的障害注入と同一視しない。OSの強制電源断、実機firmware、実AWSのOTA、ブラウザからの実更新、長時間負荷、ネットワーク課金量は未確認である。
@@ -44,6 +45,8 @@ OrbStack上のLinuxコンテナで正常系10台を2回完走した。1回目は
 端末障害テストは容量不足・download停止追加後に14件成功した。その後追加した「health失敗後のSTOP」の回帰テストで、FAILEDがSTOPPEDへ変わり復旧観測が止まる不具合を再現した。停止確認通知と既知の失敗終端を分け、FAILEDを保持する修正を含めた。通常更新・失敗・復旧の履歴やhealth成功条件は緩めない。
 
 APPLIED/HEALTH_CHECKINGの両段階を含む端末テスト15件も成功した。health確認中の負のchallenge応答を端末の予算開始時刻へ永続化し、backendの異常停止が先行した場合も未計測時間へ補完しない。確認済みPAUSEDへの同じ失敗の証拠追加が復旧承認と競合する問題も実MQTTで再現し、DB回帰37件で確認した。新たなintegrity違反・不確定は引き続き人間判断へ移す。
+
+レビュー後の追加回帰では、実bundleの更新と最初のhealth標本を待ち、進行中のobserveと定期INVENTORYの検査応答を保留する。その間のQUERYだけに一時的なSQLite異常を返し、実子アプリのSQLiteが正常であることを確認してから保留した正常応答を解放する。修正前は13標本まで進みFAILEDをAPPLIEDへ上書きして不合格、修正後はFAILED・HEALTH_FAILED・最初の標本を維持して成功した。手動でphaseをHEALTH_CHECKINGへ変える既存fixtureとは別の並行実行テストであり、実ディスク障害や実MQTTの異常注入を証明するものではない。
 
 この修正を含む専用PostgreSQLのAPI統合テストは147件成功、1件skipした。初期帰還の完了確認と旧attempt重複後のtarget/boot維持も最終E2Eへ含める。
 

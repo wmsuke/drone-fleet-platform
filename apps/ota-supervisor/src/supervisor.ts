@@ -843,8 +843,17 @@ export class Supervisor {
     this.lastTelemetrySequence = -1;
     this.receiptSequence = -1;
     this.progress("HEALTH_CHECKING", { health: null });
+    // QUERYが確定した失敗を、並行する検査の正常応答で上書きしない。
+    const observing = () => {
+      const current = this.journal.read();
+      return (
+        current.apply?.commandId === request.commandId &&
+        current.phase === "HEALTH_CHECKING"
+      );
+    };
     const bootDeadline = performance.now() + 30000;
     let probe = await this.child.inspect("HEALTH", request.fence);
+    if (!observing()) return;
     while (
       (!probe.receipts || !this.lastReceipt) &&
       performance.now() < bootDeadline
@@ -852,16 +861,20 @@ export class Supervisor {
       if (this.closing || this.abort?.signal.aborted)
         throw new OtaError("RESULT_UNKNOWN");
       await delay(250);
+      if (!observing()) return;
       probe = await this.child.inspect("HEALTH", request.fence);
+      if (!observing()) return;
     }
     for (let count = 1; count <= 13; count++) {
       if (this.stopRequest) {
         await this.stopped();
         return;
       }
+      if (!observing()) return;
       if (Date.now() >= Date.parse(request.resultDeadline))
         throw new OtaError("RESULT_UNKNOWN");
       probe = await this.child.inspect("HEALTH", request.fence);
+      if (!observing()) return;
       if (Object.values(this.checks(probe)).some((v) => v !== "PASSED"))
         throw new OtaError("HEALTH_FAILED");
       const now = performance.now();
@@ -896,6 +909,7 @@ export class Supervisor {
         }
       }
     }
+    if (!observing()) return;
     const sample = this.journal.read().health!;
     if (sample.lastMs - sample.startedMs < 60000)
       throw new OtaError("HEALTH_FAILED");
