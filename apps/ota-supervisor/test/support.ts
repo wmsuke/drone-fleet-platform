@@ -203,7 +203,7 @@ export async function fixture(
             version,
             buildId: `build-${version}`,
             behavior,
-            temperatureOffset: version === "0.1.0" ? 0 : 4,
+            temperatureOffset: behavior === "baseline" ? 0 : 4,
           })
         : Buffer.from("console.info('fixture');"),
     );

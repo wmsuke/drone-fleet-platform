@@ -93,6 +93,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
         }[] = [];
         const initialBoots = new Map<string, string>();
         const homeIds: string[] = [];
+        const telemetrySessions = new Map<string, Map<string, number>>();
         const wireEvents = new Map<string, number>();
         const wireReceipts = new Map<string, number>();
         const localCommands: { commandId: string; status?: string }[] = [];
@@ -108,6 +109,18 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
         );
         controller.on("message", (topic, bytes) => {
           const value = JSON.parse(bytes.toString());
+          if (
+            topic.endsWith("/telemetry") &&
+            ids.includes(value.deviceId) &&
+            value.sequence === 0
+          ) {
+            const sessions =
+              telemetrySessions.get(value.deviceId) ??
+              new Map<string, number>();
+            sessions.set(value.sessionId, value.payload.temperature);
+            telemetrySessions.set(value.deviceId, sessions);
+            return;
+          }
           if (topic.endsWith("/command-acks")) {
             const command = localCommands.find(
               (c) => c.commandId === value.commandId,
@@ -180,6 +193,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
               "fleet/v1/devices/+/ota-events",
               "fleet/v1/devices/+/ota-receipts",
               "fleet/v1/devices/+/command-acks",
+              "fleet/v1/devices/+/telemetry",
             ],
             { qos: 1 },
           );
@@ -460,6 +474,11 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
               const observed = await supervisor.child.inspect("HEALTH", "1");
               expect(observed.behavior).toBe("updated");
               expect(observed.bootId).not.toBe(initialBoots.get(ids[i]!));
+              const temperatures = [
+                ...telemetrySessions.get(ids[i]!)!.values(),
+              ];
+              expect(temperatures).toHaveLength(2);
+              expect(temperatures[1]! - temperatures[0]!).toBeCloseTo(4);
               expect(
                 supervisor.journal.events().filter((e) => e.type === "VERSION"),
               ).toHaveLength(1);
@@ -649,9 +668,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                 (t: { deviceId: string }) => t.deviceId === ids[0],
               ).status,
             ).toBe(
-              scenario === "canary-health-rollback"
-                ? "RECOVERED"
-                : "FAILED",
+              scenario === "canary-health-rollback" ? "RECOVERED" : "FAILED",
             );
             expect(
               (
@@ -778,6 +795,17 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                       telemetryIntervalMs: f.config.telemetryIntervalMs,
                     },
                     localCommands,
+                    telemetrySessions: [...telemetrySessions].map(
+                      ([deviceId, sessions]) => ({
+                        deviceId,
+                        sessions: [...sessions].map(
+                          ([sessionId, temperature]) => ({
+                            sessionId,
+                            temperature,
+                          }),
+                        ),
+                      }),
+                    ),
                     deviceJournals: supervisors.map((supervisor, i) => {
                       const state = supervisor.journal.read();
                       return {
