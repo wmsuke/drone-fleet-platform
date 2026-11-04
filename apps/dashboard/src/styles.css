@@ -590,6 +590,96 @@ a {
   border-radius: 12px;
   padding: 1rem;
 }
+.ota-panel pre,
+.ota-panel code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ota-panel input:not([type="checkbox"]),
+.ota-panel textarea,
+.ota-panel select {
+  display: block;
+  width: min(100%, 34rem);
+  padding: 0.6rem;
+  font: inherit;
+}
+.ota-panel label {
+  display: block;
+  margin-block: 0.75rem;
+}
+.ota-panel input[type="checkbox"] {
+  width: auto;
+  display: inline;
+}
+.ota-panel button {
+  padding: 0.6rem 0.8rem;
+  margin: 0.25rem;
+  font: inherit;
+}
+.ota-panel :focus-visible {
+  outline: 3px solid #0e7490;
+  outline-offset: 3px;
+}
+.ota-summary dd,
+.ota-panel td,
+.ota-records,
+.ota-identifier {
+  overflow-wrap: anywhere;
+}
+.ota-summary dd {
+  margin: 0.3rem 0 1rem;
+}
+.ota-panel .table-scroll {
+  overflow-x: auto;
+}
+.ota-panel table {
+  table-layout: fixed;
+  min-width: 46rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+.ota-panel h2 {
+  font-size: clamp(1.8rem, 5vw, 3.3rem);
+  line-height: 1.2;
+}
+.ota-panel table th:nth-child(1) {
+  width: 15%;
+}
+.ota-panel table th:nth-child(2) {
+  width: 30%;
+}
+.ota-panel table th:nth-child(3) {
+  width: 25%;
+}
+.ota-panel table th:nth-child(4) {
+  width: 30%;
+}
+.ota-panel th,
+.ota-panel td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #cbd5e1;
+  text-align: left;
+  vertical-align: top;
+  max-width: 35rem;
+}
+.ota-panel summary {
+  cursor: pointer;
+  padding-block: 0.5rem;
+}
+.ota-control {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 28rem;
+}
+.ota-stages li,
+.ota-records li {
+  border-bottom: 1px solid #cbd5e1;
+  padding-block: 0.75rem;
+}
+.ota-request {
+  margin-block: 1rem;
+}
 .group-form input {
   display: block;
   max-width: 100%;

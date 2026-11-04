@@ -201,12 +201,18 @@ export function registerDeploymentRoutes(
       .object({
         limit: z.coerce.number().int().min(1).max(100).default(20),
         before: z.iso.datetime({ precision: 3 }).optional(),
+        beforeId: z.uuid().optional(),
       })
       .strict()
+      .refine((q) => !q.beforeId || !!q.before)
       .safeParse(request.query);
     if (!query.success)
       return reply.code(400).send({ error: "INVALID_DEPLOYMENT_QUERY" });
-    return repository.list(query.data.limit, query.data.before);
+    return repository.list(
+      query.data.limit,
+      query.data.before,
+      query.data.beforeId,
+    );
   });
   app.get("/deployments/:deploymentId", async (request, reply) => {
     const params = z

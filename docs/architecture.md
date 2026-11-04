@@ -349,6 +349,8 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 #173で[OTAの人間介入記録](ota-interventions.md)を追加した。必須の段階承認と障害対応を分け、操作・介入・auditを同時保存する。判断対応の開始/終了は機体の停止確認や回復成功の代替にせず、本人未確認・作業時間/費用の欠測を残す。
 
+#174で[OTAの段階配信画面](ota-dashboard.md)を追加した。配信物/対象/段階の確認、段階承認、配送/適用/healthの根拠、停止/復旧と介入/auditを追跡する。受付確認待ちは同じkey・本文を保持し、結果不明や古い観測から危険な再適用を許可しない。
+
 ## Phase 4の設計と実装範囲
 
 #137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)、#143で一覧・詳細・確認APIと画面を実装した。#144で操作と状態変更のauditを同時commitする。

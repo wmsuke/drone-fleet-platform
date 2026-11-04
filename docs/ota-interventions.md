@@ -45,6 +45,8 @@ deployment詳細の`interventionSummary`は必須承認/障害対応/未終了�
 
 ## 信頼境界
 
+#174の[OTA画面](ota-dashboard.md)で介入履歴・auditと判断対応を追跡できる。画面でも受付開始/終了・自己申告作業時間・不明費用を区別し、対応終了を端末の回復成功にしない。
+
 HTTP actorは既存同様`anonymous / null`で、本人・権限を認証できない。X-Actor-Id等のheaderや本文からactorを採用せず、requestIdもサーバー発行の相関IDに限る。対応の開始者と終了者が同一人物であることも保証しない。APIはローカル・制限ネットワーク専用であり、公開や実機運用には認証・対象単位の認可が別途必要となる。
 
 同じdeployment lockで並行要求を直列化し、操作と介入/auditの片方だけを保存しない。FK・scope検証・一度限りの終了更新で別deploymentへの誤関連や既存の介入内容の上書きを拒否する。DB ownerによる削除・trigger無効化への改ざん耐性は保証しない。自由文・payload全文・秘密値は保存せず、idempotency key/hashは取得APIに出さない。

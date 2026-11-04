@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { otaInventoryMessageSchema } from "@drone-fleet/protocol";
 import {
   otaDeployments,
   otaStages,
@@ -12,19 +13,24 @@ import {
   otaActions,
   otaStops,
   otaRecoveries,
+  otaInventories,
   type Database,
 } from "@drone-fleet/database";
 
 export function createDeploymentQueries(db: Database) {
   return {
-    async list(limit: number, before?: string) {
+    async list(limit: number, before?: string, beforeId?: string) {
       return db.transaction(
         async (tx) => {
           const rows = await tx
             .select()
             .from(otaDeployments)
             .where(
-              before ? sql`${otaDeployments.createdAt} < ${before}` : undefined,
+              before
+                ? beforeId
+                  ? sql`(${otaDeployments.createdAt},${otaDeployments.deploymentId}) < (${before}::timestamptz,${beforeId}::uuid)`
+                  : sql`${otaDeployments.createdAt} < ${before}`
+                : undefined,
             )
             .orderBy(
               desc(otaDeployments.createdAt),
@@ -56,6 +62,8 @@ export function createDeploymentQueries(db: Database) {
               rows.length > limit
                 ? rows[limit - 1]!.createdAt.toISOString()
                 : null,
+            nextBeforeId:
+              rows.length > limit ? rows[limit - 1]!.deploymentId : null,
           };
         },
         { isolationLevel: "repeatable read", accessMode: "read only" },
@@ -232,8 +240,29 @@ export function createDeploymentQueries(db: Database) {
               .select()
               .from(otaDeviceStates)
               .where(eq(otaDeviceStates.deviceId, target.deviceId));
+            const [inventory] = await tx
+              .select()
+              .from(otaInventories)
+              .where(
+                and(
+                  eq(otaInventories.deviceId, target.deviceId),
+                  eq(otaInventories.reason, "ACCEPTED"),
+                ),
+              )
+              .orderBy(desc(otaInventories.sequence))
+              .limit(1);
+            const observation = otaInventoryMessageSchema.safeParse(
+              inventory?.payload,
+            );
             items.push({
               ...target,
+              observation:
+                inventory && observation.success
+                  ? {
+                      receivedAt: inventory.receivedAt.toISOString(),
+                      payload: observation.data,
+                    }
+                  : null,
               current: current
                 ? {
                     releaseId: current.snapshot.releaseId,
