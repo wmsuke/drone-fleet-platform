@@ -351,6 +351,8 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 #174で[OTAの段階配信画面](ota-dashboard.md)を追加した。配信物/対象/段階の確認、段階承認、配送/適用/healthの根拠、停止/復旧と介入/auditを追跡する。受付確認待ちは同じkey・本文を保持し、結果不明や古い観測から危険な再適用を許可しない。
 
+ローカルの10台段階配信と障害停止・復旧は[OTA E2E](ota-e2e.md)で再現する。実MQTT/DB/Linuxでの一貫検証と、端末・DBの障害境界fixtureを区別し、各実行のイベント数・所要時間・cleanup結果を保存する。
+
 ## Phase 4の設計と実装範囲
 
 #137で`groups`と`group_memberships`のDB schema・migration、group管理APIを追加した。1機体は複数groupへ所属でき、変更はgroup行のロックとrevisionで直列化する。groupは論理削除してmembershipを保持する。APIの入力検証とrepositoryを分離し、一覧・詳細に所属台数とdeviceId一覧を返す。#138でgroup一覧・詳細、作成・名称変更・削除、機体の所属編集をdashboardへ追加した。詳細は[機体グループAPI](groups-api.md)を参照する。#142で[alertの生成・解除](alerts.md)、#143で一覧・詳細・確認APIと画面を実装した。#144で操作と状態変更のauditを同時commitする。

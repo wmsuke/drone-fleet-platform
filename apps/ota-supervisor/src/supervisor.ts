@@ -905,8 +905,11 @@ export class Supervisor {
   private async stopped() {
     if (!this.stopRequest) return;
     await this.child.inspect("HEALTH", this.stopRequest.fence);
+    // 既知の失敗後の停止確認で、失敗終端と復旧用INVENTORYを失わない。
+    // STOPPED通知とQUERYのFAILED終端は、backendで別々に照合する。
+    const phase = this.journal.read().phase === "FAILED" ? "FAILED" : "STOPPED";
     this.journal.change(
-      { phase: "STOPPED" },
+      { phase },
       {
         type: "PROGRESS",
         requestType: "STOP_UPDATE",

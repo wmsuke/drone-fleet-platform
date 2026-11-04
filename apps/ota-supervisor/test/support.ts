@@ -184,7 +184,10 @@ export class Broker extends EventEmitter {
     return this as unknown as SimulatorMqttClient;
   }
 }
-export async function fixture(realBundle = false) {
+export async function fixture(
+  realBundle = false,
+  versions = ["0.1.0", "0.2.0"],
+) {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "ota-device-test-")),
   );
@@ -209,8 +212,9 @@ export async function fixture(realBundle = false) {
     archives.set(envelope.manifest.digest, bytes);
     return envelope;
   }
-  const baseline = await add("0.1.0", "baseline");
-  const candidate = await add("0.2.0", "updated");
+  const baseline = await add(versions[0]!, "baseline");
+  const candidate = await add(versions[1]!, "updated");
+  const faults = { holdArchive: false, archiveRequests: 0 };
   const server = createServer((req, res) => {
     const id = req.url?.split("/").at(-1) ?? "";
     if (req.url?.startsWith("/releases/") && releases.has(id))
@@ -218,9 +222,11 @@ export async function fixture(realBundle = false) {
     else if (
       req.url?.startsWith("/objects/") &&
       archives.has(id.replace(/\.tar\.gz$/, ""))
-    )
-      res.end(archives.get(id.replace(/\.tar\.gz$/, "")));
-    else res.writeHead(404).end();
+    ) {
+      faults.archiveRequests++;
+      if (!faults.holdArchive)
+        res.end(archives.get(id.replace(/\.tar\.gz$/, "")));
+    } else res.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -254,5 +260,14 @@ export async function fixture(realBundle = false) {
     clockTrusted: true,
     telemetryIntervalMs: 250,
   };
-  return { root, config, baseline, candidate, releases, archives, server };
+  return {
+    root,
+    config,
+    baseline,
+    candidate,
+    releases,
+    archives,
+    server,
+    faults,
+  };
 }

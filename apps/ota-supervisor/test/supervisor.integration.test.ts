@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rm, readFile, writeFile } from "node:fs/promises";
+import { rm, readFile, writeFile, open } from "node:fs/promises";
 import { randomUUID, sign } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { canonical } from "@drone-fleet/releases";
@@ -177,6 +177,18 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
       checks: { receipts: "FAILED" },
     });
     broker.receiptEnabled = true;
+    const stopTime = Date.now();
+    await supervisor.handle({
+      ...queryBase,
+      type: "STOP_UPDATE",
+      commandId: randomUUID(),
+      applyCommandId: request.commandId,
+      createdAt: new Date(stopTime).toISOString(),
+      expiresAt: new Date(stopTime + 30000).toISOString(),
+      resultDeadline: new Date(stopTime + 60000).toISOString(),
+    });
+    // backendの異常停止が追加されても、既知の失敗終端と復旧観測を失わない。
+    expect(supervisor.journal.read().phase).toBe("FAILED");
     await normal("RETURN_HOME");
     const observed = await supervisor.child.inspect("HEALTH", "1"),
       budget = supervisor.journal.budget(request.targetId)!;
@@ -239,10 +251,19 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
         ),
     ).toBe(true);
   }, 200000);
-  it.each(["signature", "digest", "compatibility"])(
+  it.each(["signature", "digest", "compatibility", "capacity"])(
     "keeps the active bundle when %s verification fails",
     async (kind) => {
       const app = await setup();
+      if (kind === "capacity") {
+        // 論理サイズで端末の512 MiB上限を越える。ホストdiskは埋めない。
+        const file = await open(join(f.config.root, "capacity-fixture"), "w");
+        try {
+          await file.truncate(400 * 1024 * 1024);
+        } finally {
+          await file.close();
+        }
+      }
       if (kind === "signature")
         f.candidate.signature = Buffer.alloc(64).toString("base64");
       if (kind === "digest")
@@ -258,6 +279,10 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
       await app.wait();
       expect(app.journal.read().active).toEqual(f.baseline);
       expect(app.journal.read().phase).toBe("FAILED");
+      if (kind === "capacity")
+        expect(app.journal.events().at(-1)).toMatchObject({
+          reason: "CAPACITY_EXCEEDED",
+        });
       if (kind === "compatibility")
         expect(app.journal.events().at(-1)).toMatchObject({
           reason: "INCOMPATIBLE_RELEASE",
@@ -350,6 +375,43 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
         .events()
         .some((e) => e.type === "PROGRESS" && e.state === "QUIESCING"),
     ).toBe(false);
+  }, 20000);
+  it("stops an in-flight download and does not reapply the delayed duplicate after restart", async () => {
+    const app = await setup();
+    await normal("RETURN_HOME");
+    f.faults.holdArchive = true;
+    const request = applyRequest(f.candidate);
+    await app.handle(request);
+    await until(() => f.faults.archiveRequests === 1);
+    const { purpose, ...base } = request;
+    expect(purpose).toBe("APPLY");
+    const now = Date.now();
+    await app.handle({
+      ...base,
+      type: "STOP_UPDATE",
+      commandId: randomUUID(),
+      applyCommandId: request.commandId,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 30000).toISOString(),
+      resultDeadline: new Date(now + 60000).toISOString(),
+    });
+    await app.wait();
+    expect(app.journal.read()).toMatchObject({
+      phase: "STOPPED",
+      active: f.baseline,
+    });
+    await app.close();
+    supervisor = undefined;
+    broker = new Broker();
+    supervisor = new Supervisor(f.config, broker.client());
+    await supervisor.start();
+    const boot = (await supervisor.child.inspect("HEALTH", "1")).bootId;
+    await supervisor.handle(request);
+    expect(f.faults.archiveRequests).toBe(1);
+    expect((await supervisor.child.inspect("HEALTH", "1")).bootId).toBe(boot);
+    expect(
+      supervisor.journal.events().filter((e) => e.type === "VERSION"),
+    ).toHaveLength(0);
   }, 20000);
   it.each([false, true])(
     "reconciles the atomic switch boundary with new pointer=%s without reapplying",
