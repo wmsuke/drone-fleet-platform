@@ -346,6 +346,19 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                   f.candidate.manifest.digest,
                 "candidate boot",
               );
+              if (scenario !== "missing-reports") {
+                // 起動直後のreceipt未到着と、稼働後の経路断を混ぜない。
+                await until(async () => {
+                  if (
+                    supervisors[0]!.journal.read().phase !== "HEALTH_CHECKING"
+                  )
+                    return false;
+                  return (
+                    (await supervisors[0]!.child.inspect("HEALTH", "1"))
+                      .receipts > 0
+                  );
+                }, "candidate received telemetry receipt");
+              }
               if (scenario === "missing-reports") blockReports = true;
               else blockReceipts = true;
               break;
