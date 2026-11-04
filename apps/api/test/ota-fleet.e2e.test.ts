@@ -651,7 +651,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
             ).toBe(
               scenario === "canary-health-rollback"
                 ? "RECOVERED"
-                : "WAITING_FOR_HUMAN",
+                : "FAILED",
             );
             expect(
               (
