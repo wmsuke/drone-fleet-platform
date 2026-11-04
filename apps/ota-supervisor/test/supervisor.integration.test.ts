@@ -66,191 +66,200 @@ describe.skipIf(!enabled)("real Linux Node 22 application OTA", () => {
       await rm(f.root, { recursive: true, force: true });
     }
   });
-  it("runs a signed bundle and explicitly rolls back to the retained old bundle after a health failure", async () => {
-    const app = await setup();
-    const before = await app.child.inspect("HEALTH", "0");
-    expect(before.behavior).toBe("baseline");
-    const denied = spawnSync(
-      process.execPath,
-      [
-        "-e",
-        `require('node:fs').readFileSync(${JSON.stringify(join(f.config.root, "private/journal.sqlite"))})`,
-      ],
-      { uid: 10001, gid: 10001, stdio: "ignore" },
-    );
-    expect(denied.status).not.toBe(0);
-    const firstTelemetry = broker.messages.find((m) =>
-      m.topic.endsWith("/telemetry"),
-    )!.payload as { sessionId: string; payload: { temperature: number } };
-    await normal("REBOOT");
-    await normal("RETURN_HOME");
-    const request = applyRequest(f.candidate);
-    await app.handle(request);
-    await expect(
-      app.handle({
-        ...request,
-        commandId: randomUUID(),
-        attemptId: randomUUID(),
-        fence: "2",
-      }),
-    ).rejects.toThrow("DEVICE_BUSY");
-    await app.wait();
-    expect(app.journal.read()).toMatchObject({
-      phase: "APPLIED",
-      active: f.candidate,
-      knownGood: f.baseline,
-      health: { count: 13 },
-    });
-    const after = await app.child.inspect("HEALTH", "1");
-    expect(after.behavior).toBe("updated");
-    expect(after.bootId).not.toBe(before.bootId);
-    expect(after.version).toBe("0.2.0");
-    expect(after.sqlite).toBe(true);
-    const newTelemetry = broker.messages.find(
-      (m) =>
-        m.topic.endsWith("/telemetry") &&
-        m.payload.sequence === 0 &&
-        m.payload.sessionId !== firstTelemetry.sessionId,
-    )!.payload as { payload: { temperature: number } };
-    expect(
-      newTelemetry.payload.temperature - firstTelemetry.payload.temperature,
-    ).toBeCloseTo(4);
-    const { purpose, ...queryBase } = request;
-    expect(purpose).toBe("APPLY");
-    const now = Date.now();
-    await app.handle({
-      ...queryBase,
-      type: "QUERY_STATE",
-      commandId: randomUUID(),
-      applyCommandId: request.commandId,
-      challengeId: randomUUID(),
-      createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + 15000).toISOString(),
-      resultDeadline: new Date(now + 15000).toISOString(),
-    });
-    expect(app.journal.events().at(-1)).toMatchObject({
-      type: "HEALTH",
-      running: { release: { version: "0.2.0" } },
-      checks: { sqlite: "PASSED", eventLoop: "PASSED" },
-    });
-    expect(
-      app.journal
-        .events()
-        .some(
-          (e) => e.type === "VERSION" && e.running.release.version === "0.2.0",
-        ),
-    ).toBe(true);
-    const count = app.journal.events().length;
-    await app.handle(request);
-    expect(app.journal.events()).toHaveLength(count);
-    await expect(
-      app.handle({
-        ...request,
-        release: { ...request.release, buildId: "changed" },
-      }),
-    ).rejects.toThrow("COMMAND_CONFLICT");
-    await app.close();
-    supervisor = undefined;
-    broker = new Broker();
-    supervisor = new Supervisor(f.config, broker.client());
-    await supervisor.start();
-    expect((await supervisor.child.inspect("HEALTH", "1")).version).toBe(
-      "0.2.0",
-    );
-    await normal("RETURN_HOME");
-    broker.receiptEnabled = false;
-    await delay(16000);
-    const failureTime = Date.now();
-    await supervisor.handle({
-      ...queryBase,
-      type: "QUERY_STATE",
-      commandId: randomUUID(),
-      applyCommandId: request.commandId,
-      challengeId: randomUUID(),
-      createdAt: new Date(failureTime).toISOString(),
-      expiresAt: new Date(failureTime + 15000).toISOString(),
-      resultDeadline: new Date(failureTime + 15000).toISOString(),
-    });
-    expect(supervisor.journal.read().phase).toBe("FAILED");
-    expect(supervisor.journal.events().at(-1)).toMatchObject({
-      type: "HEALTH",
-      checks: { receipts: "FAILED" },
-    });
-    broker.receiptEnabled = true;
-    const stopTime = Date.now();
-    await supervisor.handle({
-      ...queryBase,
-      type: "STOP_UPDATE",
-      commandId: randomUUID(),
-      applyCommandId: request.commandId,
-      createdAt: new Date(stopTime).toISOString(),
-      expiresAt: new Date(stopTime + 30000).toISOString(),
-      resultDeadline: new Date(stopTime + 60000).toISOString(),
-    });
-    // backendの異常停止が追加されても、既知の失敗終端と復旧観測を失わない。
-    expect(supervisor.journal.read().phase).toBe("FAILED");
-    await normal("RETURN_HOME");
-    const observed = await supervisor.child.inspect("HEALTH", "1"),
-      budget = supervisor.journal.budget(request.targetId)!;
-    const start = Date.now(),
-      rollback = {
-        ...request,
-        purpose: "ROLLBACK" as const,
-        release: identity(f.baseline),
-        attemptId: randomUUID(),
-        commandId: randomUUID(),
-        fence: "2",
-        createdAt: new Date(start).toISOString(),
-        expiresAt: new Date(start + 300000).toISOString(),
-        resultDeadline: new Date(start + 600000).toISOString(),
-        recovery: {
-          recoveryId: randomUUID(),
-          previousAttemptId: request.attemptId,
-          rootAttemptId: request.attemptId,
-          kind: "ROLLBACK" as const,
-          detectedAt: budget.detected_at!,
-          budgetDeadline: budget.deadline!,
-          maxDownloadBytes: 268435456 as const,
-        },
-      };
-    const trust = await readFile(f.config.trustPath, "utf8");
-    try {
-      await writeFile(f.config.trustPath, JSON.stringify({ keys: [] }));
-      await expect(supervisor.handle(rollback)).rejects.toThrow(
-        "UNTRUSTED_KEY",
+  it.each(["APPLIED", "HEALTH_CHECKING"] as const)(
+    "runs a signed bundle and rolls back after a challenged health failure during %s",
+    async (phase) => {
+      const app = await setup();
+      const before = await app.child.inspect("HEALTH", "0");
+      expect(before.behavior).toBe("baseline");
+      const denied = spawnSync(
+        process.execPath,
+        [
+          "-e",
+          `require('node:fs').readFileSync(${JSON.stringify(join(f.config.root, "private/journal.sqlite"))})`,
+        ],
+        { uid: 10001, gid: 10001, stdio: "ignore" },
       );
-    } finally {
-      await writeFile(f.config.trustPath, trust);
-    }
-    expect(supervisor.journal.budget(request.targetId)!.rollback_used).toBe(0);
-    await supervisor.handle(rollback);
-    await supervisor.wait();
-    expect(supervisor.journal.read()).toMatchObject({
-      phase: "APPLIED",
-      active: f.baseline,
-      knownGood: f.baseline,
-      health: { count: 13 },
-    });
-    const restored = await supervisor.child.inspect("HEALTH", "2");
-    expect(restored.version).toBe("0.1.0");
-    expect(restored.bootId).not.toBe(observed.bootId);
-    expect(restored.behavior).toBe("baseline");
-    expect(supervisor.journal.budget(request.targetId)).toMatchObject({
-      rollback_used: 1,
-      bytes: budget.bytes,
-      deadline: budget.deadline,
-    });
-    expect(
-      supervisor.journal
-        .events()
-        .some(
-          (e) =>
-            e.attemptId === rollback.attemptId &&
-            e.type === "VERSION" &&
-            e.running.release.releaseId === f.baseline.manifest.releaseId,
-        ),
-    ).toBe(true);
-  }, 200000);
+      expect(denied.status).not.toBe(0);
+      const firstTelemetry = broker.messages.find((m) =>
+        m.topic.endsWith("/telemetry"),
+      )!.payload as { sessionId: string; payload: { temperature: number } };
+      await normal("REBOOT");
+      await normal("RETURN_HOME");
+      const request = applyRequest(f.candidate);
+      await app.handle(request);
+      await expect(
+        app.handle({
+          ...request,
+          commandId: randomUUID(),
+          attemptId: randomUUID(),
+          fence: "2",
+        }),
+      ).rejects.toThrow("DEVICE_BUSY");
+      await app.wait();
+      expect(app.journal.read()).toMatchObject({
+        phase: "APPLIED",
+        active: f.candidate,
+        knownGood: f.baseline,
+        health: { count: 13 },
+      });
+      const after = await app.child.inspect("HEALTH", "1");
+      expect(after.behavior).toBe("updated");
+      expect(after.bootId).not.toBe(before.bootId);
+      expect(after.version).toBe("0.2.0");
+      expect(after.sqlite).toBe(true);
+      const newTelemetry = broker.messages.find(
+        (m) =>
+          m.topic.endsWith("/telemetry") &&
+          m.payload.sequence === 0 &&
+          m.payload.sessionId !== firstTelemetry.sessionId,
+      )!.payload as { payload: { temperature: number } };
+      expect(
+        newTelemetry.payload.temperature - firstTelemetry.payload.temperature,
+      ).toBeCloseTo(4);
+      const { purpose, ...queryBase } = request;
+      expect(purpose).toBe("APPLY");
+      const now = Date.now();
+      await app.handle({
+        ...queryBase,
+        type: "QUERY_STATE",
+        commandId: randomUUID(),
+        applyCommandId: request.commandId,
+        challengeId: randomUUID(),
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 15000).toISOString(),
+        resultDeadline: new Date(now + 15000).toISOString(),
+      });
+      expect(app.journal.events().at(-1)).toMatchObject({
+        type: "HEALTH",
+        running: { release: { version: "0.2.0" } },
+        checks: { sqlite: "PASSED", eventLoop: "PASSED" },
+      });
+      expect(
+        app.journal
+          .events()
+          .some(
+            (e) =>
+              e.type === "VERSION" && e.running.release.version === "0.2.0",
+          ),
+      ).toBe(true);
+      const count = app.journal.events().length;
+      await app.handle(request);
+      expect(app.journal.events()).toHaveLength(count);
+      await expect(
+        app.handle({
+          ...request,
+          release: { ...request.release, buildId: "changed" },
+        }),
+      ).rejects.toThrow("COMMAND_CONFLICT");
+      await app.close();
+      supervisor = undefined;
+      broker = new Broker();
+      supervisor = new Supervisor(f.config, broker.client());
+      await supervisor.start();
+      expect((await supervisor.child.inspect("HEALTH", "1")).version).toBe(
+        "0.2.0",
+      );
+      await normal("RETURN_HOME");
+      // QUERYがlocalの次の標本より先に失敗を観測した場合も予算起点を保存する。
+      supervisor.journal.change({ phase });
+      broker.receiptEnabled = false;
+      await delay(16000);
+      const failureTime = Date.now();
+      await supervisor.handle({
+        ...queryBase,
+        type: "QUERY_STATE",
+        commandId: randomUUID(),
+        applyCommandId: request.commandId,
+        challengeId: randomUUID(),
+        createdAt: new Date(failureTime).toISOString(),
+        expiresAt: new Date(failureTime + 15000).toISOString(),
+        resultDeadline: new Date(failureTime + 15000).toISOString(),
+      });
+      expect(supervisor.journal.read().phase).toBe("FAILED");
+      expect(supervisor.journal.events().at(-1)).toMatchObject({
+        type: "HEALTH",
+        checks: { receipts: "FAILED" },
+      });
+      broker.receiptEnabled = true;
+      const stopTime = Date.now();
+      await supervisor.handle({
+        ...queryBase,
+        type: "STOP_UPDATE",
+        commandId: randomUUID(),
+        applyCommandId: request.commandId,
+        createdAt: new Date(stopTime).toISOString(),
+        expiresAt: new Date(stopTime + 30000).toISOString(),
+        resultDeadline: new Date(stopTime + 60000).toISOString(),
+      });
+      // backendの異常停止が追加されても、既知の失敗終端と復旧観測を失わない。
+      expect(supervisor.journal.read().phase).toBe("FAILED");
+      await normal("RETURN_HOME");
+      const observed = await supervisor.child.inspect("HEALTH", "1"),
+        budget = supervisor.journal.budget(request.targetId)!;
+      const start = Date.now(),
+        rollback = {
+          ...request,
+          purpose: "ROLLBACK" as const,
+          release: identity(f.baseline),
+          attemptId: randomUUID(),
+          commandId: randomUUID(),
+          fence: "2",
+          createdAt: new Date(start).toISOString(),
+          expiresAt: new Date(start + 300000).toISOString(),
+          resultDeadline: new Date(start + 600000).toISOString(),
+          recovery: {
+            recoveryId: randomUUID(),
+            previousAttemptId: request.attemptId,
+            rootAttemptId: request.attemptId,
+            kind: "ROLLBACK" as const,
+            detectedAt: budget.detected_at!,
+            budgetDeadline: budget.deadline!,
+            maxDownloadBytes: 268435456 as const,
+          },
+        };
+      const trust = await readFile(f.config.trustPath, "utf8");
+      try {
+        await writeFile(f.config.trustPath, JSON.stringify({ keys: [] }));
+        await expect(supervisor.handle(rollback)).rejects.toThrow(
+          "UNTRUSTED_KEY",
+        );
+      } finally {
+        await writeFile(f.config.trustPath, trust);
+      }
+      expect(supervisor.journal.budget(request.targetId)!.rollback_used).toBe(
+        0,
+      );
+      await supervisor.handle(rollback);
+      await supervisor.wait();
+      expect(supervisor.journal.read()).toMatchObject({
+        phase: "APPLIED",
+        active: f.baseline,
+        knownGood: f.baseline,
+        health: { count: 13 },
+      });
+      const restored = await supervisor.child.inspect("HEALTH", "2");
+      expect(restored.version).toBe("0.1.0");
+      expect(restored.bootId).not.toBe(observed.bootId);
+      expect(restored.behavior).toBe("baseline");
+      expect(supervisor.journal.budget(request.targetId)).toMatchObject({
+        rollback_used: 1,
+        bytes: budget.bytes,
+        deadline: budget.deadline,
+      });
+      expect(
+        supervisor.journal
+          .events()
+          .some(
+            (e) =>
+              e.attemptId === rollback.attemptId &&
+              e.type === "VERSION" &&
+              e.running.release.releaseId === f.baseline.manifest.releaseId,
+          ),
+      ).toBe(true);
+    },
+    200000,
+  );
   it.each(["signature", "digest", "compatibility", "capacity"])(
     "keeps the active bundle when %s verification fails",
     async (kind) => {

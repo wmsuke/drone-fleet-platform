@@ -599,7 +599,7 @@ export class Supervisor {
     if (request.challengeId) {
       if (
         Object.values(this.checks(probe)).includes("FAILED") &&
-        this.journal.read().phase === "APPLIED"
+        ["HEALTH_CHECKING", "APPLIED"].includes(this.journal.read().phase)
       ) {
         this.journal.failure(apply.targetId);
         this.journal.change({ phase: "FAILED", fault: "HEALTH_FAILED" });
