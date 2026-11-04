@@ -92,6 +92,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
           passedAt?: string;
         }[] = [];
         const initialBoots = new Map<string, string>();
+        const homeIds: string[] = [];
         const wireEvents = new Map<string, number>();
         const wireReceipts = new Map<string, number>();
         const localCommands: { commandId: string; status?: string }[] = [];
@@ -271,6 +272,7 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
             const home = await createCommandService(
               createCommandRepository(db),
             ).send(deviceId, "RETURN_HOME");
+            homeIds.push(home.commandId);
             const [outbox] = await db
               .select()
               .from(commandOutbox)
@@ -279,21 +281,21 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
               qos: 1,
               retain: false,
             });
-            await until(
-              async () =>
-                (
-                  await db
-                    .select()
-                    .from(commands)
-                    .where(eq(commands.commandId, home.commandId))
-                )[0]?.executionStatus === "SUCCEEDED",
-              `${deviceId} home`,
-            );
             initialBoots.set(
               deviceId,
               (await supervisor.child.inspect("HEALTH", "0")).bootId,
             );
           }
+          await until(async () => {
+            const results = await db
+              .select()
+              .from(commands)
+              .where(inArray(commands.commandId, homeIds));
+            return (
+              results.length === 10 &&
+              results.every((c) => c.executionStatus === "SUCCEEDED")
+            );
+          }, "ten home results");
           await until(
             async () =>
               (
@@ -684,7 +686,18 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                 (wireReceipts.get(oldEvent.eventId) ?? 0) >= beforeReceipts + 3,
               "duplicate receipts",
             );
-            expect((await detail()).status).toBe("WAITING_FOR_HUMAN");
+            const afterLate = await detail();
+            expect(afterLate.status).toBe("WAITING_FOR_HUMAN");
+            const beforeTarget = recovered.targets.find(
+              (t: { deviceId: string }) => t.deviceId === ids[0],
+            );
+            const afterTarget = afterLate.targets.find(
+              (t: { deviceId: string }) => t.deviceId === ids[0],
+            );
+            expect(afterTarget.status).toBe(beforeTarget.status);
+            expect(afterTarget.current.bootId).toBe(
+              beforeTarget.current.bootId,
+            );
             expect(
               await db
                 .select()
@@ -834,6 +847,22 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                   (_, value) =>
                     typeof value === "bigint" ? value.toString() : value,
                 ),
+              );
+            } else {
+              console.info(
+                "OTA_FLEET_REPORT",
+                JSON.stringify({
+                  scenario,
+                  passed: false,
+                  phase: "SETUP",
+                  startedAt,
+                  finishedAt: new Date(),
+                  commands: await db
+                    .select()
+                    .from(commands)
+                    .where(inArray(commands.deviceId, ids))
+                    .catch(() => []),
+                }),
               );
             }
           } finally {
