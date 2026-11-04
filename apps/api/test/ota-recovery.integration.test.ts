@@ -360,6 +360,54 @@ describe.skipIf(!enabled)("bounded OTA recovery with PostgreSQL", () => {
     }
   });
 
+  it("keeps a confirmed pause while repeated failure evidence arrives, but escalates new integrity failures", async () => {
+    const evidence = createOtaRepository(db!, { clock: () => now });
+    await fact(
+      {
+        type: "STATE",
+        state: "FAILED",
+        queryCommandId: randomUUID(),
+        running: { release: identity(old), bootId },
+      },
+      2,
+    );
+    await evidence.tick();
+    expect(
+      (
+        await db!
+          .select()
+          .from(otaDeployments)
+          .where(eq(otaDeployments.deploymentId, root.deploymentId))
+      )[0]!.status,
+    ).toBe("PAUSED");
+    expect(
+      await db!
+        .select()
+        .from(otaEvaluations)
+        .where(eq(otaEvaluations.attemptId, root.attemptId)),
+    ).toHaveLength(2);
+    await fact(
+      {
+        type: "PROGRESS",
+        requestType: "APPLY_RELEASE",
+        state: "FAILED",
+        commandId: root.commandId,
+        reason: "INVALID_SIGNATURE",
+        downloadedBytes: 256,
+      },
+      3,
+    );
+    await evidence.tick();
+    expect(
+      (
+        await db!
+          .select()
+          .from(otaDeployments)
+          .where(eq(otaDeployments.deploymentId, root.deploymentId))
+      )[0]!.status,
+    ).toBe("WAITING_FOR_HUMAN");
+  });
+
   it("records recovery approval once, links anonymous audit and keeps observed recovery separate", async () => {
     const key = randomUUID();
     const [a, b] = await Promise.all([

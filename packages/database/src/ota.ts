@@ -30,6 +30,7 @@ import {
   otaInventories,
   otaReservations,
   otaRecoveries,
+  otaRollouts,
   devices,
   releases,
 } from "./schema.js";
@@ -301,6 +302,22 @@ export function createOtaRepository(
           "CAPACITY_EXCEEDED",
         ].includes(String(r.payload.reason)),
       );
+      // 確認済みの同じ失敗にSTATE等の根拠が増えても、復旧承認と競合する
+      // 一時的なWAITING_FOR_HUMANへ戻さない。新たな不確定・integrityは除く。
+      if (
+        !c.recovery &&
+        !integrity &&
+        verdict.status === "FAILED" &&
+        c.attempt.evaluationStatus === "FAILED" &&
+        c.deployment.status === "PAUSED" &&
+        stage?.status === "PAUSED"
+      ) {
+        const [control] = await tx
+          .select()
+          .from(otaRollouts)
+          .where(eq(otaRollouts.deploymentId, c.target.deploymentId));
+        if (control?.stoppedAt) return;
+      }
       if (
         verdict.status !== "UNCERTAIN" &&
         !integrity &&
