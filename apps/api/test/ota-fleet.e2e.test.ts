@@ -616,6 +616,14 @@ describe.skipIf(process.env.OTA_FLEET_INTEGRATION !== "true")(
                   f.baseline.manifest.digest,
                 "rollback boot",
               );
+              await until(async () => {
+                if (supervisors[0]!.journal.read().phase !== "HEALTH_CHECKING")
+                  return false;
+                return (
+                  (await supervisors[0]!.child.inspect("HEALTH", "2"))
+                    .receipts > 0
+                );
+              }, "rollback received telemetry receipt");
               blockReceipts = true;
             }
             await until(
