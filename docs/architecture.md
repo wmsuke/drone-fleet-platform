@@ -334,7 +334,9 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 6のROS 2 Bridge設計（未実装）
+## Phase 6のROS 2 Bridge設計（Bridgeは未実装）
+
+#190で[ROS 2参照環境](ros-reference.md)を追加した。専用container内の参照publisher・service・Action serverと実DDS smokeを提供する。既存simulator、MQTT、API、DBとはまだ接続しない。
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)で、Ubuntu 24.04 / ROS 2 Jazzy / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使う構成を採用した。Cloudは受付・配送と事実の保存、Bridgeは永続対応・意味変換・再照会、機体AdapterはActionと能力の意味、機体側は独立した制約・watchdogを担当する。DDSは参照containerのlocalhostへ閉じ、MQTTをリアルタイム制御へ入れない。
 

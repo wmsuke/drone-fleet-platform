@@ -1,0 +1,15 @@
+{
+  "image": "docker.io/library/ros",
+  "tagAtCapture": "jazzy-ros-base",
+  "indexDigest": "sha256:8eed0a4669bbf43ee331878a4c39bd8ebddea8e3312a58b4fae8edb14526b617",
+  "manifests": {
+    "amd64": "sha256:c26c86a28e1addf9d10a81232869791974a3f7907943d5634742b58b2f26e1a3",
+    "arm64": "sha256:1db94fb5490d0a9c5485e27624c9cf26206c6ff4b26136291628ce8de14f7a6c"
+  },
+  "upstreamDockerfilesRevision": "0038f1c3a11aa0fc573d698b39ab5c204aad5a40",
+  "rosDistribution": "jazzy",
+  "rmw": "rmw_fastrtps_cpp",
+  "dependencySource": "Installed packages and rosdep cache are frozen inside the OCI image; no apt, pip, vcs import or rosdep update/install runs during this build.",
+  "rosdepUsed": false,
+  "additionalPythonDependencies": []
+}

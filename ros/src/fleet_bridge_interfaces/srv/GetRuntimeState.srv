@@ -1,0 +1,4 @@
+string<=64 device_id
+---
+bool valid
+fleet_bridge_interfaces/RuntimeState state

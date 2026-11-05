@@ -10,6 +10,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "test:ros-reference": "bash scripts/test-ros-reference.sh",
     "test:ota-fleet": "bash scripts/test-ota-fleet.sh",
     "test:ota-backend": "bash scripts/test-ota-backend.sh",
     "test:ota-device": "bash scripts/test-ota-device.sh",

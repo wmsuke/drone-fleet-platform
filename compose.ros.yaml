@@ -1,0 +1,13 @@
+services:
+  reference:
+    build:
+      context: ./ros
+      network: none
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 10s

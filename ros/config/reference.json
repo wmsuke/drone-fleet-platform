@@ -1,0 +1,6 @@
+{
+  "devices": [
+    { "device_id": "ros-ref-001", "seed": 190 },
+    { "device_id": "ros-ref-002", "seed": 191, "temperature": null }
+  ]
+}
