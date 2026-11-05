@@ -483,7 +483,8 @@ docker compose down --volumes
 - [OTAの10台段階配信・障害停止・復旧E2E](docs/ota-e2e.md)
 - [端末の実更新と起動後health（opt-in simulator）](docs/ota-device.md)
 - [ADR 0007: OTAの実更新・成功評価・復旧境界](docs/adr/0007-ota-update-evaluation-and-recovery.md)
-- [ADR 0008: ROS 2 Bridgeの責務・通信契約・復旧境界（設計のみ）](docs/adr/0008-ros2-bridge-contract-and-recovery.md)
+- [ADR 0008: ROS 2 Bridgeの責務・通信契約・復旧境界](docs/adr/0008-ros2-bridge-contract-and-recovery.md)
+- [ROS 2の参照ノードと固定開発環境](docs/ros-reference.md)
 
 ## ライセンス
 

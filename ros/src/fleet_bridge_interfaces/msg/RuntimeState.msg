@@ -1,0 +1,15 @@
+std_msgs/Header header
+string<=64 device_id
+string<=36 server_instance_id
+string<=64 configuration_id
+string<=64 home_id
+geometry_msgs/PoseStamped home_pose
+bool has_active_goal
+unique_identifier_msgs/UUID active_goal_id
+bool has_last_terminal_goal
+unique_identifier_msgs/UUID last_terminal_goal_id
+string<=32 flight_status
+string<=64 reason
+bool ready
+uint32 accepted_count
+uint32 execution_count

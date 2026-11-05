@@ -1,0 +1,28 @@
+string<=64 device_id
+string<=36 command_id
+unique_identifier_msgs/UUID goal_id
+string<=36 server_instance_id
+string<=64 expected_configuration_id
+builtin_interfaces/Time expires_at
+builtin_interfaces/Time result_deadline
+string<=64 home_id
+string<=192 frame_id
+---
+unique_identifier_msgs/UUID goal_id
+string<=36 server_instance_id
+string<=64 configuration_id
+bool started
+builtin_interfaces/Time started_at
+builtin_interfaces/Time finished_at
+string<=64 reason
+geometry_msgs/PoseStamped final_pose
+geometry_msgs/TwistStamped final_velocity
+float64 home_distance_m
+float64 stable_duration_s
+---
+unique_identifier_msgs/UUID goal_id
+string<=36 server_instance_id
+string<=64 configuration_id
+builtin_interfaces/Time started_at
+string<=32 phase
+float64 distance_m

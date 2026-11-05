@@ -1,6 +1,6 @@
 # ADR 0008: ROS 2 Bridgeの責務・通信契約・復旧境界
 
-- 状態: 採用する設計。#189では文書のみ。Bridge・ROS workspace・新schema/API/DB・実ROS検証は#190〜#199で実装する
+- 状態: 採用する設計。#190で参照workspaceと実ROS smokeを追加した。Bridge・新schema/API/DB・Cloud連携E2Eは#191〜#199で実装する
 - 決定日: 2026-11-05
 - 対象: [親Issue #188](https://github.com/wmsuke/drone-fleet-platform/issues/188)、#189〜#199、Phase 6 / v0.6.0
 - 前提: Phase 5の#176 / PR #200は完了。現行の[通信仕様](../protocol.md)、[command期限](../command-durability.md)、[実行結果](../command-results.md)、[ADR 0005](0005-delivery-and-recovery.md)を維持する
@@ -12,7 +12,7 @@
 
 JazzyのNoble arm64/amd64とFast DDSの対応は[REP 2000](https://github.com/ros-infrastructure/rep/blob/master/rep-2000.rst#jazzy-jalisco-may-2024-may-2029)、deb導入は[公式Jazzy手順の原文](https://github.com/ros2/ros2_documentation/blob/jazzy/source/Installation/Ubuntu-Install-Debs.rst)で確認した。macOSでのnative buildや非公式Node.js ROS bindingより、両CPUで同じ公式Python clientを使える構成を優先する。Rollingの追随、C++アプリ、Cyclone DDSとの併用、別RMW間の互換試験は初期対象外とする。選定は性能比較の結果ではない。
 
-#190で実在するbase imageのmanifest digestとCPU別digest、apt packageの完全version一覧・取得元snapshot、rosdep定義のrevision、workspace commitを固定する。`latest`、無指定のapt upgrade、rosdepの実行時更新を再現の根拠にしない。Python追加依存はhash付きlockへ固定し、MQTTには[Paho Python](https://github.com/eclipse-paho/paho.mqtt.python)を使う。実version/digestを本ADRへ架空に記載せず、固定済みmanifestと再build試験を#190の完了条件にする。base tagだけの固定は不十分である。
+#190で`ros/locks`に公式OCIのindex/CPU別digest、全debの完全version一覧と取得元Dockerfile revisionを固定した。取得元snapshotはOCI自体であり、追加のapt/pip/rosdep/vcs解決は行わない。そのためrosdep定義revisionの固定は不要とし、未使用をmanifestへ明記する。workspace commit/変更状態とsource hashは試験結果へ記録する。詳細は[参照環境](../ros-reference.md)を参照する。`latest`、apt upgrade、rosdepの実行時更新を再現の根拠にしない。将来Python追加依存が必要になればhash付きlockへ固定し、MQTTには[Paho Python](https://github.com/eclipse-paho/paho.mqtt.python)を使う。base tagだけの固定は不十分である。
 
 Python側でZod契約を手書き複製しない。`packages/protocol`をwire契約の正とし、#191以降でJSON Schemaの生成物・hashとPython validatorを固定し、同じ正常/不正fixtureを両言語で検証する。SQLiteとPython MQTTの実装は既存TypeScriptの部品を直接流用できないため、同じ保存/期限/receipt規則を共有fixtureで検査する。今回、依存追加やホストのROS導入は行わない。
 
