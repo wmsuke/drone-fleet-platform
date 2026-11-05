@@ -6,7 +6,7 @@ Backend、AWS、IoTの実装から始め、Edge、ROS 2、ドローンシミュ�
 
 ## 現在の状況
 
-Phase 4までの対象機能を実装した。Docker Composeによるローカル構成、Phase 2のAWS IoT接続、Phase 3の永続バッファ・receipt・outboxに加え、group操作・実行結果・alert・auditを利用できる。[v0.4.0](releases/v0.4.0.md)と[複数機体運用デモ](fleet-demo.md)に確認手順を記す。HTTP操作者の認証は未実装で、Phase 3・4の実AWS横断検証も未実施。Phase 2.5の負荷結果と#146のcommand負荷結果は別に扱う。ローカル構成はAWS projectや証明書なしで引き続き利用できる。
+Phase 5のlocal simulator OTAまで実装した。Docker Composeによるローカル構成、Phase 2のAWS IoT接続、Phase 3の永続バッファ・receipt・outboxに加え、group操作・実行結果・alert・audit、署名済みアプリの段階配信・証拠評価・停止復旧を利用できる。[v0.5.0](releases/v0.5.0.md)と[OTAデモ](ota-demo.md)、既存の[複数機体運用デモ](fleet-demo.md)に確認手順を記す。HTTP操作者の認証、実AWS OTA・実機は未実装または未検証。Phase 2.5の負荷結果と#146のcommand負荷結果はOTAの規模実績と分ける。ローカル構成はAWS projectや証明書なしで引き続き利用できる。
 
 日付による期限は設けず、各Phaseの完了条件を満たした時点で次へ進む。個別の作業と進捗はGitHub Issueで管理する。
 
@@ -192,15 +192,17 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 リリース：`v0.5.0`
 
+状態：#165〜#175のlocal simulator実装とE2Eを完了し、#176で[デモ・更新順序・保証範囲](ota-demo.md)と[v0.5.0リリースノート](releases/v0.5.0.md)を整備した。旧simulatorとローカル構成を維持する。Edge Agent・実AWS OTA・実機・汎用Task/KPI集計は未実装または未検証である。
+
 親Issueは[#164](https://github.com/wmsuke/drone-fleet-platform/issues/164)。#135完了後、#165で[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)、#166で[配信物管理](releases.md)、#168で[端末の実適用とlocal health](ota-device.md)、#170で[backendの保存・証拠評価](ota-evaluation.md)を実装した。更新するのは署名済みアプリbundleで、OTA用構成だけ固定supervisorと機体別の子プロセスへ分ける。version書き換え・受領・download完了では成功にせず、新bootのversion/digestと60秒の新鮮な継続healthを確認する。
 
 #167で[OTA通信契約](ota-protocol.md)の型・schema・topic・IoT Policy定義、#168で端末側の送受信・実適用、#169で[固定snapshotのdeployment受付](deployments-api.md)と通常commandの予約gate、#170で観測登録・保存/receipt・評価と進捗API、#171で[段階承認・永続配送・異常停止/再開](ota-rollout.md)を追加した。受付時は承認待ちHELDとし、前段階の全対象成功・現在状態確認と明示承認後だけ次段階を解禁する。実装順はrelease・配信元（#166）と通信契約（#167）→実適用（#168）・snapshot受付（#169）→証拠評価（#170）→段階/停止（#171）→制限付き復旧（#172）→介入記録（#173）→画面（#174）→10台E2E（#175）→デモ文書（#176）。各Issueの依存関係と移行・検証条件はADRに定める。
 
-初期の1/3/残りの段階構成、対象上限100、全stage対象を分母とする評価、昇格承認、停止要求と停止確認の分離を採用する。結果不明・未停止は自動再適用せず、人間判断待ちにする。rollbackは旧版の署名・状態schema互換性・前試行停止を確認した別attemptで、回復healthまで追跡する。AWS IoT Jobsは初期対象外、local配信を先に実装し、AWSで配信する場合は#64の条件に加えて保存・転送の費用を確認する。今回AWS作成・OTA実更新・障害注入は行っていない。
+初期の1/3/残りの段階構成、対象上限100、全stage対象を分母とする評価、昇格承認、停止要求と停止確認の分離を採用する。結果不明・未停止は自動再適用せず、人間判断待ちにする。rollbackは旧版の署名・状態schema互換性・前試行停止を確認した別attemptで、回復healthまで追跡する。AWS IoT Jobsは初期対象外、local配信を実装し、AWSで配信する場合は#64の条件に加えて保存・転送の費用を確認する。local実更新・限定した障害注入を#175で検証したが、AWS作成・実AWS OTAは行っていない。
 
-#172で[許可付きretry・rollbackと復旧評価](ota-recovery.md)を追加した。適用前の一時的download失敗だけをretryし、15分/256 MiBと各1回の永続予算・直接停止/現在状態・旧版の検証を要求する。rollback成功を元releaseの更新成功へ数えない。実Linuxの障害/旧版切替とbackend証拠評価を検証し、実MQTTでのrollback全経路・10台の全障害条件・実AWSのOTA・実機は検証済みへ含めない。
+#172で[許可付きretry・rollbackと復旧評価](ota-recovery.md)を追加した。適用前の一時的download失敗だけをretryし、15分/256 MiBと各1回の永続予算・直接停止/現在状態・旧版の検証を要求する。rollback成功を元releaseの更新成功へ数えない。#175で実MQTT/DB/Linuxの明示rollback全経路も検証した。10台すべてへの全障害条件・実AWSのOTA・実機まで検証済みにはしない。
 
-#173で[承認・障害対応の人間介入記録](ota-interventions.md)を追加した。操作とauditを同時保存し、対応開始/終了・判断・復旧への関連と、不明な作業時間/費用を取得できる。介入した経路を自律完了へ読み替えない。OTA専用画面とKPI集計は含めない。
+#173で[承認・障害対応の人間介入記録](ota-interventions.md)を追加した。操作とauditを同時保存し、対応開始/終了・判断・復旧への関連と、不明な作業時間/費用を取得できる。介入した経路を自律完了へ読み替えない。OTA専用画面は#174で追加し、KPI集計は後続とする。
 
 #174で[段階配信・評価・停止復旧の画面](ota-dashboard.md)を追加した。理由付き確認、同一要求の再確認、対象ページング、復旧と介入/auditの導線を備える。10台実更新と全障害の横断E2Eは#175、KPI集計は後続の範囲とする。
 

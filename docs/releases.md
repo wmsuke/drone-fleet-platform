@@ -1,6 +1,6 @@
 # 更新配信物の登録とlocal配信
 
-#166で署名付きmanifest v1の登録・参照、検証済みreleaseの保存、専用HTTP配信を追加した。この文書は[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)のうち配信物管理を扱う。後続で追加した[端末への実適用](ota-device.md)、[deployment受付](deployments-api.md)、[保存receiptと証拠評価](ota-evaluation.md)は各文書を参照する。stage解禁・APPLY配送はまだ未実装である。
+#166で署名付きmanifest v1の登録・参照、検証済みreleaseの保存、専用HTTP配信を追加した。この文書は[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)のうち配信物管理を扱う。[端末への実適用](ota-device.md)、[deployment受付](deployments-api.md)、[保存receiptと証拠評価](ota-evaluation.md)、[段階承認・配送](ota-rollout.md)、[実更新・復旧デモ](ota-demo.md)は各文書を参照する。
 
 ## 責務と安全上の境界
 
@@ -9,7 +9,7 @@
 - 登録リクエストにURLやfile pathを含めない。APIは外部HTTP/DNSへ接続せず、検証済みdigestの固定file名だけを読むため、登録入力によるSSRFやredirectは発生しない。HTTPサービスも完全一致のpath以外を404にする。
 - `compose.releases.yaml`は明示したときだけ有効になる。HTTPはCompose内とホストloopbackでの検証専用。外部公開・実機運用は禁止で、認証・認可も未実装である。外部配信にはHTTPSと認可の設計が別途必要になる。
 - 配信領域と公開鍵だけをread-only mountする。秘密鍵は署名端末だけに置き、API・artifact containerへmountしない。設定directoryとobjectにsymlinkを使わない。
-- 端末downloadで必要なorigin allowlist、接続時DNS検証、redirect拒否、取得予算・再試行は#168で実装する。今回は端末HTTP clientを実装していない。
+- 端末downloadのorigin allowlist、接続時DNS検証、redirect拒否、取得予算・再試行は#168のsupervisorで実装した。配信物登録APIは端末HTTP clientの代替ではない。
 
 ## 生成・起動
 

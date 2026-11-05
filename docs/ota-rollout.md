@@ -52,4 +52,4 @@ STOP受領だけ、PUBACKだけ、期限超過だけでは停止完了にしな�
 
 専用PostgreSQLの`pnpm api:test:integration`で、先行評価/承認gate、固定Nの10%境界と9%/UNCERTAIN、複数workerのslot/速度、停止と送信の競合、再開・失効鍵・期限・STOP確認・予約解放を検証する。集約テストの成功入力は評価済み証拠fixtureで、60秒評価そのものは既存の証拠評価テストで検証する。
 
-`pnpm test:ota-backend`は実MQTT・DB・Linuxの異なる実bundleを使い、公開承認API→永続APPLY worker→実適用→保存receipt再送→backend再起動→60秒health評価→COMPLETEDを確認する。専用container/network/volumeは終了時に削除する。10台1/3/6と全障害注入は#175、復旧は#172、実AWSのOTA・実機は未検証である。
+`pnpm test:ota-backend`は実MQTT・DB・Linuxの異なる実bundleを使い、公開承認API→永続APPLY worker→実適用→保存receipt再送→backend再起動→60秒health評価→COMPLETEDを確認する。#175の`pnpm test:ota-fleet`では10台1/3/6と先行health失敗・後続抑止・rollback成功/失敗/不能・報告欠落を検証した。専用container/network/volumeは終了時に削除する。[デモ](ota-demo.md)と[障害マトリクス](ota-e2e.md)を参照する。全crash境界の実故障注入、実AWSのOTA・実機は未検証である。

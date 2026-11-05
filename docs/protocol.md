@@ -56,13 +56,15 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ## 共通項目
 
-### Phase 5の通信契約（送受信サービスは未対応）
+### Phase 5の通信契約（opt-in OTA）
 
 #165の[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)で、既存の`fleet/v1/devices/{deviceId}/`配下に`ota-requests`、`ota-events`、`ota-receipts`を追加する設計を定めた。いずれも新規schemaVersion 1、QoS 1・retainなし。APPLY_RELEASE / STOP_UPDATE / QUERY_STATEと進捗・boot/version/health・DB保存receiptを扱う。既存command v2・ACK v1/v2/v3・telemetry v1/v2・status/receipt v1はそのまま維持する。
 
 deploymentId・stageId・targetId・attemptId・commandId・releaseId/digest・fence・期限を照合し、eventの重複/衝突・古いattempt・遅着を分ける。fenceは64bit整数の10進文字列とし、healthは期限付きchallengeと継続観測で評価する。受領・適用・評価・停止確認・回復成功を別に記録する。初期OTA開始期限300秒・結果期限600秒はstage解禁時に固定し、既存commandの期限へ影響させない。
 
 #167で上記topicの生成/解析、OTA v1のZod schema・型・scope照合とTerraformのIoT Policy定義を追加した。契約・掲載JSON・採否規則は[OTA通信仕様 v1](ota-protocol.md)を参照する。#168で[端末の実適用](ota-device.md)、#170で[INVENTORY・ingestorの保存/receipt・QUERY照会と継続health評価](ota-evaluation.md)、#171で[段階承認・APPLY配送・停止と再開](ota-rollout.md)を追加した。未対応端末へOTAを送らず、受信側・Policy・supervisorを揃えてから有効にする。実AWSへのPolicy適用は今回行わない。
+
+#172〜#175で明示復旧・介入記録と10台E2Eまで追加した。既存command/ACK/telemetryの互換性を維持し、OTA専用event/receiptを通常ACKへ混ぜない。[デモと更新順序](ota-demo.md)に受付・受領・適用・評価、停止とrollbackの違いをまとめる。MQTT PUBACKやSTOREDは更新成功を示さない。
 
 ### 現在のメッセージ
 

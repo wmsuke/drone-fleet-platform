@@ -6,7 +6,7 @@ TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置
 
 ## 開発状況
 
-Phase 4の複数機体運用まで実装済みで、`v0.4.0`の対象機能として次の範囲を利用できる。変更点と更新時の注意は[v0.4.0リリースノート](docs/releases/v0.4.0.md)を参照する。Git tag・GitHub Releaseの発行を意味しない。
+Phase 5のlocalアプリOTAまで実装し、`v0.5.0`の対象機能として次の範囲を利用できる。変更点と更新順序・互換性は[v0.5.0リリースノート](docs/releases/v0.5.0.md)を参照する。Git tag・GitHub Releaseの発行を意味しない。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -32,6 +32,10 @@ Phase 4の複数機体運用まで実装済みで、`v0.4.0`の対象機能と�
 - ACK v3の実行結果通知、機体別の結果とoperation全体の集約・追跡画面
 - OFFLINE・低battery・command不成功のalert、確認と自動解除の分離
 - 操作・状態変更のaudit log、検索APIと閲覧画面（操作者の認証は未実装）
+- 署名済みsimulator bundleの実更新、機体別supervisorと永続journal
+- OTA対象snapshot・段階承認、継続healthの証拠評価、停止確認・明示rollbackと介入記録
+
+[OTAの実更新・停止・復旧デモ](docs/ota-demo.md)は`corepack pnpm test:ota-fleet`で専用ローカル10台を起動する。1/3/6の段階配信と障害時の後続抑止、旧版回復を実MQTT/DB/Linuxで確認し、専用資源を削除する。通常の10台simulatorは維持し、OTAは明示設定時だけ有効である。実機・firmware・実AWSのOTA成功を示すものではない。
 
 [複数機体運用デモ](docs/fleet-demo.md)では、group作成→所属設定→帰還→結果→alertの発生・確認・解除→auditの追跡を、専用のローカルComposeで再現できる。通常の1操作の上限は100台。100台の負荷検証と1,000台で残った制約は[#146の実測](docs/load-testing/fleet-commands.md)、混在結果と後着成功は[#147のE2E](docs/fleet-e2e.md)を参照する。
 
@@ -469,7 +473,8 @@ docker compose down --volumes
 - [ADR 0002: デバイスとの通信にMQTTを使う](docs/adr/0002-mqtt-protocol.md)
 - [ADR 0003: 初期の保存先にPostgreSQLを使う](docs/adr/0003-database.md)
 - [ADR 0006: 複数機体操作の集約状態と運用記録](docs/adr/0006-fleet-operations-alerts-and-audit.md)
-- [更新配信物の登録・検証とlocal配信（実更新は未実装）](docs/releases.md)
+- [OTAデモ・更新手順・保証範囲](docs/ota-demo.md)
+- [更新配信物の登録・検証とlocal配信](docs/releases.md)
 - [OTA通信仕様 v1（型・topic・権限の契約）](docs/ota-protocol.md)
 - [OTA deploymentの受付API](docs/deployments-api.md)
 - [OTA進捗の保存と証拠評価](docs/ota-evaluation.md)
