@@ -228,6 +228,7 @@ class ReferenceAdapter(Node):
             s = self.state
             try:
                 command = uuid.UUID(request.command_id)
+                canonical_command = str(command)
                 goal = uuid.UUID(bytes=bytes(request.goal_id.uuid))
                 identifiers_valid = command.version == 4 and goal.version == 4
             except ValueError:
@@ -236,7 +237,7 @@ class ReferenceAdapter(Node):
                 s.reason = "INVALID_GOAL"
             elif s.active is not None:
                 s.reason = "DEVICE_BUSY"
-            elif len(s.commands) >= 10000 or request.command_id in s.commands:
+            elif len(s.commands) >= 10000 or canonical_command in s.commands:
                 s.reason = "COMMAND_REPLAY_OR_FULL"
             elif (
                 request.server_instance_id != s.server_id
@@ -254,7 +255,7 @@ class ReferenceAdapter(Node):
                 s.reason = s.check()
             else:
                 s.active = goal
-                s.commands.add(request.command_id)
+                s.commands.add(canonical_command)
                 s.accepted += 1
                 s.reason = "GOAL_ACCEPTED"
                 return GoalResponse.ACCEPT

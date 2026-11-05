@@ -271,6 +271,33 @@ def test_action_scenarios(runtime, scenario):
     assert response.result.final_velocity.twist.linear.x == 0
 
 
+@pytest.mark.parametrize("first_format", ["canonical", "upper", "hex"])
+def test_command_uuid_spellings_cannot_replay_completed_goal(runtime, first_format):
+    node, start = runtime
+    device = "replay-" + first_format
+    start([{"device_id": device}])
+    probe = Probe(node, device)
+    command = uuid.UUID("a1234567-89ab-4cde-8fab-0123456789ab")
+    spellings = {"canonical": str(command), "upper": str(command).upper(), "hex": command.hex}
+    handle = probe.send(lambda goal: setattr(goal, "command_id", spellings[first_format]))
+    assert handle.accepted
+    assert probe.result(handle).status == GoalStatus.STATUS_SUCCEEDED
+    assert probe.get_state().ready  # 実行中のDEVICE_BUSYによる拒否ではない
+    for spelling in spellings.values():
+        # sendごとに異なるtransport/payload goal UUIDを用いる。
+        duplicate = probe.send(lambda goal: setattr(goal, "command_id", spelling))
+        assert not duplicate.accepted
+        state = probe.get_state()
+        assert state.reason == "COMMAND_REPLAY_OR_FULL"
+        assert state.accepted_count == 1 and state.execution_count == 1
+    # 重複でないcommandは引き続き受け付けられる。
+    fresh = probe.send()
+    assert fresh.accepted
+    assert probe.result(fresh).status == GoalStatus.STATUS_SUCCEEDED
+    state = probe.get_state()
+    assert state.accepted_count == 2 and state.execution_count == 2
+
+
 def test_invalid_goal_and_domain_isolation(runtime):
     node, start = runtime
     start([{"device_id": "validation"}])

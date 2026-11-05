@@ -34,6 +34,8 @@ Ubuntu 24.04 / Jazzy / Fast DDS (`rmw_fastrtps_cpp`) / Python 3.12 / colconを�
 
 `ReturnHome`はgoal IDとROS transport UUIDの一致、開始期限、結果期限を確認する。homeへの距離0.2m以下、速度0.05m/s以下が1秒続いた場合だけ成功とする。Action受付・feedback・result・cancel受付は別の事実。結果の保持は同一processの900秒のみで、restart後の復旧は未実装。REBOOTやNav2への読み替えはしない。
 
+command IDはUUIDをcanonical表記へ正規化して照合・保存する。同じUUIDの大文字/小文字・ハイフン有無は同一commandとし、終了後も別goalによる再受付を拒否する。この重複記録は同じserver process内だけで有効。
+
 | scenario | 振る舞い |
 | --- | --- |
 | `success` | homeへ移動し安定条件を満たして成功 |
