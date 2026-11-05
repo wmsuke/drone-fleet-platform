@@ -1,0 +1,52 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2.0.22@sha256:09b62ff32c2e7b64d4b431b9a89236073289b68db273de2b089edeb9b0d92b5c
+    volumes:
+      - ./ros/config/mosquitto-bridge-local.conf:/mosquitto/config/mosquitto.conf:ro
+      - bridge-mqtt-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-t", "fleet/health", "-m", "ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [fleet]
+  reference:
+    image: ${ROS_BRIDGE_IMAGE:-drone-fleet-ros:local}
+    build:
+      context: ./ros
+      network: none
+    init: true
+    ipc: shareable
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [fleet]
+  bridge:
+    image: ${ROS_BRIDGE_IMAGE:-drone-fleet-ros:local}
+    init: true
+    command: ["ros2", "run", "fleet_bridge", "run"]
+    network_mode: service:reference
+    ipc: service:reference
+    depends_on:
+      reference:
+        condition: service_started
+      mqtt:
+        condition: service_healthy
+    environment:
+      BRIDGE_DEVICE_ID: ros-ref-001
+      BRIDGE_STATE_DIR: /data/fleet
+      MQTT_TRANSPORT: local
+      MQTT_HOST: mqtt
+    volumes: [bridge-state:/data/fleet]
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 10s
+networks:
+  fleet:
+    internal: true
+volumes:
+  bridge-state:
+  bridge-mqtt-data:

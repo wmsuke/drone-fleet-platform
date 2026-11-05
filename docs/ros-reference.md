@@ -20,7 +20,7 @@ docker compose -p fleet-ros-reference -f compose.ros.yaml down
 
 Ubuntu 24.04 / Jazzy / Fast DDS (`rmw_fastrtps_cpp`) / Python 3.12 / colconを使う。`ros/locks/environment.json`に公式OCIのindex digest、arm64/amd64 manifest digest、公式Dockerfileのrevisionを記録した。`dpkg-*.tsv`は全debの完全version一覧で、build時に実環境と完全一致を検査する。
 
-公式OCIに必要な依存が揃っているため追加のapt/pip/rosdep/vcs解決は行わない。rosdep定義を再取得しないので、未使用のrevisionを再現条件として作らない。依存の取得元snapshotはdigestで指定したOCIそのもの。初回取得にはregistryが必要であり、長期保存が必要な運用ではこのimageを保存する。tagの現在値やapt repositoryの存続には依存しない。imageが取得済みなら`--network=none`でworkspaceをbuildできる。
+ROS依存は公式OCIに揃っており、追加のapt/pip/rosdep/vcs解決は行わない。#191でBridge用の[hash固定Python wheel](../ros/vendor/README.md)を追加し、build時にオフラインで展開する。rosdep定義は再取得しない。ROS依存の取得元snapshotはdigestで指定したOCIそのもの。初回取得にはregistryが必要であり、長期保存が必要な運用ではこのimageも保存する。tagの現在値やapt repositoryの存続には依存せず、取得済みimageと同梱wheelで`--network=none`のbuildを行う。
 
 依存更新時はDockerfileのindex digestと環境manifest、両CPUのdeb lockを同じ変更で更新し、arm64/amd64の実ROS試験を再実行する。通常のbuildでlockを自動更新しない。
 

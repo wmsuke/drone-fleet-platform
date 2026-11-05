@@ -233,6 +233,8 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 #190で[固定ROS参照環境](ros-reference.md)とpublisher/service/Actionの実DDS smokeを追加した。Cloud/MQTT Bridgeの接続と復旧は引き続き未実装。
 
+#191で[MQTT / ROS clientの起動・終了基盤](ros-bridge.md)を追加した。両接続の分離、認証設定検証、SQLite所有lockと受信保存、shutdownを実装した。telemetry変換・command実行・Cloud保存の復旧は未実装。
+
 リリース：`v0.6.0`
 
 ROS 2とMQTTの間を接続するBridgeを追加する。
