@@ -334,6 +334,12 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
+## Phase 6のROS 2 Bridge設計（未実装）
+
+#189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)で、Ubuntu 24.04 / ROS 2 Jazzy / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使う構成を採用した。Cloudは受付・配送と事実の保存、Bridgeは永続対応・意味変換・再照会、機体AdapterはActionと能力の意味、機体側は独立した制約・watchdogを担当する。DDSは参照containerのlocalhostへ閉じ、MQTTをリアルタイム制御へ入れない。
+
+ROSのLOCAL位置と欠測を既存GPS列へ補完しない。後続Issueでtelemetry v3と専用観測・構成/実行event、command v3とcancelを追加する。goal UUIDを送信前に保存してもROS呼出しとSQLiteは原子的でなく、送信後不明なら再投入せず照会・介入へ移す。受領、goal受付、終端result、cancel受付、停止観測を分ける。現行simulator・OTA・旧schemaは維持し、本IssueでBridgeや新APIが使えるとはしない。
+
 ## Phase 5のOTA設計と配信物管理
 
 #165の[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)でsimulator/Edge AgentのアプリケーションOTAを定めた。現行の複数機体simulatorは維持し、OTA用構成だけ機体ごとの固定supervisorと更新対象の子プロセスへ分ける。supervisorが単一のMQTT接続・更新排他・journal・署名検証・active切替と起動確認を持ち、子はIPC adapterで既存のtelemetry/command処理を使う。OS・Node.js・supervisor・飛行制御firmwareの更新は含めない。
