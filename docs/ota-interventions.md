@@ -41,7 +41,7 @@ outcomeは`KEEP_STOPPED`（停止維持を判断）、`ESCALATED`（現地調査
 
 開始/終了はサーバーが記録した受付時刻で、人間の実作業時間ではない。同期操作の開始/終了が同時刻でもdurationMsを0にしない。HUMAN_REVIEW終了時に限り、利用者が取得した作業時間を任意の`durationMs`で報告できる。非負の安全な整数で受付開始〜終了を超えない値だけを許可し、`durationSource: OPERATOR_REPORTED`とする。未報告・未終了の時間はnullのままとし、経過時間を作業時間へ補完しない。費用の入力・単価設定・実請求の取得は追加していない。
 
-deployment詳細の`interventionSummary`は必須承認/障害対応/未終了対応の件数と、既存operationに介入詳細が欠ける`legacyOperationCount`を返す。migration前のactor・時間・audit関連を捏造してbackfillしない。旧操作も自律完了の除外根拠に含める。除外根拠がないことは自律完了の証明ではなく、この記録だけで過去の人間操作を網羅できない。KPI集計やOTA専用画面は後続Issueとする。
+deployment詳細の`interventionSummary`は必須承認/障害対応/未終了対応の件数と、既存operationに介入詳細が欠ける`legacyOperationCount`を返す。migration前のactor・時間・audit関連を捏造してbackfillしない。旧操作も自律完了の除外根拠に含める。除外根拠がないことは自律完了の証明ではなく、この記録だけで過去の人間操作を網羅できない。OTA専用画面は#174で追加した。KPI集計は後続Issueとし、現行イベントとの対応と欠測は[デモのKPI対応表](ota-demo.md#6-kpi計画との対応と保証範囲)を参照する。
 
 ## 信頼境界
 

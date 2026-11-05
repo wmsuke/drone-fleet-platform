@@ -1,6 +1,6 @@
 # OTA通信仕様 v1
 
-#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。#168で[端末の実適用](ota-device.md)、#169で[deployment受付](deployments-api.md)、#170で[観測登録・保存/receipt・証拠評価](ota-evaluation.md)を追加した。stage解禁・APPLY配送はまだ未実装で、通常起動はOTAを無効にする。
+#167で`packages/protocol`へOTA要求・報告・DB保存receiptの型と実行時検証を追加した。[ADR 0007](adr/0007-ota-update-evaluation-and-recovery.md)に従う。#168で[端末の実適用](ota-device.md)、#169で[deployment受付](deployments-api.md)、#170で[観測登録・保存/receipt・証拠評価](ota-evaluation.md)、#171〜#175で段階配送・復旧・介入と10台E2Eを追加した。通常起動はOTAを無効にし、[デモと更新順](ota-demo.md)に従って対応サービスを揃えて有効にする。実AWS OTAは未検証である。
 
 ## 初回・定期のINVENTORY
 

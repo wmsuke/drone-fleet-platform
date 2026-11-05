@@ -65,4 +65,4 @@ OTA無効の状態でmigrationとprotocol/ingestor/API/supervisorを揃える。
 
 専用PostgreSQLのAPI統合テストは、許可/禁止・freshness・排他・待機/再起動・予算・冪等承認・HTTP照会・audit失敗時のrollback、旧versionの評価SUCCEEDEDと元失敗の分離、rollback失敗/不能を検証する。backendの13標本/60秒評価は保存イベントと制御clockによるfixtureで検証する。
 
-`pnpm test:ota-device`では実Linuxアプリを更新し、receipt経路を遮断してhealth失敗を検出し、保持した旧bundleへ明示rollbackして別bootと60秒のlocal healthを確認する。旧鍵の無効化、SQLite budgetの再起動維持も別テストで確認する。`pnpm test:ota-backend`は既存の実MQTT/DB/異なるbundle・backend再起動・成功評価を回帰する。これを実MQTT経由のrollback一貫検証へ読み替えない。10台の全障害E2Eは#175、実AWSのOTAと実機は未検証である。
+`pnpm test:ota-device`では実Linuxアプリを更新し、receipt経路を遮断してhealth失敗を検出し、保持した旧bundleへ明示rollbackして別bootと60秒のlocal healthを確認する。旧鍵の無効化、SQLite budgetの再起動維持も別テストで確認する。`pnpm test:ota-backend`は実MQTT/DB/異なるbundle・backend再起動・成功評価を回帰する。#175の`pnpm test:ota-fleet`で10台を登録した先行機体のrollback成功/失敗/不能を実MQTT経由で一貫検証した。手順と人間の準備操作は[デモ](ota-demo.md)、検証層・未確認の障害条件は[E2Eマトリクス](ota-e2e.md)を参照する。実AWSのOTAと実機は未検証である。

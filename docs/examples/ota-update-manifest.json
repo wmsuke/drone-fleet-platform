@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "249654b2-b7d5-4e26-87eb-5b29b79bc284",
+  "application": "simulator",
+  "version": "0.2.0",
+  "buildId": "local-demo-2",
+  "platform": "linux-arm64",
+  "nodeRange": ">=22.13.0 <23",
+  "otaProtocolRange": "^1.0.0",
+  "supervisorRange": "^1.0.0",
+  "stateSchemaRange": "1.0.0",
+  "entrypoint": "app/main.mjs",
+  "healthContractVersion": "ota-health-v1",
+  "rollbackCompatible": true
+}

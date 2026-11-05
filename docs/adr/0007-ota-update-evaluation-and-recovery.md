@@ -1,6 +1,6 @@
 # ADR 0007: OTAの実更新・成功評価・復旧境界
 
-- 状態: 採用する設計。#166でrelease管理、#167で通信契約、#168で端末の実適用、#169で固定snapshot受付、#170で観測・保存receipt・証拠評価・進捗API、#171で段階承認/APPLY配送・停止確認と再開、#172で制限付きretry/rollbackと復旧評価、#173で人間介入記録と判断対応API、#174で段階配信・評価・停止復旧の画面を実装
+- 状態: 採用。#166〜#174でrelease・通信・端末実適用・受付・評価・段階制御・復旧・介入・画面、#175で10台local E2E、#176でデモ・更新手順と保証範囲を実装
 - 決定日: 2026-10-21
 - 対象: 親Issue #164、#165〜#176。Phase 4の#135完了後の設計
 - 計画: [Taskの実行評価・安全な復旧と人間介入KPI](https://app.notion.com/p/3fe512303eae818cb481e62a47ed9c42)（2026-10-19更新の計画案を参照。現行コードとGitHub Issueを実装範囲の正とする）
@@ -10,6 +10,8 @@
 現行`apps/simulator/src/fleet.ts`は1プロセスで複数機体を起動する。command v2とoutboxは開始期限30秒、受領ACK v2、実行通知ACK v3を使い、SQLiteのSTARTED残存をUNCERTAINにする。これらをversionの書き換えだけでOTAへ読み替えない。
 
 Phase 5はLinuxコンテナ上のsimulator/Edge Agentアプリケーションの更新を対象とする。飛行制御firmware、OS・Node.js・監督プロセス自体の更新、実機の安全保証、汎用Task基盤、KPIダッシュボードは対象外。受領ACK、download完了、HTTP 202、再接続だけでは更新成功にしない。OTAは既定で無効とし、従来の複数機体プロセスとローカルデモを維持する。
+
+v0.5.0の実更新実装はsimulatorに限る。Edge Agentはmanifestの識別対象だが実行adapterは未実装である。[再現デモ・権限・互換性と更新順・KPIイベント対応](../ota-demo.md)を現行手順とし、設計時の将来形と実装済みを区別する。実MQTT/DB/Linuxの10台E2Eと、保存snapshot/制御clockによる障害テストの範囲は[検証記録](../ota-e2e.md)を正とする。
 
 ## 1. 実際に更新するものとプロセス境界
 
@@ -47,7 +49,7 @@ streamingで圧縮・展開サイズとentry数を数える。絶対path、`..`�
 
 ## 3. 永続モデルと状態の分離
 
-以下はPhase 5の論理モデルで、#169ではdeployment/stage/target/attempt・送信待ち・device予約とevent保存領域を追加した。#170でevent保存と評価、#171で段階制御と理由付き操作を追加した。制限付き復旧・intervention詳細は後続Issueで追加する。IDはUUID、fenceはdeviceごとに増える64bit整数をJSONでは10進文字列で表す。
+以下はPhase 5の論理モデルで、#169ではdeployment/stage/target/attempt・送信待ち・device予約とevent保存領域を追加した。#170でevent保存と評価、#171で段階制御と理由付き操作、#172〜#173で制限付き復旧・interventionを追加した。IDはUUID、fenceはdeviceごとに増える64bit整数をJSONでは10進文字列で表す。
 
 | 単位               | 保存するもの・責務                                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -152,16 +154,16 @@ supervisorは機体ごとのOS lockと独立SQLite journalを持つ。アプリ�
 
 同一filesystem内の検証済みrelease directoryをfsyncし、active pointerは一時ファイルのfsync→atomic rename→親directory fsyncで切り替える。SQLiteとrename/子の起動は単一transactionではないため、journalに前後のdigest・切替意図を残して実物と照合する。last-known-good pointerも同様に更新し、health成功前には旧既知正常版を消さない。
 
-| crash/障害の境界                      | 再起動時の扱い                                                                                                   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| download/検証途中                     | partialを実行しない。active旧版を維持し、予算内の取得だけ再開可                                                  |
-| VERIFIED、旧子停止前                  | active・旧子・期限・通常commandの停止状態を照合して同attemptを継続できる                                         |
-| QUIESCING                             | PID/bootIdとOS lockで旧子終了を確認。PID再利用や生存不明ならUNCERTAIN                                            |
-| 切替意図後、rename前後                | active pointer・候補digest・journalを照合。旧版なら同attemptの未完手順を継続、新版なら二重適用せず起動確認へ進む |
-| 新子起動後、結果保存前                | 同じ子が生存すれば新鮮なhealthで照合。再起動が必要な不明状態は自動再起動せず介入                                 |
-| health/成功commit後、通知前           | 保存済みeventを再送。再適用しない。server receiptがなくてもjournalの成功を消さない                               |
-| backend停止・DB commit後のreceipt欠落 | 同eventを再送し重複排除。期限超過は成功へ補完せず照合待ち                                                        |
-| journal破損・volume消失・pointer矛盾  | 新適用・新子起動を禁止。可能なら旧子の現状を維持しWAITING_FOR_HUMAN                                              |
+| crash/障害の境界                              | 再起動時の扱い                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| download/検証途中、VERIFIEDで旧子終了確認済み | partialを実行せず旧activeを起動する。元適用はFAILEDとして明示attemptを待ち、自動download再開はしない                                                   |
+| download/VERIFIEDでも子PIDが不明              | 旧子終了を推測せずUNCERTAIN。再取得・新子起動を止めて運用者へ引き継ぐ                                                                                  |
+| QUIESCING                                     | PID/bootIdとOS lockで旧子終了を確認。PID再利用や生存不明ならUNCERTAIN                                                                                  |
+| 切替意図後、rename前後                        | active pointer・候補digest・journalを照合。旧版なら同attemptの未完手順を継続、新版なら二重適用せず起動確認へ進む                                       |
+| fork意図・新子起動後、結果保存前              | 生存やPID再利用を推測せずUNCERTAIN。未知の子をkill/再起動せず介入                                                                                      |
+| health/成功commit後、通知前                   | 保存済みeventを再送し再適用しない。再起動時は旧子の終了確認が必要で、不明ならUNCERTAIN。終了確認済みならactiveの新bootを報告し、過去healthを流用しない |
+| backend停止・DB commit後のreceipt欠落         | 同eventを再送し重複排除。期限超過は成功へ補完せず照合待ち                                                                                              |
+| journal破損・volume消失・pointer矛盾          | 新適用・新子起動を禁止。可能なら旧子の現状を維持しWAITING_FOR_HUMAN                                                                                    |
 
 OTA開始前は通常commandの実行中・STARTED/UNCERTAINがないことと、子のIDLE・更新可能応答を直接確認する。古いtelemetryから安全を推測しない。APIのdevice予約で新規の通常command受付を拒否し、fleet operationも予約機体を含めば全受付を拒否する。予約以前のoutbox・実行と競合するため、supervisorでも新command転送を閉じてから停止可能性を確認する。gate中の通常commandへ受領ACKや実行成功を捏造せず、既存の再送・期限評価に任せる。gate前に開始した操作の終了が不明ならOTAを始めない。Phase 4全体の排他スケジューラを後付けしたとは扱わない。
 

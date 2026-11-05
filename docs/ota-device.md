@@ -80,6 +80,6 @@ pnpm test:ota-device
 docker compose -f compose.yaml -f compose.releases.yaml -f compose.ota.yaml down
 ```
 
-test:ota-deviceは使い捨てLinux・Node.js 22コンテナで異なる実bundle、温度出力の差、60秒health、health報告、REBOOT/RETURN_HOME、不正署名・digest・互換性、並行要求・fence、権限分離、kernel lockを検証する。切替前後・結果保存境界は保存済みjournalのcrash snapshotから復元し、不明なPIDを動かさないことを確認する。全境界の実SIGKILL・disk故障注入と10台段階配信は#175の範囲である。
+test:ota-deviceは使い捨てLinux・Node.js 22コンテナで異なる実bundle、温度出力の差、60秒health、health報告、REBOOT/RETURN_HOME、不正署名・digest・互換性、並行要求・fence、権限分離、kernel lockを検証する。切替前後・結果保存境界は保存済みjournalのcrash snapshotから復元し、不明なPIDを動かさないことを確認する。#175で実行中observeとQUERY失敗の競合を追加し、失敗確定後の正常応答でAPPLIEDへ戻らないことも確認した。10台段階配信は[実MQTT/DBのデモ](ota-demo.md)、検証層は[E2Eマトリクス](ota-e2e.md)を参照する。全境界の実SIGKILL・disk故障注入は未検証である。
 
 downではstate/dataや鍵を消さない。UNCERTAINでは再起動loopやbootstrapによる上書きを行わず、対象の子とjournal/active/known-goodを確認する。既知のPIDが見つからないだけで終了証明にせず、手動復旧を記録する。volumeを消す場合はtelemetry/commandの未確認行とOTA履歴が失われるため、対象機体とbackupを先に確認する。
