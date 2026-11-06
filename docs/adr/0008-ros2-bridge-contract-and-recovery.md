@@ -64,9 +64,9 @@ service照会は1回2秒、最大3回・合計10秒以内。Action goal応答は
 
 ## 4. 観測の意味変換と時計
 
-現行telemetry v1/v2はbattery、緯度経度、非負altitude、temperature、飛行状態が必須で、DBもNOT NULLである。ROSの欠測・ローカル位置を0やGPSへ変換することは禁止する。#192で同じtelemetry topicに**telemetry v3（ROS観測）**を追加し、v1/v2の意味と保存先を変えない。
+現行telemetry v1/v2はbattery、緯度経度、非負altitude、temperature、飛行状態が必須で、DBもNOT NULLである。ROSの欠測・ローカル位置を0やGPSへ変換することは禁止する。#192で同じtelemetry topicに**telemetry v3（ROS観測）**を追加した。v1/v2の意味と保存先は変えない。[実装・API・検証手順](../ros-observations.md)に詳細を記す。
 
-v3は既存のdeviceId/UUID v4 sessionId/sequence/UTC timestampを保持し、payloadに`source: ROS2`、nullableなbattery/temperature、`position: LOCAL / GEODETIC / null`、`flightStatus`（既存3値＋UNKNOWN）、diagnostics、field別quality/reasonと元のsource stamp/time domainを持つ。LOCALはframeId・m単位xyz、GEODETICは緯度経度deg・nullable altitudeと高度基準を必須にする。欠測値はnullと理由で表し、NaN/InfinityをJSONへ送らない。厳密なZod schema・fixtureは#192で実装し、このADRでは現行parserを変更しない。
+v3は既存のdeviceId/UUID v4 sessionId/sequence/UTC timestampを保持し、payloadに`source: ROS2`、nullableなbattery/temperature、`position: LOCAL / GEODETIC / null`、`flightStatus`（既存3値＋UNKNOWN）、diagnostics、field別quality/reasonと元のsource stamp/time domainを持つ。LOCALはframeId・m単位xyz、GEODETICは緯度経度deg・nullable altitudeと高度基準を必須にする。欠測値はnullと理由で表し、NaN/InfinityをJSONへ送らない。#192でZod schema・fixtureと受信parserを追加した。
 
 | ROS値                             | Fleet v3での意味・欠測/拒否                                                                                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

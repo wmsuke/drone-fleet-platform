@@ -1,4 +1,10 @@
-import { devices, telemetry, type Database } from "@drone-fleet/database";
+import {
+  devices,
+  telemetry,
+  rosObservations,
+  type Database,
+} from "@drone-fleet/database";
+import type { RosObservationMessage } from "@drone-fleet/protocol";
 import { asc, desc, eq } from "drizzle-orm";
 
 import type {
@@ -8,6 +14,10 @@ import type {
 } from "./schema.js";
 
 export interface DeviceRepository {
+  observationHistory?(
+    deviceId: string,
+    limit: number,
+  ): Promise<{ message: RosObservationMessage; receivedAt: string }[] | null>;
   list(): Promise<DeviceListItem[]>;
   findById(deviceId: string): Promise<DeviceDetail | null>;
   telemetryHistory(
@@ -17,7 +27,33 @@ export interface DeviceRepository {
 }
 
 export function createDeviceRepository(database: Database): DeviceRepository {
+  const observations = async (deviceId: string, limit: number) => {
+    const rows = await database
+      .select()
+      .from(rosObservations)
+      .where(eq(rosObservations.deviceId, deviceId))
+      .orderBy(desc(rosObservations.receivedAt), desc(rosObservations.id))
+      .limit(limit);
+    return rows.map((row) => ({
+      receivedAt: row.receivedAt.toISOString(),
+      message: {
+        schemaVersion: 3 as const,
+        deviceId: row.deviceId,
+        sessionId: row.sessionId,
+        sequence: row.sequence,
+        timestamp: row.deviceTimestamp.toISOString(),
+        payload: row.payload,
+      },
+    }));
+  };
   return {
+    async observationHistory(deviceId, limit) {
+      const [device] = await database
+        .select({ deviceId: devices.deviceId })
+        .from(devices)
+        .where(eq(devices.deviceId, deviceId));
+      return device ? observations(deviceId, limit) : null;
+    },
     async list() {
       const latestTelemetry = database
         .selectDistinctOn([telemetry.deviceId], {
@@ -48,8 +84,49 @@ export function createDeviceRepository(database: Database): DeviceRepository {
         )
         .orderBy(asc(devices.deviceId));
 
+      const rosLatest = await database
+        .selectDistinctOn([rosObservations.deviceId])
+        .from(rosObservations)
+        .orderBy(
+          rosObservations.deviceId,
+          desc(rosObservations.receivedAt),
+          desc(rosObservations.id),
+        );
+      const legacyLatest = await database
+        .selectDistinctOn([telemetry.deviceId], {
+          deviceId: telemetry.deviceId,
+          receivedAt: telemetry.receivedAt,
+        })
+        .from(telemetry)
+        .orderBy(
+          telemetry.deviceId,
+          desc(telemetry.receivedAt),
+          desc(telemetry.id),
+        );
+      const legacyTimes = new Map(
+        legacyLatest.map((r) => [r.deviceId, r.receivedAt]),
+      );
+      const rosMap = new Map(
+        rosLatest
+          .filter(
+            (r) => r.receivedAt >= (legacyTimes.get(r.deviceId) ?? new Date(0)),
+          )
+          .map((r) => [r.deviceId, r.payload]),
+      );
       return rows.map((row) => ({
         ...row,
+        ...(rosMap.has(row.deviceId)
+          ? {
+              battery: rosMap.get(row.deviceId)!.battery,
+              flightStatus:
+                rosMap.get(row.deviceId)!.flightStatus === "UNKNOWN"
+                  ? null
+                  : (rosMap.get(row.deviceId)!.flightStatus as
+                      | "IDLE"
+                      | "FLYING"
+                      | "RETURNING_HOME"),
+            }
+          : {}),
         lastReceivedAt: row.lastReceivedAt?.toISOString() ?? null,
       }));
     },
@@ -97,6 +174,11 @@ export function createDeviceRepository(database: Database): DeviceRepository {
         return null;
       }
       const latest = row.telemetry;
+      const observation = (await observations(deviceId, 1))[0] ?? null;
+      const rosNewer =
+        observation !== null &&
+        (latest === null ||
+          observation.receivedAt >= latest.receivedAt.toISOString());
       return {
         deviceId: row.deviceId,
         model: row.model,
@@ -106,7 +188,7 @@ export function createDeviceRepository(database: Database): DeviceRepository {
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         latestTelemetry:
-          latest === null
+          latest === null || rosNewer
             ? null
             : {
                 sequence: latest.sequence,
@@ -119,6 +201,7 @@ export function createDeviceRepository(database: Database): DeviceRepository {
                 temperature: latest.temperature,
                 flightStatus: latest.flightStatus,
               },
+        ...(observation ? { latestObservation: observation } : {}),
       };
     },
     async telemetryHistory(deviceId, limit) {

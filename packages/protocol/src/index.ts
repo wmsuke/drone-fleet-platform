@@ -21,6 +21,7 @@ export {
   telemetryV2MessageSchema,
   type TelemetryMessage,
   type TelemetryV2Message,
+  type LegacyTelemetryMessage,
 } from "./telemetry.js";
 
 export {
@@ -38,5 +39,6 @@ export {
   type ParsedMqttTopic,
 } from "./topics.js";
 export * from "./telemetry-receipt.js";
+export * from "./ros-observation.js";
 export * from "./ota.js";
 export * from "./ota-ipc.js";

@@ -5,7 +5,7 @@ import {
   createTelemetryTopic,
   createTelemetryReceiptsTopic,
   telemetryReceiptMessageSchema,
-  type TelemetryMessage,
+  type LegacyTelemetryMessage as TelemetryMessage,
 } from "@drone-fleet/protocol";
 import { connectAsync, type IClientOptions } from "mqtt";
 import { randomUUID } from "node:crypto";

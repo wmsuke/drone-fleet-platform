@@ -5,6 +5,12 @@ import hashlib
 import json
 import os
 import sqlite3
+import uuid
+
+import fastjsonschema
+from pathlib import Path
+
+from .observations import utc
 
 
 class JournalError(Exception):
@@ -32,7 +38,7 @@ class Journal:
             if self.db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise JournalError()
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1) or (existed and version == 0):
+            if version not in (0, 1, 2) or (existed and version == 0):
                 raise JournalError()
             with self.db:
                 self.db.execute("CREATE TABLE IF NOT EXISTS identity (device TEXT NOT NULL)")
@@ -47,7 +53,19 @@ class Journal:
                                 "(id INTEGER PRIMARY KEY, body TEXT)")
                 self.db.execute("CREATE TABLE IF NOT EXISTS status_outbox "
                                 "(id INTEGER PRIMARY KEY CHECK(id=1), body TEXT)")
-                self.db.execute("PRAGMA user_version=1")
+                self.db.execute("CREATE TABLE IF NOT EXISTS telemetry_outbox "
+                                "(id INTEGER PRIMARY KEY, session TEXT, "
+                                "sequence INTEGER, body TEXT)")
+                self.db.execute("CREATE TABLE IF NOT EXISTS telemetry_loss "
+                                "(id INTEGER PRIMARY KEY CHECK(id=1), count INTEGER NOT NULL)")
+                self.db.execute("PRAGMA user_version=2")
+            self.session = str(uuid.uuid4())
+            self.sequence = 0
+            contracts = Path("/workspace/contracts")
+            self.validate_observation = fastjsonschema.compile(json.loads(
+                (contracts / "ros-observation.schema.json").read_text()), use_default=False)
+            self.validate_receipt = fastjsonschema.compile(json.loads(
+                (contracts / "telemetry-receipt.schema.json").read_text()), use_default=False)
         except (OSError, sqlite3.Error, JournalError):
             self.close()
             raise JournalError("JOURNAL_UNAVAILABLE") from None
@@ -62,6 +80,18 @@ class Journal:
             raise JournalError("JOURNAL_FULL")
 
     def receive(self, topic, body):
+        if topic == f"fleet/v1/devices/{self.config.device_id}/telemetry-receipts":
+            try:
+                receipt = json.loads(body)
+                self.validate_receipt(receipt)
+                if receipt["deviceId"] != self.config.device_id:
+                    return
+            except (ValueError, fastjsonschema.JsonSchemaException):
+                return
+            with self.db:
+                self.db.execute("DELETE FROM telemetry_outbox WHERE session=? AND sequence=?",
+                                (receipt["sessionId"], receipt["sequence"]))
+            return
         digest = hashlib.sha256(topic.encode() + b"\0" + body).hexdigest()
         with self.db:
             if not self.db.execute("SELECT 1 FROM inbox WHERE hash=?", (digest,)).fetchone():
@@ -87,6 +117,34 @@ class Journal:
     def status_sent(self, body):
         with self.db:
             self.db.execute("DELETE FROM status_outbox WHERE body=?", (body,))
+
+    def observation(self, payload):
+        message = {"schemaVersion": 3, "deviceId": self.config.device_id,
+                   "sessionId": self.session, "sequence": self.sequence,
+                   "timestamp": utc(), "payload": payload}
+        self.validate_observation(message)
+        body = json.dumps(message, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+        size = len(body.encode())
+        if size > min(32768, self.config.byte_limit):
+            raise JournalError("TELEMETRY_PACKET_TOO_LARGE")
+        with self.db:
+            while True:
+                count, total = self.db.execute(
+                    "SELECT count(*), coalesce(sum(length(CAST(body AS BLOB))),0) "
+                    "FROM telemetry_outbox").fetchone()
+                if count < self.config.record_limit and total + size <= self.config.byte_limit:
+                    break
+                self.db.execute("DELETE FROM telemetry_outbox WHERE id="
+                                "(SELECT min(id) FROM telemetry_outbox)")
+                self.db.execute("INSERT INTO telemetry_loss VALUES (1,1) "
+                                "ON CONFLICT(id) DO UPDATE SET count=count+1")
+            self.db.execute("INSERT INTO telemetry_outbox(session,sequence,body) VALUES (?,?,?)",
+                            (self.session, self.sequence, body))
+        self.sequence += 1
+
+    def pending_observations(self):
+        return self.db.execute(
+            "SELECT id,body FROM telemetry_outbox ORDER BY id LIMIT 100").fetchall()
 
     def close(self):
         if self.db is not None:

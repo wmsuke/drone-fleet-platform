@@ -1,0 +1,19 @@
+services:
+  ros-reference:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    ipc: shareable
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  ros-bridge:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    command: ["ros2", "run", "fleet_bridge", "run"]
+    environment:
+      BRIDGE_DEVICE_ID: ros-ref-001
+      MQTT_HOST: mqtt
+    network_mode: service:ros-reference
+    ipc: service:ros-reference
+    volumes: [ros-observation-state:/data/fleet]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  ros-observation-state:

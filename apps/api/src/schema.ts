@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { isValidDeviceId } from "@drone-fleet/protocol";
+import {
+  isValidDeviceId,
+  rosObservationMessageSchema,
+} from "@drone-fleet/protocol";
+
+export const rosObservationHistoryItemSchema = z.object({
+  message: rosObservationMessageSchema,
+  receivedAt: z.iso.datetime(),
+});
 
 export const deviceIdSchema = z
   .string()
@@ -73,6 +81,7 @@ export const deviceDetailSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   latestTelemetry: latestTelemetrySchema.nullable(),
+  latestObservation: rosObservationHistoryItemSchema.nullable().optional(),
 });
 
 export type DeviceListItem = z.infer<typeof deviceListItemSchema>;

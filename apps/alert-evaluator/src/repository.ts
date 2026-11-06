@@ -7,6 +7,7 @@ import {
   devices,
   deviceOnlineObservations,
   telemetry,
+  rosObservations,
   fleetOperations,
   fleetOperationTargets,
   appendAudit,
@@ -229,6 +230,17 @@ export function createAlertRepository(db: Database, policy: AlertPolicy) {
             ),
           )
           .orderBy(asc(telemetry.receivedAt), asc(telemetry.id));
+        const rosRows = await tx
+          .select()
+          .from(rosObservations)
+          .where(
+            and(
+              eq(rosObservations.deviceId, deviceId),
+              eq(rosObservations.isRetained, false),
+              gte(rosObservations.receivedAt, cutoff),
+              lte(rosObservations.receivedAt, now),
+            ),
+          );
         const online = await tx
           .select()
           .from(deviceOnlineObservations)
@@ -252,6 +264,19 @@ export function createAlertRepository(db: Database, policy: AlertPolicy) {
           previous,
           policy,
           facts: [
+            ...rosRows.map((r) => ({
+              key: `ros:${r.id}`,
+              receivedAt: r.receivedAt.getTime(),
+              deviceAt: new Date(
+                r.payload.quality.battery.receivedAt ?? r.deviceTimestamp,
+              ).getTime(),
+              session: r.sessionId,
+              sequence: r.sequence,
+              ...(r.payload.battery !== null &&
+              r.payload.quality.battery.reason === "VALID"
+                ? { battery: r.payload.battery }
+                : {}),
+            })),
             ...rows.map((r) => ({
               key: `telemetry:${r.id}`,
               receivedAt: r.receivedAt.getTime(),
