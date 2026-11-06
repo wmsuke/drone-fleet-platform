@@ -334,15 +334,15 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 6のROS 2 Bridge設計（接続・観測経路まで実装）
+## Phase 6のROS 2 Bridge設計（接続・観測・構成報告まで実装）
 
 #191で[Bridgeの起動・終了処理](ros-bridge.md)、#192で[ROS観測の変換と保存](ros-observations.md)を追加した。MQTT購読とROSの型付き照会を独立させ、設定検証・SQLiteの単一owner・受信commit後のPUBACK・終了時の記録保持を実装する。観測はtelemetry v3・専用ros_observationsへ保存し、DB receiptまで永続再送する。操作readyとAction送信は後続Issueであり、現時点では有効にしない。
 
-#190で[ROS 2参照環境](ros-reference.md)を追加した。専用container内の参照publisher・service・Action serverと実DDS smokeを提供する。#192の専用E2EでMQTT・DB・APIまで接続する。既存simulatorは変更しない。
+#190で[ROS 2参照環境](ros-reference.md)を追加した。専用container内の参照publisher・service・Action serverと実DDS smokeを提供する。#192の専用E2EでMQTT・DB・APIまで接続し、#193で[能力・実稼働構成の報告と保存](bridge-configuration.md)を追加した。desiredとreported、対応操作と実行readyを区別する。既存simulatorは変更しない。
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)で、Ubuntu 24.04 / ROS 2 Jazzy / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使う構成を採用した。Cloudは受付・配送と事実の保存、Bridgeは永続対応・意味変換・再照会、機体AdapterはActionと能力の意味、機体側は独立した制約・watchdogを担当する。DDSは参照containerのlocalhostへ閉じ、MQTTをリアルタイム制御へ入れない。
 
-ROSのLOCAL位置と欠測を既存GPS列へ補完しない。telemetry v3の型と検証はpackages/protocolに集約し、Python用schema/fixtureを生成する。構成/実行event、command v3とcancelは後続Issueとする。goal UUIDを送信前に保存してもROS呼出しとSQLiteは原子的でなく、送信後不明なら再投入せず照会・介入へ移す。受領、goal受付、終端result、cancel受付、停止観測を分ける。現行simulator・OTA・旧schemaは維持する。
+ROSのLOCAL位置と欠測を既存GPS列へ補完しない。telemetry v3と構成報告の型・検証はpackages/protocolに集約し、Python用schema/fixtureを生成する。構成報告はDB commit後のreceiptまで永続再送し、旧報告や同ID別本文で現在構成を上書きしない。実行event、command v3とcancelは後続Issueとする。goal UUIDを送信前に保存してもROS呼出しとSQLiteは原子的でなく、送信後不明なら再投入せず照会・介入へ移す。受領、goal受付、終端result、cancel受付、停止観測を分ける。現行simulator・OTA・旧schemaは維持する。
 
 ## Phase 5のOTA設計と配信物管理
 

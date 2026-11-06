@@ -16,6 +16,8 @@ MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protoc
 |---|---|---|
 | `fleet/v1/devices/{deviceId}/telemetry` | デバイス | MQTT受信処理 |
 | `fleet/v1/devices/{deviceId}/telemetry-receipts` | MQTT受信処理 | デバイス |
+| `fleet/v1/devices/{deviceId}/bridge-events` | Bridge | MQTT受信処理 |
+| `fleet/v1/devices/{deviceId}/bridge-receipts` | MQTT受信処理 | Bridge |
 | `fleet/v1/devices/{deviceId}/status` | デバイス・ブローカーのLWT | MQTT受信処理 |
 | `fleet/v1/devices/{deviceId}/commands` | API | デバイス |
 | `fleet/v1/devices/{deviceId}/command-acks` | デバイス | MQTT受信処理 |
@@ -60,7 +62,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)にROS topic/Action、QoS、batteryの比率→%、LOCAL/GPSと欠測、ROS時刻/UTC、commandId/goal UUID、cancel/停止の対応を定めた。現行telemetry v1/v2とACK v3にはROSのLOCAL・非開始拒否・CANCELLEDを無理に詰め込まない。
 
-#192で[ROS telemetry v3の変換・永続再送・DB保存・観測API](ros-observations.md)を追加した。既存telemetry topicとreceipt v1を使い、LOCAL・欠測をGPS列へ投影しない。後続の#193〜#196で能力報告、ROS command v3、bridge-events/bridge-receipts/bridge-requests各v1を追加する。これらの操作形式は未実装で、Bridgeの操作readyはfalseを維持する。未知の新形式を旧parserで扱えるとは仮定しない。
+#192で[ROS telemetry v3の変換・永続再送・DB保存・観測API](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)を追加した。既存telemetry topicとreceipt v1を使い、LOCAL・欠測をGPS列へ投影しない。bridge-events/bridge-receipts v1はCONFIGURATIONとDB保存確認だけを扱う。後続の#194〜#196でROS command v3、実行event、bridge-requestsを追加する。操作readyはfalseを維持し、未知の新形式を旧parserで扱えるとは仮定しない。
 
 ### Phase 5の通信契約（opt-in OTA）
 

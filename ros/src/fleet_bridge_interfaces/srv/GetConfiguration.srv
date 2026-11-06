@@ -1,0 +1,4 @@
+string<=64 device_id
+---
+bool valid
+string<=32768 configuration_json

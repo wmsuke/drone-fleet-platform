@@ -292,6 +292,99 @@ export const rosObservations = pgTable(
   ],
 );
 
+export const bridgeDefinitions = pgTable("bridge_definitions", {
+  key: text("key").primaryKey(),
+  document: jsonb("document").$type<Record<string, unknown>>().notNull(),
+});
+export const bridgeConfigurations = pgTable("bridge_configurations", {
+  configurationId: varchar("configuration_id", { length: 64 }).primaryKey(),
+  deviceId: varchar("device_id", { length: 64 })
+    .notNull()
+    .references(() => devices.deviceId, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot")
+    .$type<import("@drone-fleet/protocol").BridgeConfiguration>()
+    .notNull(),
+});
+export const bridgeReports = pgTable(
+  "bridge_reports",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "cascade" }),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    message: jsonb("message")
+      .$type<import("@drone-fleet/protocol").BridgeEventMessage>()
+      .notNull(),
+    disposition: text("disposition").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    index("bridge_reports_device_time_idx").on(t.deviceId, t.receivedAt.desc()),
+    check(
+      "bridge_reports_disposition_valid",
+      sql`${t.disposition} IN ('CURRENT','STALE','CONFLICT','ACTIVE_EXECUTION','CLOCK_INVALID','JOURNAL_MISMATCH')`,
+    ),
+  ],
+);
+export const bridgeConfigurationHeads = pgTable("bridge_configuration_heads", {
+  deviceId: varchar("device_id", { length: 64 })
+    .primaryKey()
+    .references(() => devices.deviceId, { onDelete: "cascade" }),
+  journalId: uuid("journal_id"),
+  reportEventId: uuid("report_event_id").references(
+    () => bridgeReports.eventId,
+  ),
+  configurationId: varchar("configuration_id", { length: 64 }).references(
+    () => bridgeConfigurations.configurationId,
+  ),
+  configurationRevision: bigint("configuration_revision", { mode: "number" })
+    .notNull()
+    .default(0),
+  reportSequence: bigint("report_sequence", { mode: "number" })
+    .notNull()
+    .default(0),
+  reportedAt: timestamp("reported_at", { withTimezone: true, mode: "date" }),
+  desiredId: varchar("desired_id", { length: 64 }),
+  desiredRevision: bigint("desired_revision", { mode: "number" })
+    .notNull()
+    .default(0),
+});
+export const bridgeConflicts = pgTable("bridge_conflicts", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  eventId: uuid("event_id").notNull(),
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  receivedAt: timestamp("received_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+});
+export const bridgeCommandConfigurations = pgTable(
+  "bridge_command_configurations",
+  {
+    commandId: uuid("command_id")
+      .primaryKey()
+      .references(() => commands.commandId, { onDelete: "restrict" }),
+    goalId: uuid("goal_id").notNull().unique(),
+    configurationId: varchar("configuration_id", { length: 64 })
+      .notNull()
+      .references(() => bridgeConfigurations.configurationId, {
+        onDelete: "restrict",
+      }),
+    reportEventId: uuid("report_event_id")
+      .notNull()
+      .references(() => bridgeReports.eventId, { onDelete: "restrict" }),
+    startedAt: timestamp("started_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    stopConfirmed: boolean("stop_confirmed").notNull().default(false),
+  },
+);
+
 export const commands = pgTable(
   "commands",
   {

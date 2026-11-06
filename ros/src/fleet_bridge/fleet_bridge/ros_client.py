@@ -3,6 +3,12 @@
 import threading
 import time
 import json
+from pathlib import Path
+import copy
+
+import fastjsonschema
+from fleet_reference.configuration import component, digest
+from fleet_bridge_interfaces.srv import GetConfiguration
 
 from diagnostic_msgs.msg import DiagnosticArray
 from fleet_bridge_interfaces.action import ReturnHome
@@ -36,6 +42,16 @@ class RosClient:
         self.next_probe = 0.0
         self.failures = 0
         self.closing_at = None
+        self.configuration_pending = None
+        self.configuration_deadline = 0
+        self.configuration_next = 0
+        self.reported = None
+        self.reported_at = 0
+        self.reported_serial = 0
+        self.runtime_identity = None
+        self.runtime_active = True
+        self.validate_configuration = fastjsonschema.compile(json.loads(Path(
+            "/workspace/contracts/adapter-configuration.schema.json").read_text()))
         rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
         self.node = Node("fleet_bridge", namespace=config.namespace)
         self.observations = Observations(config)
@@ -58,6 +74,8 @@ class RosClient:
         self.client = self.node.create_client(
             GetRuntimeState, config.namespace + "/get_runtime_state", callback_group=self.group,
         )
+        self.configuration_client = self.node.create_client(
+            GetConfiguration, config.namespace + "/get_configuration", callback_group=self.group)
         self.action = ActionClient(
             self.node, ReturnHome, config.namespace + "/return_home", callback_group=self.group,
             feedback_sub_qos_profile=QoSProfile(
@@ -91,17 +109,23 @@ class RosClient:
 
     def tick(self):
         now = time.monotonic()
+        self.tick_configuration(now)
         if self.pending:
             if self.pending.done():
                 future, self.pending = self.pending, None
                 try:
-                    valid = matches_runtime(self.config, future.result())
+                    response = future.result()
+                    valid = matches_runtime(self.config, response)
                 except Exception:
                     valid = False
                 with self.guard:
                     self.available = valid and self.action.server_is_ready()
                     self.reason = "ROS_AVAILABLE" if self.available else "ROS_IDENTITY_OR_TYPE"
                     self.last_response = now
+                    self.runtime_identity = ((response.state.server_instance_id,
+                                              response.state.configuration_id,
+                                              response.state.home_id) if valid else None)
+                    self.runtime_active = response.state.has_active_goal if valid else True
                 self.failures = 0
             elif now >= self.deadline:
                 self.client.remove_pending_request(self.pending)
@@ -119,6 +143,54 @@ class RosClient:
             self.pending = self.client.call_async(request)
             self.deadline = now + 2
 
+    def tick_configuration(self, now):
+        if self.configuration_pending:
+            if self.configuration_pending.done():
+                future, self.configuration_pending = self.configuration_pending, None
+                try:
+                    response = future.result()
+                    value = json.loads(response.configuration_json)
+                    self.validate_configuration(value)
+                    if value["profile"]["digest"] != digest(value["profile"]["definition"]):
+                        raise ValueError()
+                    for name in ("operatingPolicy", "safetyConfig"):
+                        if (value[name]["status"] == "KNOWN"
+                                and value[name]["digest"] != digest(value[name]["definition"])):
+                            raise ValueError()
+                    identity = (value["serverInstanceId"], value["adapterConfigurationId"],
+                                value["homeId"])
+                    if (response.valid and value["deviceId"] == self.config.device_id
+                            and value["namespace"] == self.config.namespace
+                            and identity == self.runtime_identity):
+                        with self.guard:
+                            self.reported = {**value, "bridge": component("fleet_bridge")}
+                            self.reported_at = now
+                            self.reported_serial += 1
+                except Exception:
+                    with self.guard:
+                        self.reported = None
+            elif now >= self.configuration_deadline:
+                self.configuration_client.remove_pending_request(self.configuration_pending)
+                self.configuration_pending.cancel()
+                self.configuration_pending = None
+            return
+        if now >= self.configuration_next and self.configuration_client.service_is_ready():
+            self.configuration_next = now + 1
+            request = GetConfiguration.Request(device_id=self.config.device_id)
+            self.configuration_pending = self.configuration_client.call_async(request)
+            self.configuration_deadline = now + 2
+
+    def configuration_snapshot(self):
+        with self.guard:
+            value = self.reported
+            if (not value or self.runtime_active or not self.available
+                    or time.monotonic() - self.last_response >= 3
+                    or time.monotonic() - self.reported_at >= 3
+                    or (value["serverInstanceId"], value["adapterConfigurationId"], value["homeId"])
+                    != self.runtime_identity):
+                return None
+            return self.reported_serial, copy.deepcopy(value)
+
     def close(self):
         self.timer.cancel()
         self.executor.remove_node(self.node)
@@ -129,6 +201,9 @@ class RosClient:
         if self.pending:
             self.client.remove_pending_request(self.pending)
             self.pending.cancel()
+        if self.configuration_pending:
+            self.configuration_client.remove_pending_request(self.configuration_pending)
+            self.configuration_pending.cancel()
         self.action.destroy()
         self.node.destroy_node()
         rclpy.try_shutdown()

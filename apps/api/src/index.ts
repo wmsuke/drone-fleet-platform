@@ -1,4 +1,4 @@
-import { createDatabase } from "@drone-fleet/database";
+import { createDatabase, createBridgeRepository } from "@drone-fleet/database";
 import { createReleaseRepository } from "./release-repository.js";
 import { createOtaMonitor } from "./ota-monitor.js";
 import { createDeploymentRepository } from "./deployment-repository.js";
@@ -69,6 +69,7 @@ async function main(): Promise<void> {
         )
       : undefined;
   const app = buildApi(createDeviceRepository(db), commandService, {
+    bridgeRepository: createBridgeRepository(db),
     ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH
       ? {
           deploymentRepository: createDeploymentRepository(db, {

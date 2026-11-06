@@ -11,6 +11,7 @@ import fastjsonschema
 from pathlib import Path
 
 from .observations import utc
+from fleet_reference.configuration import digest, canonical
 
 
 class JournalError(Exception):
@@ -38,7 +39,7 @@ class Journal:
             if self.db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise JournalError()
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2) or (existed and version == 0):
+            if version not in (0, 1, 2, 3) or (existed and version == 0):
                 raise JournalError()
             with self.db:
                 self.db.execute("CREATE TABLE IF NOT EXISTS identity (device TEXT NOT NULL)")
@@ -58,7 +59,15 @@ class Journal:
                                 "sequence INTEGER, body TEXT)")
                 self.db.execute("CREATE TABLE IF NOT EXISTS telemetry_loss "
                                 "(id INTEGER PRIMARY KEY CHECK(id=1), count INTEGER NOT NULL)")
-                self.db.execute("PRAGMA user_version=2")
+                self.db.execute("CREATE TABLE IF NOT EXISTS bridge_counters "
+                                "(id INTEGER PRIMARY KEY CHECK(id=1), journal TEXT NOT NULL, "
+                                "configuration TEXT, revision INTEGER, sequence INTEGER)")
+                self.db.execute("INSERT OR IGNORE INTO bridge_counters VALUES (1,?,NULL,0,0)",
+                                (str(uuid.uuid4()),))
+                self.db.execute("CREATE TABLE IF NOT EXISTS bridge_outbox "
+                                "(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT UNIQUE, "
+                                "hash TEXT, body TEXT)")
+                self.db.execute("PRAGMA user_version=3")
             self.session = str(uuid.uuid4())
             self.sequence = 0
             contracts = Path("/workspace/contracts")
@@ -66,20 +75,38 @@ class Journal:
                 (contracts / "ros-observation.schema.json").read_text()), use_default=False)
             self.validate_receipt = fastjsonschema.compile(json.loads(
                 (contracts / "telemetry-receipt.schema.json").read_text()), use_default=False)
+            self.validate_bridge = fastjsonschema.compile(json.loads(
+                (contracts / "bridge-event.schema.json").read_text()), use_default=False)
+            self.validate_bridge_receipt = fastjsonschema.compile(json.loads(
+                (contracts / "bridge-receipt.schema.json").read_text()), use_default=False)
         except (OSError, sqlite3.Error, JournalError):
             self.close()
             raise JournalError("JOURNAL_UNAVAILABLE") from None
 
     def capacity(self, size):
         rows, total = self.db.execute(
-            "SELECT (SELECT count(*) FROM inbox)+(SELECT count(*) FROM lifecycle),"
+            "SELECT (SELECT count(*) FROM inbox)+(SELECT count(*) FROM lifecycle)+"
+            "(SELECT count(*) FROM bridge_outbox),"
             "coalesce((SELECT sum(length(body)) FROM inbox),0)+"
-            "coalesce((SELECT sum(length(body)) FROM lifecycle),0)"
+            "coalesce((SELECT sum(length(body)) FROM lifecycle),0)+"
+            "coalesce((SELECT sum(length(CAST(body AS BLOB))) FROM bridge_outbox),0)"
         ).fetchone()
         if rows >= self.config.record_limit or total + size > self.config.byte_limit:
             raise JournalError("JOURNAL_FULL")
 
     def receive(self, topic, body):
+        if topic == f"fleet/v1/devices/{self.config.device_id}/bridge-receipts":
+            try:
+                receipt = json.loads(body)
+                self.validate_bridge_receipt(receipt)
+                if receipt["deviceId"] != self.config.device_id:
+                    return
+            except (ValueError, fastjsonschema.JsonSchemaException):
+                return
+            with self.db:
+                self.db.execute("DELETE FROM bridge_outbox WHERE event=? AND hash=?",
+                                (receipt["eventId"], receipt["payloadHash"]))
+            return
         if topic == f"fleet/v1/devices/{self.config.device_id}/telemetry-receipts":
             try:
                 receipt = json.loads(body)
@@ -145,6 +172,33 @@ class Journal:
     def pending_observations(self):
         return self.db.execute(
             "SELECT id,body FROM telemetry_outbox ORDER BY id LIMIT 100").fetchall()
+
+    def configuration_report(self, configuration):
+        configuration_id = digest(configuration)
+        with self.db:
+            journal, previous, revision, sequence = self.db.execute(
+                "SELECT journal,configuration,revision,sequence FROM bridge_counters").fetchone()
+            revision += int(previous != configuration_id)
+            sequence += 1
+            message = {"schemaVersion": 1, "deviceId": self.config.device_id,
+                       "kind": "CONFIGURATION", "eventId": str(uuid.uuid4()),
+                       "sessionId": self.session, "journalId": journal, "sequence": sequence,
+                       "configurationId": configuration_id, "configurationRevision": revision,
+                       "reportSequence": sequence, "configuration": configuration,
+                       "timestamp": utc()}
+            self.validate_bridge(message)
+            body = canonical(message)
+            size = len(body.encode())
+            if size > 32768:
+                raise JournalError("BRIDGE_PACKET_TOO_LARGE")
+            self.capacity(size)
+            self.db.execute("INSERT INTO bridge_outbox(event,hash,body) VALUES (?,?,?)",
+                            (message["eventId"], digest(message), body))
+            self.db.execute("UPDATE bridge_counters SET configuration=?,revision=?,sequence=?",
+                            (configuration_id, revision, sequence))
+
+    def pending_bridge_events(self):
+        return self.db.execute("SELECT id,body FROM bridge_outbox ORDER BY id LIMIT 100").fetchall()
 
     def close(self):
         if self.db is not None:

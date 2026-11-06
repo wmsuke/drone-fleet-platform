@@ -62,6 +62,15 @@ export {
   type AuditContext,
 } from "./audit.js";
 export { operationAggregation } from "./operation-aggregation.js";
+export {
+  bridgeDefinitions,
+  bridgeConfigurations,
+  bridgeReports,
+  bridgeConfigurationHeads,
+  bridgeConflicts,
+  bridgeCommandConfigurations,
+} from "./schema.js";
+export * from "./bridge.js";
 export { createOtaRepository, otaDeploymentLock } from "./ota.js";
 export { createOtaRollout, OtaControlError } from "./ota-rollout.js";
 export { createOtaRecovery } from "./ota-recovery.js";

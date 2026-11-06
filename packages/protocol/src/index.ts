@@ -26,6 +26,8 @@ export {
 
 export {
   createCommandAcksTopic,
+  createBridgeEventsTopic,
+  createBridgeReceiptsTopic,
   createOtaRequestsTopic,
   createOtaEventsTopic,
   createOtaReceiptsTopic,
@@ -40,5 +42,6 @@ export {
 } from "./topics.js";
 export * from "./telemetry-receipt.js";
 export * from "./ros-observation.js";
+export * from "./bridge.js";
 export * from "./ota.js";
 export * from "./ota-ipc.js";

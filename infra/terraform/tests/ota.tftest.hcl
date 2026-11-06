@@ -37,7 +37,7 @@ run "ota_permissions_are_directional_and_device_scoped" {
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[5].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/ota-events" &&
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[6].Action == "iot:Publish" &&
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[6].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/ota-receipts" &&
-      length(jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement) == 7
+      length(jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement) == 10
     )
     error_message = "ingestor must only receive OTA events and publish non-retained receipts"
   }

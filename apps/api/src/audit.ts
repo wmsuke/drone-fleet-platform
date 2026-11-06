@@ -17,6 +17,10 @@ function id(value: unknown) {
 }
 const routes: Record<string, [AuditEvent["action"], AuditEvent["targetKind"]]> =
   {
+    "PUT /devices/:deviceId/bridge-configuration/desired": [
+      "bridge.desired_changed",
+      "device",
+    ],
     "POST /deployments/:deploymentId/interventions": [
       "deployment.intervention_started",
       "deployment",

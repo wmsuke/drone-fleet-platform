@@ -29,5 +29,13 @@ for path in sorted(paths):
     if path.is_file():
         source.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes())
 manifest["sourceSha256"] = source.hexdigest()
+manifest["componentSourceSha256"] = {}
+for name in ("fleet_bridge", "fleet_reference"):
+    package_hash = hashlib.sha256()
+    package = root / "src" / name
+    for path in sorted(package.rglob("*")):
+        if path.is_file() and "test" not in path.relative_to(package).parts:
+            package_hash.update(str(path.relative_to(package)).encode() + b"\0" + path.read_bytes())
+    manifest["componentSourceSha256"][name] = package_hash.hexdigest()
 (root / "environment-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 print(json.dumps(manifest))

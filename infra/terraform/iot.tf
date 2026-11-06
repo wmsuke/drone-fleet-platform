@@ -107,6 +107,27 @@ resource "aws_iot_policy" "device" {
           "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/ota-receipts"
         ]
         Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid       = "PublishBridgeEvents"
+        Effect    = "Allow"
+        Action    = "iot:Publish"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-events"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid       = "SubscribeBridgeReceipts"
+        Effect    = "Allow"
+        Action    = "iot:Subscribe"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-receipts"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid       = "ReceiveBridgeReceipts"
+        Effect    = "Allow"
+        Action    = "iot:Receive"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-receipts"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
       }
     ]
   })
@@ -174,6 +195,24 @@ resource "aws_iot_policy" "telemetry_ingestor" {
         Effect   = "Allow"
         Action   = "iot:Publish"
         Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/ota-receipts"
+      },
+      {
+        Sid      = "SubscribeBridgeEvents"
+        Effect   = "Allow"
+        Action   = "iot:Subscribe"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/+/bridge-events"
+      },
+      {
+        Sid      = "ReceiveBridgeEvents"
+        Effect   = "Allow"
+        Action   = "iot:Receive"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/bridge-events"
+      },
+      {
+        Sid      = "PublishBridgeReceipts"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/bridge-receipts"
       }
     ]
   })

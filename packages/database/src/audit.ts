@@ -5,6 +5,7 @@ import { auditLogs, fleetOperationTargets, fleetOperations } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 export type AuditAction =
+  | "bridge.desired_changed"
   | "deployment.intervention_started"
   | "deployment.intervention_completed"
   | "deployment.recovery_requested"
