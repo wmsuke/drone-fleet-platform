@@ -334,7 +334,9 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 6のROS 2 Bridge設計（Bridgeは未実装）
+## Phase 6のROS 2 Bridge設計（接続基盤まで実装）
+
+#191で[Bridgeの起動・終了処理](ros-bridge.md)を追加した。MQTT購読とROSの型付き照会を独立させ、設定検証・SQLiteの単一owner・受信commit後のPUBACK・終了時の記録保持を実装する。操作ready、ROS観測の変換、Action送信、Cloudへの新形式保存は後続Issueであり、現時点では有効にしない。
 
 #190で[ROS 2参照環境](ros-reference.md)を追加した。専用container内の参照publisher・service・Action serverと実DDS smokeを提供する。既存simulator、MQTT、API、DBとはまだ接続しない。
 

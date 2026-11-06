@@ -1,0 +1,97 @@
+[
+  {
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "drone-001",
+      "timestamp": "2026-11-05T00:00:00.000Z",
+      "payload": { "status": "ONLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a_b-C",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "OFFLINE", "reason": "SHUTDOWN" }
+    }
+  },
+  {
+    "valid": true,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "extra": true,
+      "payload": {
+        "status": "OFFLINE",
+        "reason": "CONNECTION_LOST",
+        "extra": true
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "bad/id",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "ONLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T09:00:00+09:00",
+      "payload": { "status": "ONLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-02-30T00:00:00Z",
+      "payload": { "status": "ONLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 2,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "ONLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "ONLINE", "reason": "SHUTDOWN" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "OFFLINE", "reason": "CONNECTED" }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 1,
+      "deviceId": "a",
+      "timestamp": "2026-11-05T00:00:00Z",
+      "payload": { "status": "ONLINE" }
+    }
+  }
+]

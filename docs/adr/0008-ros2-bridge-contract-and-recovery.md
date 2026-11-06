@@ -1,6 +1,6 @@
 # ADR 0008: ROS 2 Bridgeの責務・通信契約・復旧境界
 
-- 状態: 採用する設計。#190で参照workspaceと実ROS smokeを追加した。Bridge・新schema/API/DB・Cloud連携E2Eは#191〜#199で実装する
+- 状態: 採用する設計。#190で参照workspace、#191でBridgeの接続・終了基盤と既存statusの共通schema検証を追加した。観測変換・操作・新schema/API/DB・Cloud連携E2Eは#192〜#199で実装する
 - 決定日: 2026-11-05
 - 対象: [親Issue #188](https://github.com/wmsuke/drone-fleet-platform/issues/188)、#189〜#199、Phase 6 / v0.6.0
 - 前提: Phase 5の#176 / PR #200は完了。現行の[通信仕様](../protocol.md)、[command期限](../command-durability.md)、[実行結果](../command-results.md)、[ADR 0005](0005-delivery-and-recovery.md)を維持する
@@ -15,6 +15,8 @@ JazzyのNoble arm64/amd64とFast DDSの対応は[REP 2000](https://github.com/ro
 #190で`ros/locks`に公式OCIのindex/CPU別digest、全debの完全version一覧と取得元Dockerfile revisionを固定した。取得元snapshotはOCI自体であり、追加のapt/pip/rosdep/vcs解決は行わない。そのためrosdep定義revisionの固定は不要とし、未使用をmanifestへ明記する。workspace commit/変更状態とsource hashは試験結果へ記録する。詳細は[参照環境](../ros-reference.md)を参照する。`latest`、apt upgrade、rosdepの実行時更新を再現の根拠にしない。将来Python追加依存が必要になればhash付きlockへ固定し、MQTTには[Paho Python](https://github.com/eclipse-paho/paho.mqtt.python)を使う。base tagだけの固定は不十分である。
 
 Python側でZod契約を手書き複製しない。`packages/protocol`をwire契約の正とし、#191以降でJSON Schemaの生成物・hashとPython validatorを固定し、同じ正常/不正fixtureを両言語で検証する。SQLiteとPython MQTTの実装は既存TypeScriptの部品を直接流用できないため、同じ保存/期限/receipt規則を共有fixtureで検査する。今回、依存追加やホストのROS導入は行わない。
+
+#191では[Bridge接続基盤](../ros-bridge.md)として、Paho 2.1.0とfastjsonschema 2.21.2のpure Python wheelをhash固定で追加した。pipを含まない固定OCIを更新せず、標準zipfileで検証済みwheelをオフライン展開する。status v1のZod→JSON Schemaと共通fixtureを両言語で検査する。操作の相関検証や重要eventのoutboxは後続Issueのままとし、接続statusの最新1行と区別する。
 
 JSON Schemaで表せない期限・scope相関・canonical JSON/hash・拒否規則も共通fixtureの対象にし、schemaの生成だけで同じ検証とみなさない。再取得可能なapt snapshotがない場合は検証済みdeb/OCI imageを保存し、version一覧だけで再build可能と主張しない。
 

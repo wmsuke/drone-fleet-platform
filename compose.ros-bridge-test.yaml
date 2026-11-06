@@ -1,0 +1,42 @@
+services:
+  certificates:
+    image: ${ROS_BRIDGE_TEST_IMAGE:?}
+    user: "0:0"
+    command: ["bash", "/workspace/tools/test-certificates.sh"]
+    volumes: [test-certs:/test-certs]
+    network_mode: none
+  mqtt:
+    image: eclipse-mosquitto:2.0.22@sha256:09b62ff32c2e7b64d4b431b9a89236073289b68db273de2b089edeb9b0d92b5c
+    volumes:
+      - ./ros/config/mosquitto-bridge-local.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-t", "fleet/health", "-m", "ready"]
+      interval: 1s
+      timeout: 2s
+      retries: 20
+  mqtt-tls:
+    image: eclipse-mosquitto:2.0.22@sha256:09b62ff32c2e7b64d4b431b9a89236073289b68db273de2b089edeb9b0d92b5c
+    depends_on:
+      certificates:
+        condition: service_completed_successfully
+    volumes:
+      - ./ros/config/mosquitto-bridge-tls-test.conf:/mosquitto/config/mosquitto.conf:ro
+      - test-certs:/test-certs:ro
+    networks:
+      default:
+        aliases: [wrong-name]
+  runner:
+    image: ${ROS_BRIDGE_TEST_IMAGE:?}
+    init: true
+    environment:
+      BRIDGE_INTEGRATION: "true"
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      mqtt-tls:
+        condition: service_started
+    volumes: [test-certs:/test-certs:ro]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  test-certs:

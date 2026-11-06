@@ -11,5 +11,9 @@
   "rmw": "rmw_fastrtps_cpp",
   "dependencySource": "Installed packages and rosdep cache are frozen inside the OCI image; no apt, pip, vcs import or rosdep update/install runs during this build.",
   "rosdepUsed": false,
-  "additionalPythonDependencies": []
+  "additionalPythonDependencies": [
+    "paho-mqtt==2.1.0",
+    "fastjsonschema==2.21.2"
+  ],
+  "wheelHashLock": "locks/wheels.sha256"
 }

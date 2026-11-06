@@ -10,6 +10,8 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "test:ros-bridge": "bash scripts/test-ros-bridge.sh",
+    "protocol:export:ros": "pnpm --filter @drone-fleet/protocol build && node packages/protocol/scripts/export-ros-contracts.mjs",
     "test:ros-reference": "bash scripts/test-ros-reference.sh",
     "test:ota-fleet": "bash scripts/test-ota-fleet.sh",
     "test:ota-backend": "bash scripts/test-ota-backend.sh",

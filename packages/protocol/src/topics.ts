@@ -1,4 +1,4 @@
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+export const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const TOPIC_PREFIX = ["fleet", "v1", "devices"] as const;
 
 export type MqttTopicKind =
