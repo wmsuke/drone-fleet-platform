@@ -201,13 +201,20 @@ def test_receipt_capacity_fails_without_eviction(tmp_path):
     journal.close()
 
 
-def test_expiration_receipt_blocks_start_even_after_clock_moves_back(tmp_path):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_expiration_receipt_blocks_start_even_after_clock_moves_back(tmp_path, prepared):
     configuration, command, now = inputs()
     journal, commands = open_journal(tmp_path, command["deviceId"])
+    if prepared:
+        commands.prepare(command, configuration, now)
     assert commands.receive(json.dumps(command), instant(command["expiresAt"]))
     with pytest.raises(JournalError, match="COMMAND_EXPIRED"):
-        commands.prepare(command, configuration, now)
-    assert commands.get(command["commandId"]) is None
+        if prepared:
+            commands.send_intent(command["commandId"], now)
+        else:
+            commands.prepare(command, configuration, now)
+    value = commands.get(command["commandId"])
+    assert (value["state"] == "READY") if prepared else (value is None)
     journal.close()
 
 

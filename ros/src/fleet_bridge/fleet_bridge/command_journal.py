@@ -136,6 +136,13 @@ class CommandJournal:
             value = self.get(command_id)
             if value is None or value["state"] != "READY":
                 raise JournalError("SEND_NOT_ALLOWED")
+            receipt = self.db.execute("SELECT hash,ack FROM command_receipts WHERE command=?",
+                                      (command_id,)).fetchone()
+            if receipt:
+                if receipt[0] != value["payloadHash"]:
+                    raise JournalError("COMMAND_CONFLICT")
+                if json.loads(receipt[1])["status"] == "REJECTED_EXPIRED":
+                    raise JournalError("COMMAND_EXPIRED")
             if now < instant(value["command"]["timestamp"]) - 5:
                 raise JournalError("CLOCK_INVALID")
             if now >= instant(value["command"]["expiresAt"]):
