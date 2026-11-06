@@ -11,6 +11,7 @@ import { connectionStatusMessageSchema } from "../dist/connection-status.js";
 import { rosObservationMessageSchema } from "../dist/ros-observation.js";
 import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
 import { fixtures } from "../test/fixtures/ros-observations.mjs";
+import { actionFixtures } from "../test/fixtures/bridge-actions.mjs";
 import {
   bridgeEventMessageSchema,
   bridgeReceiptMessageSchema,
@@ -22,6 +23,10 @@ const schema = z.toJSONSchema(connectionStatusMessageSchema, {
   io: "input",
 });
 const outputs = [
+  [
+    "action-fixtures.json",
+    await format(JSON.stringify(actionFixtures), { parser: "json" }),
+  ],
   [
     "configuration-fixtures.json",
     await format(

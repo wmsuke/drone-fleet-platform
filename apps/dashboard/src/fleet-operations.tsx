@@ -270,7 +270,7 @@ function ConnectedOperations({
                 {Object.entries(targetLabels).map(([key, label]) => (
                   <div key={key}>
                     <dt>{label}</dt>
-                    <dd>{detail.data.counts[key as TargetStatus]}台</dd>
+                    <dd>{detail.data.counts[key as TargetStatus] ?? 0}台</dd>
                   </div>
                 ))}
               </dl>

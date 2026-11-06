@@ -175,8 +175,8 @@ def test_separate_failures_reconnect_persistence_and_shutdown(processes, tmp_pat
                               MQTT_PORT=str(proxy.server_address[1]))
         until(lambda: health(directory).get("mqtt_subscribed")
               and health(directory).get("ros_available"))
-        assert health(directory)["ready"] is False
-        assert health(directory)["accepting_operations"] is False
+        until(lambda: health(directory).get("ready"))
+        assert health(directory)["accepting_operations"] is True
         until(lambda: any(m["deviceId"] == device and m["payload"]["status"] == "ONLINE"
                           for m in messages))
         payload = b'{"notYetACommand":true}'

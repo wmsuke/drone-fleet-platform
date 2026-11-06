@@ -65,6 +65,19 @@ export const commandResponseSchema = z.object({
 });
 
 export const commandHistoryItemSchema = commandResponseSchema.extend({
+  executionStatus: z
+    .enum([
+      "NOT_REPORTED",
+      "RUNNING",
+      "SUCCEEDED",
+      "FAILED",
+      "UNCERTAIN",
+      "REJECTED",
+      "CANCELLED",
+    ])
+    .optional(),
+  executionStartedAt: z.iso.datetime().nullable().optional(),
+  executionResultAt: z.iso.datetime().nullable().optional(),
   expiredAt: z.iso.datetime().optional(),
   acknowledgementReceivedAt: z.iso.datetime().nullable(),
   timedOutAt: z.iso.datetime().nullable(),

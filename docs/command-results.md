@@ -2,6 +2,8 @@
 
 #152で、受領ACKと別の実行状態をSQLite・PostgreSQLへ保存し、同じcommand-acks topicでACK v3として通知する経路を追加した。commandはv2のまま。#140で[グループ操作の集約API](fleet-operations-api.md)を追加した。単一機体のHTTP履歴・ダッシュボードの配送/受領表示は維持し、操作画面は#141で扱う。
 
+この文書のACK v3経路はsimulatorを対象とする。#194のROS対象は[command v3・bridge-eventsの実行証拠](ros-command-journal.md)を使い、実開始なしのREJECTEDとROS終端CANCELLEDも区別する。既存履歴とグループ集約は両経路を読み取るが、受領ACKを成功へ読み替えない。
+
 ## 通知と完了条件
 
 simulatorの受領・期限拒否ACKは引き続きv2で送る。ingestorはv1/v2とv3の受領・期限拒否を受け付ける。実行通知はv3の`RUNNING` / `SUCCEEDED` / `FAILED` / `UNCERTAIN`で、`startedAt`が必須である。`timestamp`はその実行状態を記録した端末UTC時刻で、startedAt以前の値は不正とする。受領・期限拒否にはstartedAtを付けない。型と検証は`packages/protocol`に置く。

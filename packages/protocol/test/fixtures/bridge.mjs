@@ -10,7 +10,7 @@ export function configuration(digest, deviceId = "bridge-fixture") {
   };
   const definition = {
     profileId: "reference-return-home",
-    version: "1.0.0",
+    version: "1.1.0",
     model: "reference_vehicle",
     operations: [
       {
@@ -29,12 +29,13 @@ export function configuration(digest, deviceId = "bridge-fixture") {
     },
     requiredSensors: ["battery", "odometry", "runtime_state"],
     homeDefinition: "SERVER_BOOT_REGISTERED_POSE",
+    resultCacheMs: 900000,
     limits,
   };
   const known = (id) => ({
     status: "KNOWN",
     id,
-    version: "0.2.0",
+    version: "0.3.0",
     releaseDigest: "a".repeat(64),
   });
   const policy = (id) => ({

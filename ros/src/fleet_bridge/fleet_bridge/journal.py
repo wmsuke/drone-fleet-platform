@@ -39,7 +39,7 @@ class Journal:
             if self.db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise JournalError()
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5) or (existed and version == 0):
+            if version not in (0, 1, 2, 3, 4, 5, 6) or (existed and version == 0):
                 raise JournalError()
             with self.db:
                 self.db.execute("CREATE TABLE IF NOT EXISTS identity (device TEXT NOT NULL)")
@@ -75,7 +75,14 @@ class Journal:
                                 "command TEXT PRIMARY KEY, hash TEXT NOT NULL, body TEXT NOT NULL, "
                                 "ack TEXT NOT NULL, pending INTEGER NOT NULL "
                                 "CHECK(pending IN (0,1)))")
-                self.db.execute("PRAGMA user_version=5")
+                self.db.execute("CREATE TABLE IF NOT EXISTS action_progress ("
+                                "command TEXT PRIMARY KEY, send_at REAL, "
+                                "query_count INTEGER DEFAULT 0, query_started REAL, "
+                                "terminal_event TEXT, stop_event TEXT, last_event TEXT, "
+                                "stop_confirmed INTEGER DEFAULT 0)")
+                self.db.execute("INSERT OR IGNORE INTO action_progress(command) "
+                                "SELECT command FROM action_commands")
+                self.db.execute("PRAGMA user_version=6")
             self.session = str(uuid.uuid4())
             self.sequence = 0
             contracts = Path("/workspace/contracts")
@@ -99,15 +106,19 @@ class Journal:
             "coalesce((SELECT sum(length(body)) FROM inbox),0)+"
             "coalesce((SELECT sum(length(body)) FROM lifecycle),0)+"
             "coalesce((SELECT sum(length(CAST(body AS BLOB))) FROM bridge_outbox),0)+"
-            "coalesce((SELECT sum(length(CAST(body AS BLOB))+length(CAST(snapshot AS BLOB))) "
+            "coalesce((SELECT sum(length(CAST(body AS BLOB))+length(CAST(snapshot AS BLOB))+"
+            "coalesce(length(CAST(result AS BLOB)),0)) "
             "FROM action_commands),0)+"
             "coalesce((SELECT sum(length(CAST(body AS BLOB))+length(CAST(ack AS BLOB))) "
-            "FROM command_receipts),0)"
+            "FROM command_receipts),0)+"
+            "coalesce((SELECT sum(coalesce(length(terminal_event),0)+"
+            "coalesce(length(stop_event),0)+"
+            "coalesce(length(last_event),0)) FROM action_progress),0)"
         ).fetchone()
         if rows >= self.config.record_limit or total + size > self.config.byte_limit:
             raise JournalError("JOURNAL_FULL")
 
-    def receive(self, topic, body):
+    def receive(self, topic, body, reason="OPERATIONS_NOT_IMPLEMENTED"):
         if topic == f"fleet/v1/devices/{self.config.device_id}/bridge-receipts":
             try:
                 receipt = json.loads(body)
@@ -137,7 +148,7 @@ class Journal:
             if not self.db.execute("SELECT 1 FROM inbox WHERE hash=?", (digest,)).fetchone():
                 self.capacity(len(body))
                 self.db.execute("INSERT INTO inbox VALUES (?,?,?,?)",
-                                (digest, topic, body, "OPERATIONS_NOT_IMPLEMENTED"))
+                                (digest, topic, body, reason))
 
     def record(self, state):
         body = json.dumps(state, sort_keys=True)

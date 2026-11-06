@@ -69,8 +69,11 @@ export {
   bridgeConfigurationHeads,
   bridgeConflicts,
   bridgeCommandConfigurations,
+  rosCommandTargets,
+  bridgeActionEvents,
 } from "./schema.js";
 export * from "./bridge.js";
+export * from "./ros-commands.js";
 export { createOtaRepository, otaDeploymentLock } from "./ota.js";
 export { createOtaRollout, OtaControlError } from "./ota-rollout.js";
 export { createOtaRecovery } from "./ota-recovery.js";

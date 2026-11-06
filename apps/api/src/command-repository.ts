@@ -3,6 +3,7 @@ import {
   commandOutbox,
   devices,
   appendAudit,
+  reserveRosCommand,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -64,14 +65,16 @@ export function createCommandRepository(database: Database): CommandRepository {
           status: "PENDING",
         });
         if (command.expiresAt !== undefined) {
-          const payload = commandMessageSchema.parse({
-            schemaVersion: 2,
-            commandId: command.commandId,
-            deviceId: command.deviceId,
-            type: command.type,
-            timestamp: command.createdAt.toISOString(),
-            expiresAt: command.expiresAt.toISOString(),
-          });
+          const payload =
+            (await reserveRosCommand(transaction, command)) ??
+            commandMessageSchema.parse({
+              schemaVersion: 2,
+              commandId: command.commandId,
+              deviceId: command.deviceId,
+              type: command.type,
+              timestamp: command.createdAt.toISOString(),
+              expiresAt: command.expiresAt.toISOString(),
+            });
           await transaction.insert(commandOutbox).values({
             commandId: command.commandId,
             topic: createCommandsTopic(command.deviceId),
@@ -162,6 +165,14 @@ function toCommandHistoryItem(
 ): CommandHistoryItem {
   return {
     ...toCommandResponse(command),
+    ...(command.executionStatus !== "NOT_REPORTED"
+      ? {
+          executionStatus:
+            command.executionStatus as CommandHistoryItem["executionStatus"],
+          executionStartedAt: command.executionStartedAt?.toISOString() ?? null,
+          executionResultAt: command.executionResultAt?.toISOString() ?? null,
+        }
+      : {}),
     ...(command.expiredAt === null
       ? {}
       : { expiredAt: command.expiredAt.toISOString() }),

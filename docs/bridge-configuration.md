@@ -1,24 +1,24 @@
 # Bridgeの能力定義と実稼働構成
 
-Issue #193。[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)の構成報告を実装する。ROS Action送信、cancel、操作readyの有効化は#194以降であり、本機能の報告やdesired設定では機体を操作しない。
+Issue #193で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)の構成報告を追加した。#194で[Action実行と復旧](ros-command-journal.md)へ接続した。構成報告やdesired設定だけでは機体を操作しない。cancelの受付は#195の範囲とする。
 
 ## 能力と実使用情報
 
-Capability Profile v1.0.0は型式reference_vehicle、RETURN_HOMEから専用ReturnHome Actionへの対応、相対Action名、map/base_link、ENU、m・m/s・rad/s、必要sensor、起動時homeの定義、制約を固定する。REBOOTをnode再起動へ読み替えない。
+Capability Profile v1.1.0は型式reference_vehicle、RETURN_HOMEから専用ReturnHome Actionへの対応、相対Action名、map/base_link、ENU、m・m/s・rad/s、必要sensor、起動時homeの定義、制約とresultCacheMsを固定する。旧v1.0.0は履歴として読み取れるが、新規実行には使わない。REBOOTをnode再起動へ読み替えない。
 
 参照AdapterのGetConfiguration serviceから、実起動server UUID、home ID、既存Adapter設定digest、profile、Adapterの実package versionとsource digest、ROS distro/RMW/Python/architectureとbuild manifest digest、適用運用policy、安全設定を取得する。BridgeはGetRuntimeStateのdevice/server/config/homeと一致した新鮮な報告だけへ自身の実package version/source digestを加える。サービス照会は非同期・2秒期限で、MQTT callbackから待たない。
 
-今回Bridge/Adapterを0.2.0へ更新した。source digestはbuild時にpackageのsource・setup・package.xmlから生成し、runtime manifestは固定OCI・deb・Python依存と全ROS sourceの識別を含む。OCI image digestそのものや暗号学的な実行証明とは異なる。自己申告、信頼した参照実装とMQTT端末認証の境界を残す。
+#193のBridge/Adapter 0.2.0に対し、#194の実行対応版は0.3.0とする。source digestはbuild時にpackageのsource・setup・package.xmlから生成し、runtime manifestは固定OCI・deb・Python依存と全ROS sourceの識別を含む。OCI image digestそのものや暗号学的な実行証明とは異なる。自己申告、信頼した参照実装とMQTT端末認証の境界を残す。
 
 参照の安全閾値は報告と実判定で同じ定義を使う。運用policyは許可操作・制約の識別情報で、AWS IoT Policy（MQTT権限）とは別概念である。AI未使用はNOT_APPLICABLE/NOT_USEDとし、model versionを作らない。Bridge/Adapter/runtimeの情報を取得できない場合のUNKNOWNと区別する。KNOWNで宣言した未対応versionはschemaで拒否し、UNKNOWNを実行可能へ補完しない。
 
 ## wireと保存確認
 
-新topicはfleet/v1/devices/{deviceId}/bridge-eventsとbridge-receipts。QoS 1・retainなし。schemaVersion 1のCONFIGURATIONだけを追加し、将来の実行eventを先取りしない。commandIdやgoalIdを構成報告へ捏造しない。
+topicはfleet/v1/devices/{deviceId}/bridge-eventsとbridge-receipts。QoS 1・retainなし。schemaVersion 1のCONFIGURATIONと、#194のgoal受付・feedback・実行結果・停止観測を扱う。commandIdやgoalIdを構成報告へ捏造しない。
 
 型・実行時検証はpackages/protocol/src/bridge.tsを正とする。pnpm protocol:export:rosでPython用JSON Schemaと共通fixtureを生成する。構成はsafe integerだけを使い、キーを辞書順に並べた空白なしUTF-8 JSONのSHA-256で識別する。浮動小数点の表現差を避けるため制約の距離・時間はmm/msの整数とし、ROS観測そのものの単位は変えない。
 
-BridgeはSQLite user_version 3でjournal ID、configurationRevision、reportSequenceを非破壊追加した。user_version 4でcommand対応、現在のuser_version 5で受領ACKを[command送信境界のjournal](ros-command-journal.md)へ追加する。同じ構成の再報告ではrevisionを変えず、構成が変わると増加させる。reportSequenceは起動sessionをまたいで増加する。active goalが報告されている間は新しい構成報告を生成しない。報告周期は最大5秒、実ROS照会の結果が3秒未満のときだけ生成する。
+BridgeはSQLite user_version 3でjournal ID、configurationRevision、reportSequenceを非破壊追加した。4でcommand、5で受領ACK、6で実行・照会予算・終端証拠を追加する。同じ構成の再報告ではrevisionを変えず、構成が変わると増加させる。reportSequenceは起動sessionをまたいで増加する。未停止実行中は同じ構成の再報告だけを許可し、構成の切替はしない。報告周期は最大5秒、実ROS照会の結果が3秒未満のときだけ生成する。
 
 eventとcounterを同じWAL/FULL transactionで保存してから配送する。重要eventはinbox/lifecycleと合わせて最大10,000件/32 MiB。最古eventを自動削除しない。満杯・書込失敗はBridgeを非readyのまま停止する。最大5件/秒、1〜8秒backoffで再送し、PUBACKでは削除しない。自機device/eventId/canonical payloadHash/STOREDが一致するDB receiptだけで削除する。未確認eventは再起動後も同じ本文・timestampで配送する。
 
@@ -30,12 +30,12 @@ ingestorはevent正本・受信時刻・採否と構成をtransactionで保存�
 
 bridge_definitionsにID/versionごとの定義、bridge_configurationsに構成IDごとの不変snapshot、bridge_reportsにevent正本と採否、bridge_configuration_headsに現在のreportedとdesiredを分けて保存する。PostgreSQL triggerで定義・構成・報告本文のUPDATEを禁止する。
 
-- GET /devices/:deviceId/bridge-configuration：reported、desired、matchesDesired、報告のfresh（15秒未満）、定義上のsupportedOperationsを返す。readyは常にfalse。
+- GET /devices/:deviceId/bridge-configuration：reported、desired、matchesDesired、報告のfresh（15秒未満）、定義上のsupportedOperationsと、新鮮な観測・実行対応version・排他・OTA予約を照合したreadyを返す。受付時にも同じ条件を検証する。
 - GET /devices/:deviceId/bridge-configuration/reports?limit=100：採否付き報告履歴。limitは1〜1000。
 - PUT /devices/:deviceId/bridge-configuration/desired：revisionとconfigurationIdを指定する。同revision別ID・古いrevisionは409。未報告のIDも期待値として設定できるが、配信・適用・reported更新はしない。変更とauditを同transactionで保存する。
 - GET /commands/:commandId/bridge-configuration：保存済み実行参照から当時の構成を返す。参照がなければ404。
 
-createBridgeRepository.bindExecutionは#194の実行開始処理へ渡すDB境界である。新鮮な現在報告、desiredとの一致、対応操作、同機体の未停止実行、goal UUIDを確認し、commandId/goalId/configurationId/報告event/開始時刻を不変に結ぶ。後から現在構成へ差し替えない。停止確認なしの実行がある間の構成切替も拒否する。今回この関数からActionや架空の実行結果を作らない。既存simulator commandは変更せず、実ROSの開始・結果経路への接続は#194で行う。DB/API試験の実行参照は明示的な完了・停止確認fixtureで検証する。
+#194ではAPI受付時に構成・報告event・期限を予約し、実feedback/resultのstartedAtを得てから共有bindExecutionでcommandId/goalId/configurationId/報告event/実開始時刻を不変に結ぶ。受付後の現在構成へ差し替えず、非開始拒否には架空の開始参照を作らない。停止未確認・結果不明・矛盾がある実行は、新規commandとOTA受付、構成切替を保留する。GET /commands/:commandId/bridge-executionで採否付き実行証拠も取得できる。
 
 ## 更新と検証
 

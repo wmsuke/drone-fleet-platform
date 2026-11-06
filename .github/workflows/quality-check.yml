@@ -25,6 +25,7 @@ jobs:
           bash scripts/test-ros-reference.sh
           bash scripts/test-ros-bridge.sh
           bash scripts/test-ros-observations.sh
+          bash scripts/test-ros-commands.sh
         env:
           TMPDIR: ${{ runner.temp }}
       - name: Upload ROS environment and observations
@@ -36,6 +37,7 @@ jobs:
             ${{ runner.temp }}/ros-reference-*/
             ${{ runner.temp }}/ros-bridge-*/
             ${{ runner.temp }}/ros-observations-*/
+            ${{ runner.temp }}/ros-commands-*/
           retention-days: 14
   ota-fleet:
     name: OTA ten-device staged rollout and rollback E2E

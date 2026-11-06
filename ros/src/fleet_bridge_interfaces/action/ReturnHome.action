@@ -1,5 +1,6 @@
 string<=64 device_id
 string<=36 command_id
+string<=64 owner_id
 unique_identifier_msgs/UUID goal_id
 string<=36 server_instance_id
 string<=64 expected_configuration_id

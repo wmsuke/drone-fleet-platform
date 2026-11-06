@@ -18,6 +18,8 @@ export const targetLabels = {
   EXPIRED: "開始期限切れ",
   UNRESPONSIVE: "未応答",
   UNCERTAIN: "結果不明",
+  REJECTED: "実行拒否（未開始）",
+  CANCELLED: "実行中断",
 } as const;
 export type TargetStatus = keyof typeof targetLabels;
 export type OperationStatus = keyof typeof operationLabels;
@@ -35,7 +37,8 @@ export interface OperationSummary extends Omit<OperationAccepted, "status"> {
   groupName: string;
   groupRevision: number;
   status: OperationStatus;
-  counts: Record<TargetStatus, number>;
+  counts: Record<Exclude<TargetStatus, "REJECTED" | "CANCELLED">, number> &
+    Partial<Record<"REJECTED" | "CANCELLED", number>>;
   succeededCount: number;
   unsuccessfulCount: number;
   inProgressCount: number;
@@ -100,7 +103,14 @@ function envelope(v: unknown): v is OperationAccepted {
 function summary(v: unknown): v is OperationSummary {
   if (!envelope(v) || !object(v)) return false;
   const c = v.counts;
-  if (!object(c) || !Object.keys(targetLabels).every((s) => integer(c[s])))
+  if (
+    !object(c) ||
+    !Object.keys(targetLabels).every(
+      (s) =>
+        integer(c[s]) ||
+        (["REJECTED", "CANCELLED"].includes(s) && c[s] === undefined),
+    )
+  )
     return false;
   const counts = c as Record<TargetStatus, number>;
   return (
@@ -137,9 +147,15 @@ function target(v: unknown): v is OperationTarget {
       "TIMED_OUT",
       "EXPIRED",
     ].includes(v.commandStatus as string) &&
-    ["NOT_REPORTED", "RUNNING", "SUCCEEDED", "FAILED", "UNCERTAIN"].includes(
-      v.executionStatus as string,
-    ) &&
+    [
+      "NOT_REPORTED",
+      "RUNNING",
+      "SUCCEEDED",
+      "FAILED",
+      "UNCERTAIN",
+      "REJECTED",
+      "CANCELLED",
+    ].includes(v.executionStatus as string) &&
     (v.outboxState === null ||
       [
         "PENDING",

@@ -49,6 +49,7 @@ class CommandJournal:
                     return False
                 self.db.execute("UPDATE command_receipts SET pending=1 WHERE command=?",
                                 (command["commandId"],))
+                self.replay(command["commandId"])
                 return True
             ack = canonical({"schemaVersion": 2, "deviceId": command["deviceId"],
                              "commandId": command["commandId"], "timestamp": utc(),
@@ -113,6 +114,10 @@ class CommandJournal:
         for name in ("bridge", "adapter", "runtime", "operatingPolicy", "safetyConfig"):
             if configuration[name]["status"] != "KNOWN":
                 raise JournalError("CAPABILITY_UNKNOWN")
+        if (configuration["bridge"]["version"] != "0.3.0"
+                or configuration["adapter"]["version"] != "0.3.0"
+                or configuration["profile"]["definition"]["version"] != "1.1.0"):
+            raise JournalError("CAPABILITY_UPGRADE_REQUIRED")
         expected = {"command": "RETURN_HOME",
                     "actionType": "fleet_bridge_interfaces/action/ReturnHome",
                     "actionName": "return_home"}
@@ -120,7 +125,9 @@ class CommandJournal:
             raise JournalError("CAPABILITY_UNSUPPORTED")
         snapshot = canonical(configuration)
         with self.db:
-            if self.db.execute("SELECT 1 FROM action_commands WHERE state != 'REJECTED' LIMIT 1"
+            if self.db.execute("SELECT 1 FROM action_commands c LEFT JOIN action_progress p "
+                               "ON p.command=c.command WHERE state != 'REJECTED' "
+                               "AND coalesce(p.stop_confirmed,0)=0 LIMIT 1"
                                ).fetchone():
                 # 成功resultも停止確認ではない。解除は後続の証拠検証でのみ行う。
                 raise JournalError("GOAL_UNRESOLVED")
@@ -128,6 +135,8 @@ class CommandJournal:
             self.db.execute("INSERT INTO action_commands VALUES (?,?,?,?,?,'READY',NULL,NULL)",
                             (command["commandId"], digest(command), body,
                              str(uuid.uuid4()), snapshot))
+            self.db.execute("INSERT INTO action_progress(command) VALUES (?)",
+                            (command["commandId"],))
         return self.get(command["commandId"])
 
     def send_intent(self, command_id, now):
@@ -149,6 +158,8 @@ class CommandJournal:
                 raise JournalError("COMMAND_EXPIRED")
             self.db.execute("UPDATE action_commands SET state='SEND_INTENT' WHERE command=?",
                             (command_id,))
+            self.db.execute("UPDATE action_progress SET send_at=? WHERE command=?",
+                            (now, command_id))
         return self.get(command_id)
 
     def recovery(self):
@@ -173,3 +184,91 @@ class CommandJournal:
                 "WHERE command=? AND state='SEND_INTENT'", (command_id,))
             if updated.rowcount != 1:
                 raise JournalError("GOAL_STATE_CONFLICT")
+
+    def progress(self, command_id):
+        row = self.db.execute("SELECT send_at,query_count,query_started,terminal_event,stop_event,"
+                              "last_event,stop_confirmed FROM action_progress WHERE command=?",
+                              (command_id,)).fetchone()
+        return dict(zip(("sendAt", "queryCount", "queryStarted", "terminalEvent", "stopEvent",
+                         "lastEvent", "stopConfirmed"), row)) if row else None
+
+    def replay(self, command_id):
+        progress = self.progress(command_id)
+        if not progress:
+            return
+        for field in ("terminalEvent", "lastEvent", "stopEvent"):
+            body = progress[field]
+            if body:
+                event = json.loads(body)
+                if not self.db.execute("SELECT 1 FROM bridge_outbox WHERE event=?",
+                                       (event["eventId"],)).fetchone():
+                    self.journal.capacity(len(body.encode()))
+                    self.db.execute("INSERT INTO bridge_outbox(event,hash,body) VALUES (?,?,?)",
+                                    (event["eventId"], digest(event), body))
+
+    def event(self, command_id, kind, fields, state=None):
+        value = self.get(command_id)
+        with self.db:
+            journal_id, sequence = self.db.execute(
+                "SELECT journal,sequence FROM bridge_counters").fetchone()
+            event = {"schemaVersion": 1, "deviceId": self.journal.config.device_id,
+                     "timestamp": utc(), "eventId": str(uuid.uuid4()),
+                     "sessionId": self.journal.session, "journalId": journal_id,
+                     "sequence": sequence + 1, "configurationId": value["command"][
+                         "expectedConfigurationId"], "commandId": command_id,
+                     "goalId": value["goalId"],
+                     "serverInstanceId": value["configuration"]["serverInstanceId"],
+                     "kind": kind, **fields}
+            self.journal.validate_bridge(event)
+            body = canonical(event)
+            if len(body.encode()) > 32768:
+                raise JournalError("BRIDGE_PACKET_TOO_LARGE")
+            if kind == "FEEDBACK":
+                self.db.execute("DELETE FROM bridge_outbox WHERE json_extract(body,'$.kind')="
+                                "'FEEDBACK' AND json_extract(body,'$.commandId')=?", (command_id,))
+            # outboxと履歴の双方を見込む。満杯なら全てrollbackしheartbeatを止める。
+            self.journal.capacity(len(body.encode()) * 4)
+            self.db.execute("INSERT INTO bridge_outbox(event,hash,body) VALUES (?,?,?)",
+                            (event["eventId"], digest(event), body))
+            self.db.execute("UPDATE bridge_counters SET sequence=?", (sequence + 1,))
+            if kind != "FEEDBACK":
+                self.db.execute("UPDATE action_progress SET last_event=? WHERE command=?",
+                                (body, command_id))
+            if state:
+                self.db.execute("UPDATE action_commands SET state=?,reason=?,result=? "
+                                "WHERE command=?",
+                                (state, event["reason"], body, command_id))
+                if state in ("SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "UNCERTAIN"):
+                    self.db.execute("UPDATE action_progress SET terminal_event=? WHERE command=?",
+                                    (body, command_id))
+            if kind == "STOP_OBSERVATION":
+                self.db.execute("UPDATE action_progress SET stop_event=?,stop_confirmed=1 "
+                                "WHERE command=?", (body, command_id))
+        return event
+
+    def query_attempt(self, command_id, now):
+        with self.db:
+            self.db.execute("UPDATE action_progress SET query_count=query_count+1, "
+                            "query_started=coalesce(query_started,?) WHERE command=?",
+                            (now, command_id))
+
+    def commands(self):
+        return [self.get(row[0]) for row in self.db.execute("SELECT command FROM action_commands")]
+
+    def open_commands(self):
+        return [self.get(row[0]) for row in self.db.execute(
+            "SELECT c.command FROM action_commands c LEFT JOIN action_progress p "
+            "ON p.command=c.command "
+            "WHERE c.state!='REJECTED' AND coalesce(p.stop_confirmed,0)=0")]
+
+    def by_goal(self, goal_id):
+        row = self.db.execute("SELECT command FROM action_commands WHERE goal=?",
+                              (goal_id,)).fetchone()
+        return self.get(row[0]) if row else None
+
+    def received_commands(self):
+        # 隔離した汎用inboxは、今後も操作候補として読まない。
+        return [json.loads(row[0]) for row in self.db.execute(
+            "SELECT r.body FROM command_receipts r LEFT JOIN action_commands c "
+            "ON c.command=r.command WHERE c.command IS NULL "
+            "AND json_extract(r.ack,'$.status')='ACKNOWLEDGED' ORDER BY r.rowid")]

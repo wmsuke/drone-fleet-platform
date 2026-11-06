@@ -231,15 +231,15 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 ## Phase 6：ROS 2連携
 
-#190で[固定ROS参照環境](ros-reference.md)とpublisher/service/Actionの実DDS smokeを追加した。Cloud/MQTT Bridgeの接続と復旧は引き続き未実装。
+#190で[固定ROS参照環境](ros-reference.md)とpublisher/service/Actionの実DDS smokeを追加した。
 
-#191で[MQTT / ROS clientの起動・終了基盤](ros-bridge.md)、#192で[ROS観測の変換とDB/API保存経路](ros-observations.md)、#193で[能力定義と実稼働構成の記録](bridge-configuration.md)を追加した。両接続の分離、認証設定検証、SQLite所有lock、観測/構成の永続再送・DB receipt、shutdownを実装した。command実行の復旧は未実装。
+#191で[MQTT / ROS clientの起動・終了基盤](ros-bridge.md)、#192で[ROS観測の変換とDB/API保存経路](ros-observations.md)、#193で[能力定義と実稼働構成の記録](bridge-configuration.md)、#194で[Action実行・結果保存・再照会](ros-command-journal.md)を追加した。両接続の分離、認証設定検証、SQLite所有lock、観測/構成/実行証拠の永続再送・DB receipt、shutdown、重複goal抑止、結果不明時の排他を実装した。
 
 リリース：`v0.6.0`
 
 ROS 2とMQTTの間を接続するBridgeを追加する。
 
-親Issueは[#188](https://github.com/wmsuke/drone-fleet-platform/issues/188)。#189で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)を整備した。Jazzy / Ubuntu 24.04 / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使い、参照DDSをlocalhostへ閉じる。#192までの観測経路を実装済みとし、操作系とPhase全体のE2Eは後続とする。実装順は参照環境#190→起動/終了#191→観測変換#192・能力/構成#193→Action#194→cancel#195→障害/機体側拒否#196→画面#197→実ROS E2E#198→デモ#199とする。
+親Issueは[#188](https://github.com/wmsuke/drone-fleet-platform/issues/188)。#189で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)を整備した。Jazzy / Ubuntu 24.04 / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使い、参照DDSをlocalhostへ閉じる。#194までの実装と専用Action E2Eを追加した。cancel・障害通知・専用画面・Phase全体のE2Eは後続とする。実装順は参照環境#190→起動/終了#191→観測変換#192・能力/構成#193→Action#194→cancel#195→障害/機体側拒否#196→画面#197→実ROS E2E#198→デモ#199とする。
 
 RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへnode再起動等の別意味を流用しない。LOCAL位置はGPSに変えず、欠測は新観測schemaで表す。goal受付・実行終端・cancel受付・停止観測を分離し、不明なgoalを再投入しない。実行時のBridge/Adapter/runtime/policy/Capability Profileを不変参照で残し、汎用Task評価・executionContext全体・KPI集計はPhase 7以降へ渡す。Cloud/AIに依存しない参照機体側制約は用意するが、実機安全保証とは区別する。
 

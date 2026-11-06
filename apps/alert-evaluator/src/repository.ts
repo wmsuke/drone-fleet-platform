@@ -194,7 +194,7 @@ export function createAlertRepository(db: Database, policy: AlertPolicy) {
         LEFT JOIN fleet_operation_targets t ON t.command_id=c.command_id
         LEFT JOIN fleet_operations o ON o.operation_id=t.operation_id
         WHERE (c.execution_status <> 'SUCCEEDED' AND (
-          c.execution_status IN ('FAILED','UNCERTAIN') OR c.status IN ('FAILED','EXPIRED','TIMED_OUT')
+          c.execution_status IN ('FAILED','UNCERTAIN','REJECTED','CANCELLED') OR c.status IN ('FAILED','EXPIRED','TIMED_OUT')
           OR coalesce(o.result_deadline, c.created_at + ${policy.commandResultMs} * interval '1 millisecond') <= ${now.toISOString()}::timestamptz))
           OR EXISTS (SELECT 1 FROM alerts a WHERE a.command_id=c.command_id AND a.status='ACTIVE')
         ORDER BY c.command_id`);

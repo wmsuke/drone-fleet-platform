@@ -32,6 +32,8 @@ const detail: OperationDetailResponse = {
     EXPIRED: 0,
     UNRESPONSIVE: 1,
     UNCERTAIN: 0,
+    REJECTED: 0,
+    CANCELLED: 0,
   },
   succeededCount: 1,
   unsuccessfulCount: 1,

@@ -5,6 +5,7 @@ import time
 import json
 from pathlib import Path
 import copy
+import uuid
 
 import fastjsonschema
 from fleet_reference.configuration import component, digest
@@ -12,7 +13,7 @@ from fleet_bridge_interfaces.srv import GetConfiguration
 
 from diagnostic_msgs.msg import DiagnosticArray
 from fleet_bridge_interfaces.action import ReturnHome
-from fleet_bridge_interfaces.msg import RuntimeState
+from fleet_bridge_interfaces.msg import RuntimeState, BridgeHeartbeat
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import BatteryState, NavSatFix
 from fleet_bridge_interfaces.srv import GetRuntimeState
@@ -25,6 +26,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.signals import SignalHandlerOptions
 from rclpy.event_handler import SubscriptionEventCallbacks
 from rclpy.duration import Duration
+from unique_identifier_msgs.msg import UUID
 
 from .adapter import matches_runtime
 from .observations import Observations
@@ -50,6 +52,11 @@ class RosClient:
         self.reported_serial = 0
         self.runtime_identity = None
         self.runtime_active = True
+        self.runtime_state = None
+        self.owner_permission = None
+        self.owner_permission_at = 0
+        self.next_heartbeat = 0
+        self.feedback = {}
         self.validate_configuration = fastjsonschema.compile(json.loads(Path(
             "/workspace/contracts/adapter-configuration.schema.json").read_text()))
         rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
@@ -82,6 +89,11 @@ class RosClient:
                 depth=10, reliability=ReliabilityPolicy.BEST_EFFORT,
             ),
         )
+        self.result_client = self.node.create_client(
+            ReturnHome.Impl.GetResultService, config.namespace + "/return_home/_action/get_result",
+            callback_group=self.group)
+        self.heartbeat_publisher = self.node.create_publisher(
+            BridgeHeartbeat, "bridge_heartbeat", QoSProfile(depth=1, deadline=Duration(seconds=2)))
         self.timer = self.node.create_timer(0.2, self.tick)
         self.executor = MultiThreadedExecutor(num_threads=2)
         self.executor.add_node(self.node)
@@ -109,6 +121,11 @@ class RosClient:
 
     def tick(self):
         now = time.monotonic()
+        with self.guard:
+            permission = self.owner_permission if now - self.owner_permission_at < 1.5 else None
+        if permission and now >= self.next_heartbeat:
+            self.next_heartbeat = now + 1
+            self.heartbeat_publisher.publish(permission)
         self.tick_configuration(now)
         if self.pending:
             if self.pending.done():
@@ -126,6 +143,7 @@ class RosClient:
                                               response.state.configuration_id,
                                               response.state.home_id) if valid else None)
                     self.runtime_active = response.state.has_active_goal if valid else True
+                    self.runtime_state = copy.deepcopy(response.state) if valid else None
                 self.failures = 0
             elif now >= self.deadline:
                 self.client.remove_pending_request(self.pending)
@@ -183,13 +201,73 @@ class RosClient:
     def configuration_snapshot(self):
         with self.guard:
             value = self.reported
-            if (not value or self.runtime_active or not self.available
+            if (not value or not self.available
                     or time.monotonic() - self.last_response >= 3
                     or time.monotonic() - self.reported_at >= 3
                     or (value["serverInstanceId"], value["adapterConfigurationId"], value["homeId"])
                     != self.runtime_identity):
                 return None
             return self.reported_serial, copy.deepcopy(value)
+
+    def runtime_snapshot(self):
+        with self.guard:
+            if not self.available or time.monotonic() - self.last_response >= 3:
+                return None
+            return copy.deepcopy(self.runtime_state)
+
+    def permit_heartbeat(self, owner_id, state):
+        with self.guard:
+            self.owner_permission = None
+            if state is not None:
+                message = BridgeHeartbeat()
+                message.header.stamp = self.node.get_clock().now().to_msg()
+                message.header.frame_id = self.config.namespace[1:] + "/map"
+                message.device_id = self.config.device_id
+                message.owner_id = owner_id
+                message.server_instance_id = state.server_instance_id
+                message.expected_configuration_id = state.configuration_id
+                message.has_goal = state.has_active_goal
+                message.goal_id = state.active_goal_id
+                self.owner_permission = message
+                self.owner_permission_at = time.monotonic()
+
+    def send(self, value, owner_id):
+        from builtin_interfaces.msg import Time
+        from .command_journal import instant
+        goal = ReturnHome.Goal()
+        config = value["configuration"]
+        goal.device_id = self.config.device_id
+        goal.owner_id = owner_id
+        goal.command_id = value["commandId"]
+        goal.goal_id = UUID(uuid=list(uuid.UUID(value["goalId"]).bytes))
+        goal.server_instance_id = config["serverInstanceId"]
+        goal.expected_configuration_id = config["adapterConfigurationId"]
+        goal.home_id = config["homeId"]
+        goal.frame_id = config["namespace"][1:] + "/map"
+        for target, name in (("expires_at", "expiresAt"), ("result_deadline", "resultDeadline")):
+            ns = round(instant(value["command"][name]) * 1_000_000_000)
+            setattr(goal, target, Time(sec=ns // 1_000_000_000, nanosec=ns % 1_000_000_000))
+
+        def feedback(message):
+            if bytes(message.goal_id.uuid) != uuid.UUID(value["goalId"]).bytes:
+                return
+            with self.guard:
+                self.feedback[value["commandId"]] = copy.deepcopy(message.feedback)
+
+        return self.action.send_goal_async(goal, goal_uuid=goal.goal_id, feedback_callback=feedback)
+
+    def latest_feedback(self, command_id):
+        with self.guard:
+            return self.feedback.pop(command_id, None)
+
+    def query(self, goal_id):
+        request = ReturnHome.Impl.GetResultService.Request()
+        request.goal_id = UUID(uuid=list(uuid.UUID(goal_id).bytes))
+        return self.result_client.call_async(request)
+
+    def abandon_query(self, future):
+        self.result_client.remove_pending_request(future)
+        future.cancel()  # goal cancelではなくローカル照会の取消。
 
     def close(self):
         self.timer.cancel()

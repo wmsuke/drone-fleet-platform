@@ -55,6 +55,16 @@ export interface CommandResponse {
 }
 
 export interface CommandHistoryItem extends CommandResponse {
+  executionStatus?:
+    | "NOT_REPORTED"
+    | "RUNNING"
+    | "SUCCEEDED"
+    | "FAILED"
+    | "UNCERTAIN"
+    | "REJECTED"
+    | "CANCELLED";
+  executionStartedAt?: string | null;
+  executionResultAt?: string | null;
   expiredAt?: string;
   acknowledgementReceivedAt: string | null;
   timedOutAt: string | null;
@@ -235,6 +245,22 @@ function isCommandHistoryItem(input: unknown): input is CommandHistoryItem {
   }
   const command = input as unknown as Record<string, unknown>;
   return (
+    (command.executionStatus === undefined ||
+      [
+        "NOT_REPORTED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "UNCERTAIN",
+        "REJECTED",
+        "CANCELLED",
+      ].includes(command.executionStatus as string)) &&
+    [command.executionStartedAt, command.executionResultAt].every(
+      (value) =>
+        value === undefined ||
+        value === null ||
+        (typeof value === "string" && Number.isFinite(Date.parse(value))),
+    ) &&
     (command.expiredAt === undefined ||
       (typeof command.expiredAt === "string" &&
         Number.isFinite(Date.parse(command.expiredAt)))) &&
