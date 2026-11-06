@@ -10,6 +10,7 @@ import fastjsonschema
 from fleet_reference.configuration import canonical, digest
 
 from .journal import JournalError
+from .observations import utc
 
 
 def instant(value):
@@ -24,6 +25,49 @@ class CommandJournal:
         self.db = journal.db
         self.validate = fastjsonschema.compile(json.loads(Path(
             "/workspace/contracts/ros-command.schema.json").read_text()), use_default=False)
+
+    def receive(self, body, now):
+        """自機v3だけを受領commit。ACKNOWLEDGEDはActionの受付ではない。"""
+        try:
+            command = json.loads(body)
+            self.validate(command)
+            start = instant(command["timestamp"])
+            expires = instant(command["expiresAt"])
+            if (command["deviceId"] != self.journal.config.device_id
+                    or expires != start + 30
+                    or instant(command["resultDeadline"]) != start + 120
+                    or now < start - 5):
+                return False
+        except (ValueError, fastjsonschema.JsonSchemaException):
+            return False
+        payload_hash = digest(command)
+        with self.db:
+            old = self.db.execute("SELECT hash FROM command_receipts WHERE command=?",
+                                  (command["commandId"],)).fetchone()
+            if old:
+                if old[0] != payload_hash:
+                    return False
+                self.db.execute("UPDATE command_receipts SET pending=1 WHERE command=?",
+                                (command["commandId"],))
+                return True
+            ack = canonical({"schemaVersion": 2, "deviceId": command["deviceId"],
+                             "commandId": command["commandId"], "timestamp": utc(),
+                             "status": "REJECTED_EXPIRED" if now >= expires else "ACKNOWLEDGED"})
+            command_body = canonical(command)
+            self.journal.capacity(len(command_body.encode()) + len(ack.encode()))
+            self.db.execute("INSERT INTO command_receipts VALUES (?,?,?,?,1)",
+                            (command["commandId"], payload_hash, command_body, ack))
+        return True
+
+    def pending_acknowledgements(self):
+        return self.db.execute("SELECT command,ack FROM command_receipts "
+                               "WHERE pending=1 ORDER BY rowid LIMIT 100").fetchall()
+
+    def acknowledgement_sent(self, command_id, body):
+        # ACK v2にはDB receiptがない。PUBACKでpendingだけを解除し正本は保持する。
+        with self.db:
+            self.db.execute("UPDATE command_receipts SET pending=0 WHERE command=? AND ack=?",
+                            (command_id, body))
 
     def get(self, command_id):
         row = self.db.execute("SELECT command,hash,body,goal,snapshot,state,reason,result "
@@ -47,6 +91,13 @@ class CommandJournal:
             if previous["payloadHash"] != digest(command):
                 raise JournalError("COMMAND_CONFLICT")
             return previous
+        receipt = self.db.execute("SELECT hash,ack FROM command_receipts WHERE command=?",
+                                  (command["commandId"],)).fetchone()
+        if receipt:
+            if receipt[0] != digest(command):
+                raise JournalError("COMMAND_CONFLICT")
+            if json.loads(receipt[1])["status"] == "REJECTED_EXPIRED":
+                raise JournalError("COMMAND_EXPIRED")
         start = instant(command["timestamp"])
         expires = instant(command["expiresAt"])
         deadline = instant(command["resultDeadline"])

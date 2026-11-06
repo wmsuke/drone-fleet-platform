@@ -97,7 +97,7 @@ class MqttTransport:
                 return
             epoch = self.epoch
         if (message.topic not in self.topics or message.qos != 1
-                or len(message.payload) > 32768):
+                or getattr(message, "retain", False) or len(message.payload) > 32768):
             # 受領ACKを返さず接続を閉じる。本文・topic・例外をログへ出さない。
             with self.guard:
                 self.last_failure = "MQTT_PACKET_REJECTED"
@@ -154,6 +154,10 @@ class MqttTransport:
 
     def publish_bridge_event(self, body):
         info = self.client.publish(self.prefix + "bridge-events", body, qos=1, retain=False)
+        return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
+
+    def publish_acknowledgement(self, body):
+        info = self.client.publish(self.prefix + "command-acks", body, qos=1, retain=False)
         return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
 
     def stop_intake(self):

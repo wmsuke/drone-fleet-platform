@@ -11,6 +11,7 @@ import time
 import rclpy
 
 from .config import ConfigurationError, load_config
+from .command_journal import CommandJournal
 from .journal import Journal, JournalError
 from .ros_client import RosClient
 from .transport import MqttTransport, status_message
@@ -24,7 +25,7 @@ def health_file(config, state):
     os.replace(path, config.state_dir / "health.json")
 
 
-def receive_pending(transport, journal, deadline=None):
+def receive_pending(transport, journal, deadline=None, commands=None):
     for _ in range(transport.config.queue_limit):
         if deadline is not None and time.monotonic() >= deadline:
             break
@@ -32,7 +33,11 @@ def receive_pending(transport, journal, deadline=None):
             item = transport.inbox.get_nowait()
         except queue.Empty:
             break
-        journal.receive(item[3], item[4])
+        handled = (commands is not None
+                   and item[3] == f"fleet/v1/devices/{transport.config.device_id}/commands"
+                   and commands.receive(item[4], time.time()))
+        if not handled:
+            journal.receive(item[3], item[4])
         transport.acknowledge(item)  # SQLite commitより前にPUBACKしない
 
 
@@ -48,9 +53,13 @@ def run(config, stopping):
     next_event = 0
     event_due = {}
     event_inflight = None
+    ack_inflight = None
+    commands = None
     exit_code = 0
     try:
         journal = Journal(config)
+        commands = CommandJournal(journal)
+        commands.recovery()  # SEND_INTENT以後を再送候補にしない。
         transport = MqttTransport(config)
         ros = RosClient(config)
         transport.start()
@@ -69,7 +78,8 @@ def run(config, stopping):
                     journal.status(message)
                 print(json.dumps({"event": "BRIDGE_STATE", **state}), flush=True)
                 last = state
-            receive_pending(transport, journal, deadline=time.monotonic() + 0.1)
+            receive_pending(transport, journal, deadline=time.monotonic() + 0.1,
+                            commands=commands)
             observation = ros.observations.snapshot()
             if observation is not None:
                 journal.observation(observation)
@@ -84,6 +94,17 @@ def run(config, stopping):
                 telemetry_inflight = None
                 event_due.clear()
                 event_inflight = None
+                ack_inflight = None
+            if ack_inflight and ack_inflight[2].is_published():
+                commands.acknowledgement_sent(ack_inflight[0], ack_inflight[1])
+                ack_inflight = None
+            if state["mqtt_subscribed"] and ack_inflight is None:
+                acknowledgements = commands.pending_acknowledgements()
+                if acknowledgements:
+                    command_id, body = acknowledgements[0]
+                    info = transport.publish_acknowledgement(body)
+                    if info:
+                        ack_inflight = (command_id, body, info)
             if telemetry_inflight and telemetry_inflight.is_published():
                 telemetry_inflight = None  # PUBACKだけではSQLiteから削除しない。
             if state["mqtt_subscribed"] and telemetry_inflight is None:
@@ -134,7 +155,8 @@ def run(config, stopping):
                          "reason": "SHUTDOWN" if exit_code == 0 else "JOURNAL_OR_RUNTIME_FAILED"}
                 health_file(config, state)
                 if transport:
-                    receive_pending(transport, journal, deadline=time.monotonic() + 3)
+                    receive_pending(transport, journal, deadline=time.monotonic() + 3,
+                                    commands=commands)
                     if not transport.inbox.empty():
                         exit_code = 1
                         state["reason"] = "INBOX_PENDING_REDELIVERY"
