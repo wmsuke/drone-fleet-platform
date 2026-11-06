@@ -18,7 +18,7 @@ Capability Profile v1.0.0は型式reference_vehicle、RETURN_HOMEから専用Ret
 
 型・実行時検証はpackages/protocol/src/bridge.tsを正とする。pnpm protocol:export:rosでPython用JSON Schemaと共通fixtureを生成する。構成はsafe integerだけを使い、キーを辞書順に並べた空白なしUTF-8 JSONのSHA-256で識別する。浮動小数点の表現差を避けるため制約の距離・時間はmm/msの整数とし、ROS観測そのものの単位は変えない。
 
-BridgeはSQLite user_version 3へ非破壊追加し、journal ID、configurationRevision、reportSequenceを永続化する。同じ構成の再報告ではrevisionを変えず、構成が変わると増加させる。reportSequenceは起動sessionをまたいで増加する。active goalが報告されている間は新しい構成報告を生成しない。報告周期は最大5秒、実ROS照会の結果が3秒未満のときだけ生成する。
+BridgeはSQLite user_version 3でjournal ID、configurationRevision、reportSequenceを非破壊追加した。現在のuser_version 4は[command送信境界のjournal](ros-command-journal.md)も追加する。同じ構成の再報告ではrevisionを変えず、構成が変わると増加させる。reportSequenceは起動sessionをまたいで増加する。active goalが報告されている間は新しい構成報告を生成しない。報告周期は最大5秒、実ROS照会の結果が3秒未満のときだけ生成する。
 
 eventとcounterを同じWAL/FULL transactionで保存してから配送する。重要eventはinbox/lifecycleと合わせて最大10,000件/32 MiB。最古eventを自動削除しない。満杯・書込失敗はBridgeを非readyのまま停止する。最大5件/秒、1〜8秒backoffで再送し、PUBACKでは削除しない。自機device/eventId/canonical payloadHash/STOREDが一致するDB receiptだけで削除する。未確認eventは再起動後も同じ本文・timestampで配送する。
 

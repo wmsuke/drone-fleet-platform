@@ -39,7 +39,7 @@ class Journal:
             if self.db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise JournalError()
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3) or (existed and version == 0):
+            if version not in (0, 1, 2, 3, 4) or (existed and version == 0):
                 raise JournalError()
             with self.db:
                 self.db.execute("CREATE TABLE IF NOT EXISTS identity (device TEXT NOT NULL)")
@@ -67,7 +67,11 @@ class Journal:
                 self.db.execute("CREATE TABLE IF NOT EXISTS bridge_outbox "
                                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT UNIQUE, "
                                 "hash TEXT, body TEXT)")
-                self.db.execute("PRAGMA user_version=3")
+                self.db.execute("CREATE TABLE IF NOT EXISTS action_commands ("
+                                "command TEXT PRIMARY KEY, hash TEXT NOT NULL, body TEXT NOT NULL, "
+                                "goal TEXT UNIQUE NOT NULL, snapshot TEXT NOT NULL, "
+                                "state TEXT NOT NULL, reason TEXT, result TEXT)")
+                self.db.execute("PRAGMA user_version=4")
             self.session = str(uuid.uuid4())
             self.sequence = 0
             contracts = Path("/workspace/contracts")
@@ -86,10 +90,12 @@ class Journal:
     def capacity(self, size):
         rows, total = self.db.execute(
             "SELECT (SELECT count(*) FROM inbox)+(SELECT count(*) FROM lifecycle)+"
-            "(SELECT count(*) FROM bridge_outbox),"
+            "(SELECT count(*) FROM bridge_outbox)+(SELECT count(*) FROM action_commands),"
             "coalesce((SELECT sum(length(body)) FROM inbox),0)+"
             "coalesce((SELECT sum(length(body)) FROM lifecycle),0)+"
-            "coalesce((SELECT sum(length(CAST(body AS BLOB))) FROM bridge_outbox),0)"
+            "coalesce((SELECT sum(length(CAST(body AS BLOB))) FROM bridge_outbox),0)+"
+            "coalesce((SELECT sum(length(CAST(body AS BLOB))+length(CAST(snapshot AS BLOB))) "
+            "FROM action_commands),0)"
         ).fetchone()
         if rows >= self.config.record_limit or total + size > self.config.byte_limit:
             raise JournalError("JOURNAL_FULL")

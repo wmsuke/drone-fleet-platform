@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { fixtures as bridgeFixtures } from "../test/fixtures/bridge.mjs";
 import { canonicalBridgeJson } from "../dist/bridge.js";
 import { format } from "prettier";
+import { rosCommandMessageSchema } from "../dist/command.js";
 import { connectionStatusMessageSchema } from "../dist/connection-status.js";
 import { rosObservationMessageSchema } from "../dist/ros-observation.js";
 import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
@@ -35,6 +36,7 @@ const outputs = [
   ...(await Promise.all(
     [
       ["bridge-event.schema.json", bridgeEventMessageSchema],
+      ["ros-command.schema.json", rosCommandMessageSchema],
       ["bridge-receipt.schema.json", bridgeReceiptMessageSchema],
       ["adapter-configuration.schema.json", adapterConfigurationSchema],
     ].map(async ([name, schema]) => [
