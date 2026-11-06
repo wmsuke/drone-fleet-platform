@@ -84,6 +84,11 @@ def test_ros_clock_reset_and_no_repeated_freshness(observer):
     message.header.stamp.sec = 0
     observations.receive("battery", message)
     assert observations.snapshot()["battery"] is None
+    clock[0] += 1
+    message.header.stamp.sec = 102
+    message.header.stamp.nanosec = 1_000_000_000
+    observations.receive("battery", message)
+    assert observations.snapshot()["battery"] is None
 
 
 def test_diagnostic_bounding_qos_and_freshness(observer):
@@ -112,6 +117,11 @@ def test_fix_no_fix_and_unknown_altitude(observer):
     clock[0] += 1
     message.header.stamp.sec += 1
     message.status.status = -1
+    observations.receive("fix", message)
+    assert observations.snapshot()["position"] is None
+    clock[0] += 1
+    message.header.stamp.sec += 1
+    message.status.status = 99
     observations.receive("fix", message)
     assert observations.snapshot()["position"] is None
 

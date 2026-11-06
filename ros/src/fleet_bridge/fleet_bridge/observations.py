@@ -57,6 +57,8 @@ class Observations:
             domain = "ROS" if sim_time else "SYSTEM"
             stamp = message.header.stamp
             ns = stamp.sec * 1_000_000_000 + stamp.nanosec
+            if not 0 <= stamp.nanosec < 1_000_000_000:
+                ns = 0  # builtin Timeのuint32範囲だけでは有効なstampにならない。
             now = self.now()
             previous = self.stamps.get(topic)
             reset = (domain != self.domain or ns <= 0
@@ -112,7 +114,7 @@ class Observations:
                                       "convention": "ENU", "unit": "m", "pose": pose,
                                       "velocity": velocity})
             elif topic == "fix":
-                valid = (message.status.status >= 0 and math.isfinite(message.latitude)
+                valid = (0 <= message.status.status <= 2 and math.isfinite(message.latitude)
                          and math.isfinite(message.longitude) and -90 <= message.latitude <= 90
                          and -180 <= message.longitude <= 180)
                 save("position", {"kind": "GEODETIC", "latitude": message.latitude,
