@@ -36,7 +36,8 @@ class MqttTransport:
         self.stop = threading.Event()
         self.thread = None
         self.prefix = f"fleet/v1/devices/{config.device_id}/"
-        self.topics = [self.prefix + "commands", self.prefix + "telemetry-receipts"]
+        self.topics = [self.prefix + "commands", self.prefix + "telemetry-receipts",
+                       self.prefix + "bridge-receipts"]
         self.validate = status_validator()
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, client_id=config.client_id,
@@ -149,6 +150,10 @@ class MqttTransport:
 
     def publish_observation(self, body):
         info = self.client.publish(self.prefix + "telemetry", body, qos=1, retain=False)
+        return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
+
+    def publish_bridge_event(self, body):
+        info = self.client.publish(self.prefix + "bridge-events", body, qos=1, retain=False)
         return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
 
     def stop_intake(self):

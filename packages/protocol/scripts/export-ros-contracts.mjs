@@ -2,17 +2,51 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import process from "node:process";
 import { z } from "zod";
+import { createHash } from "node:crypto";
+import { fixtures as bridgeFixtures } from "../test/fixtures/bridge.mjs";
+import { canonicalBridgeJson } from "../dist/bridge.js";
 import { format } from "prettier";
 import { connectionStatusMessageSchema } from "../dist/connection-status.js";
 import { rosObservationMessageSchema } from "../dist/ros-observation.js";
 import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
 import { fixtures } from "../test/fixtures/ros-observations.mjs";
+import {
+  bridgeEventMessageSchema,
+  bridgeReceiptMessageSchema,
+  adapterConfigurationSchema,
+} from "../dist/bridge.js";
 
 const schema = z.toJSONSchema(connectionStatusMessageSchema, {
   target: "draft-7",
   io: "input",
 });
 const outputs = [
+  [
+    "configuration-fixtures.json",
+    await format(
+      JSON.stringify(
+        bridgeFixtures((value) =>
+          createHash("sha256").update(canonicalBridgeJson(value)).digest("hex"),
+        ),
+      ),
+      { parser: "json" },
+    ),
+  ],
+  ...(await Promise.all(
+    [
+      ["bridge-event.schema.json", bridgeEventMessageSchema],
+      ["bridge-receipt.schema.json", bridgeReceiptMessageSchema],
+      ["adapter-configuration.schema.json", adapterConfigurationSchema],
+    ].map(async ([name, schema]) => [
+      name,
+      await format(
+        JSON.stringify(
+          z.toJSONSchema(schema, { target: "draft-7", io: "input" }),
+        ),
+        { parser: "json" },
+      ),
+    ]),
+  )),
   [
     "observation-fixtures.json",
     await format(JSON.stringify(fixtures), { parser: "json" }),

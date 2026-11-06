@@ -1,4 +1,6 @@
 import { connectAsync, type IClientOptions, type IPublishPacket } from "mqtt";
+import type { BridgeRepository } from "@drone-fleet/database";
+import { ingestBridge } from "./bridge.js";
 import { createTelemetryReceiptsTopic } from "@drone-fleet/protocol";
 import { ingestOta, type OtaRepository } from "./ota.js";
 
@@ -73,6 +75,7 @@ export async function startTelemetryIngestor(
   createConnectionConfig: CreateTelemetryMqttConnectionConfig = async () =>
     createTelemetryMqttConnectionConfig(config.mqttTransport),
   otaRepository?: OtaRepository,
+  bridgeRepository?: BridgeRepository,
 ): Promise<RunningTelemetryIngestor> {
   const metrics =
     injectedMetrics ??
@@ -100,21 +103,21 @@ export async function startTelemetryIngestor(
     if (stopping) return;
     const receivedAt = new Date();
     const task =
-      otaRepository && topic.endsWith("/ota-events")
-        ? ingestOta(
+      bridgeRepository && topic.endsWith("/bridge-events")
+        ? ingestBridge(
             topic,
             payload,
             packet,
             receivedAt,
-            otaRepository,
-            async (target, json) => {
+            bridgeRepository,
+            async (target, body) => {
               let timer: ReturnType<typeof setTimeout> | undefined;
               try {
                 await Promise.race([
-                  client.publishAsync(target, json, { qos: 1, retain: false }),
+                  client.publishAsync(target, body, { qos: 1, retain: false }),
                   new Promise<never>((_, reject) => {
                     timer = setTimeout(
-                      () => reject(new Error("OTA receipt timeout")),
+                      () => reject(new Error("bridge receipt timeout")),
                       10000,
                     );
                   }),
@@ -125,61 +128,91 @@ export async function startTelemetryIngestor(
             },
             logger,
           )
-        : topic.endsWith("/command-acks")
-          ? ingestAcknowledgement(
+        : otaRepository && topic.endsWith("/ota-events")
+          ? ingestOta(
               topic,
               payload,
+              packet,
               receivedAt,
-              acknowledgementRepository,
+              otaRepository,
+              async (target, json) => {
+                let timer: ReturnType<typeof setTimeout> | undefined;
+                try {
+                  await Promise.race([
+                    client.publishAsync(target, json, {
+                      qos: 1,
+                      retain: false,
+                    }),
+                    new Promise<never>((_, reject) => {
+                      timer = setTimeout(
+                        () => reject(new Error("OTA receipt timeout")),
+                        10000,
+                      );
+                    }),
+                  ]);
+                } finally {
+                  clearTimeout(timer);
+                }
+              },
               logger,
             )
-          : topic.endsWith("/status")
-            ? ingestStatus(
+          : topic.endsWith("/command-acks")
+            ? ingestAcknowledgement(
                 topic,
                 payload,
                 receivedAt,
-                packet.retain,
-                statusRepository,
+                acknowledgementRepository,
                 logger,
-                metrics,
               )
-            : (() => {
-                const mqttReceivedAtMonotonic =
-                  metrics === undefined ? undefined : performance.now();
-                return ingestTelemetry(
+            : topic.endsWith("/status")
+              ? ingestStatus(
                   topic,
                   payload,
                   receivedAt,
-                  telemetryWriter,
-                  logger,
                   packet.retain,
+                  statusRepository,
+                  logger,
                   metrics,
-                  mqttReceivedAtMonotonic,
-                  async (receipt) => {
-                    let timer: ReturnType<typeof setTimeout> | undefined;
-                    try {
-                      await Promise.race([
-                        client.publishAsync(
-                          createTelemetryReceiptsTopic(receipt.deviceId),
-                          JSON.stringify(receipt),
-                          { qos: 1, retain: false },
-                        ),
-                        new Promise<never>((_resolve, reject) => {
-                          timer = setTimeout(
-                            () =>
-                              reject(
-                                new Error("telemetry receipt PUBACK timed out"),
-                              ),
-                            10_000,
-                          );
-                        }),
-                      ]);
-                    } finally {
-                      if (timer !== undefined) clearTimeout(timer);
-                    }
-                  },
-                );
-              })();
+                )
+              : (() => {
+                  const mqttReceivedAtMonotonic =
+                    metrics === undefined ? undefined : performance.now();
+                  return ingestTelemetry(
+                    topic,
+                    payload,
+                    receivedAt,
+                    telemetryWriter,
+                    logger,
+                    packet.retain,
+                    metrics,
+                    mqttReceivedAtMonotonic,
+                    async (receipt) => {
+                      let timer: ReturnType<typeof setTimeout> | undefined;
+                      try {
+                        await Promise.race([
+                          client.publishAsync(
+                            createTelemetryReceiptsTopic(receipt.deviceId),
+                            JSON.stringify(receipt),
+                            { qos: 1, retain: false },
+                          ),
+                          new Promise<never>((_resolve, reject) => {
+                            timer = setTimeout(
+                              () =>
+                                reject(
+                                  new Error(
+                                    "telemetry receipt PUBACK timed out",
+                                  ),
+                                ),
+                              10_000,
+                            );
+                          }),
+                        ]);
+                      } finally {
+                        if (timer !== undefined) clearTimeout(timer);
+                      }
+                    },
+                  );
+                })();
     inFlight.add(task);
     void task.finally(() => {
       inFlight.delete(task);
@@ -188,6 +221,10 @@ export async function startTelemetryIngestor(
 
   try {
     await client.subscribeAsync(TELEMETRY_TOPIC_FILTER, { qos: 1 });
+    if (bridgeRepository)
+      await client.subscribeAsync("fleet/v1/devices/+/bridge-events", {
+        qos: 1,
+      });
     await client.subscribeAsync(STATUS_TOPIC_FILTER, { qos: 1 });
     await client.subscribeAsync(COMMAND_ACK_TOPIC_FILTER, { qos: 1 });
     if (otaRepository) {

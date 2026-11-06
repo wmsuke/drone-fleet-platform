@@ -117,8 +117,8 @@ run "phase2_foundation_plan" {
     condition = (
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[3].Action == "iot:Publish" &&
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[3].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/telemetry-receipts" &&
-      length(jsondecode(aws_iot_policy.device.policy).Statement) == 8 &&
-      length(jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement) == 7
+      length(jsondecode(aws_iot_policy.device.policy).Statement) == 11 &&
+      length(jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement) == 10
     )
     error_message = "ingestor must keep telemetry receipts without retain and only add the explicit OTA permissions"
   }

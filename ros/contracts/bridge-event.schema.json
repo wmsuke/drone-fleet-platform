@@ -1,0 +1,441 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 1 },
+    "deviceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+    },
+    "kind": { "type": "string", "const": "CONFIGURATION" },
+    "eventId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "journalId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "configurationId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "configurationRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "reportSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "namespace": {
+          "type": "string",
+          "pattern": "^\\/fleet\\/d_[0-9a-f]{2,128}$"
+        },
+        "serverInstanceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "adapterConfigurationId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "homeId": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "definition": {
+              "type": "object",
+              "properties": {
+                "profileId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "1.0.0" },
+                "model": { "type": "string", "const": "reference_vehicle" },
+                "operations": {
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": { "type": "string", "const": "RETURN_HOME" },
+                      "actionType": {
+                        "type": "string",
+                        "const": "fleet_bridge_interfaces/action/ReturnHome"
+                      },
+                      "actionName": { "type": "string", "const": "return_home" }
+                    },
+                    "required": ["command", "actionType", "actionName"],
+                    "additionalProperties": false
+                  }
+                },
+                "frames": {
+                  "type": "object",
+                  "properties": {
+                    "position": { "type": "string", "const": "map" },
+                    "velocity": { "type": "string", "const": "base_link" },
+                    "convention": { "type": "string", "const": "ENU" },
+                    "positionUnit": { "type": "string", "const": "m" },
+                    "velocityUnit": { "type": "string", "const": "m/s" },
+                    "angularUnit": { "type": "string", "const": "rad/s" }
+                  },
+                  "required": [
+                    "position",
+                    "velocity",
+                    "convention",
+                    "positionUnit",
+                    "velocityUnit",
+                    "angularUnit"
+                  ],
+                  "additionalProperties": false
+                },
+                "requiredSensors": {
+                  "type": "array",
+                  "items": [
+                    { "type": "string", "const": "battery" },
+                    { "type": "string", "const": "odometry" },
+                    { "type": "string", "const": "runtime_state" }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "homeDefinition": {
+                  "type": "string",
+                  "const": "SERVER_BOOT_REGISTERED_POSE"
+                },
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "minBatteryPercent": { "type": "number", "const": 20 },
+                    "maxDistanceMm": { "type": "number", "const": 10000 },
+                    "sensorFreshnessMs": { "type": "number", "const": 3000 },
+                    "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
+                    "positionToleranceMm": { "type": "number", "const": 200 },
+                    "stoppedSpeedMmPerSecond": {
+                      "type": "number",
+                      "const": 50
+                    },
+                    "dwellMs": { "type": "number", "const": 1000 }
+                  },
+                  "required": [
+                    "minBatteryPercent",
+                    "maxDistanceMm",
+                    "sensorFreshnessMs",
+                    "heartbeatTimeoutMs",
+                    "positionToleranceMm",
+                    "stoppedSpeedMmPerSecond",
+                    "dwellMs"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "profileId",
+                "version",
+                "model",
+                "operations",
+                "frames",
+                "requiredSensors",
+                "homeDefinition",
+                "limits"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": ["digest", "definition"],
+          "additionalProperties": false
+        },
+        "adapter": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "KNOWN" },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "0.2.0" },
+                "releaseDigest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": ["status", "id", "version", "releaseDigest"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "UNKNOWN" },
+                "reason": {
+                  "type": "string",
+                  "enum": ["VERSION_UNREPORTED", "IDENTITY_UNAVAILABLE"]
+                }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "runtime": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "KNOWN" },
+                "manifestDigest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "rosDistro": { "type": "string", "const": "jazzy" },
+                "rmw": { "type": "string", "const": "rmw_fastrtps_cpp" },
+                "python": { "type": "string", "pattern": "^3\\.12\\.\\d+$" },
+                "architecture": { "type": "string", "enum": ["arm64", "amd64"] }
+              },
+              "required": [
+                "status",
+                "manifestDigest",
+                "rosDistro",
+                "rmw",
+                "python",
+                "architecture"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "UNKNOWN" },
+                "reason": {
+                  "type": "string",
+                  "enum": ["VERSION_UNREPORTED", "IDENTITY_UNAVAILABLE"]
+                }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "operatingPolicy": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "KNOWN" },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "1.0.0" },
+                "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "definition": {
+                  "type": "object",
+                  "properties": {
+                    "minBatteryPercent": { "type": "number", "const": 20 },
+                    "maxDistanceMm": { "type": "number", "const": 10000 },
+                    "sensorFreshnessMs": { "type": "number", "const": 3000 },
+                    "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
+                    "positionToleranceMm": { "type": "number", "const": 200 },
+                    "stoppedSpeedMmPerSecond": {
+                      "type": "number",
+                      "const": 50
+                    },
+                    "dwellMs": { "type": "number", "const": 1000 }
+                  },
+                  "required": [
+                    "minBatteryPercent",
+                    "maxDistanceMm",
+                    "sensorFreshnessMs",
+                    "heartbeatTimeoutMs",
+                    "positionToleranceMm",
+                    "stoppedSpeedMmPerSecond",
+                    "dwellMs"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["status", "id", "version", "digest", "definition"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "UNKNOWN" },
+                "reason": {
+                  "type": "string",
+                  "enum": ["VERSION_UNREPORTED", "IDENTITY_UNAVAILABLE"]
+                }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "NOT_APPLICABLE" },
+                "reason": { "type": "string", "const": "NOT_USED" }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "safetyConfig": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "KNOWN" },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "1.0.0" },
+                "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "definition": {
+                  "type": "object",
+                  "properties": {
+                    "minBatteryPercent": { "type": "number", "const": 20 },
+                    "maxDistanceMm": { "type": "number", "const": 10000 },
+                    "sensorFreshnessMs": { "type": "number", "const": 3000 },
+                    "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
+                    "positionToleranceMm": { "type": "number", "const": 200 },
+                    "stoppedSpeedMmPerSecond": {
+                      "type": "number",
+                      "const": 50
+                    },
+                    "dwellMs": { "type": "number", "const": 1000 }
+                  },
+                  "required": [
+                    "minBatteryPercent",
+                    "maxDistanceMm",
+                    "sensorFreshnessMs",
+                    "heartbeatTimeoutMs",
+                    "positionToleranceMm",
+                    "stoppedSpeedMmPerSecond",
+                    "dwellMs"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["status", "id", "version", "digest", "definition"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "UNKNOWN" },
+                "reason": {
+                  "type": "string",
+                  "enum": ["VERSION_UNREPORTED", "IDENTITY_UNAVAILABLE"]
+                }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "NOT_APPLICABLE" },
+                "reason": { "type": "string", "const": "NOT_USED" }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "ai": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "string", "const": "NOT_APPLICABLE" },
+            "reason": { "type": "string", "const": "NOT_USED" }
+          },
+          "required": ["status", "reason"],
+          "additionalProperties": false
+        },
+        "bridge": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "KNOWN" },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "0.2.0" },
+                "releaseDigest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": ["status", "id", "version", "releaseDigest"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "type": "string", "const": "UNKNOWN" },
+                "reason": {
+                  "type": "string",
+                  "enum": ["VERSION_UNREPORTED", "IDENTITY_UNAVAILABLE"]
+                }
+              },
+              "required": ["status", "reason"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "deviceId",
+        "namespace",
+        "serverInstanceId",
+        "adapterConfigurationId",
+        "homeId",
+        "profile",
+        "adapter",
+        "runtime",
+        "operatingPolicy",
+        "safetyConfig",
+        "ai",
+        "bridge"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "deviceId",
+    "timestamp",
+    "kind",
+    "eventId",
+    "sessionId",
+    "journalId",
+    "sequence",
+    "configurationId",
+    "configurationRevision",
+    "reportSequence",
+    "configuration"
+  ],
+  "additionalProperties": false
+}

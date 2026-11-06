@@ -11,6 +11,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
 from fleet_bridge_interfaces.action import ReturnHome
 from fleet_bridge_interfaces.msg import BridgeHeartbeat, RuntimeState
 from fleet_bridge_interfaces.srv import GetRuntimeState
+from fleet_bridge_interfaces.srv import GetConfiguration
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 import rclpy
@@ -23,6 +24,7 @@ from sensor_msgs.msg import BatteryState
 from unique_identifier_msgs.msg import UUID
 
 from .model import Vehicle, namespace
+from .configuration import LIMITS, configuration, canonical
 
 
 def sensor_qos():
@@ -73,13 +75,13 @@ class State:
         self.commands = set()
 
     def check(self):
-        if time.monotonic() - self.heartbeat_at >= 3:
+        if time.monotonic() - self.heartbeat_at >= LIMITS["heartbeatTimeoutMs"] / 1000:
             return "BRIDGE_WATCHDOG"
-        if time.monotonic() - self.last_sample >= 3:
+        if time.monotonic() - self.last_sample >= LIMITS["sensorFreshnessMs"] / 1000:
             return "SENSOR_STALE"
-        if self.config.battery_percentage < 0.2:
+        if self.config.battery_percentage < LIMITS["minBatteryPercent"] / 100:
             return "LOW_BATTERY"
-        if self.vehicle.distance > 10:
+        if self.vehicle.distance > LIMITS["maxDistanceMm"] / 1000:
             return "POLICY_REJECTED"
         return None
 
@@ -166,6 +168,8 @@ class ReferenceAdapter(Node):
         self.create_service(
             GetRuntimeState, "get_runtime_state", self.get_state, callback_group=group,
         )
+        self.create_service(GetConfiguration, "get_configuration", self.get_configuration,
+                            callback_group=group)
         feedback_qos = QoSProfile(
             depth=10, reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
@@ -175,6 +179,13 @@ class ReferenceAdapter(Node):
             goal_callback=self.goal, cancel_callback=self.cancel, callback_group=group,
             feedback_pub_qos_profile=feedback_qos, result_timeout=900,
         )
+
+    def get_configuration(self, request, response):
+        with self.state.lock:
+            response.valid = request.device_id == self.state.config.device_id
+            if response.valid:
+                response.configuration_json = canonical(configuration(self.state))
+        return response
 
     def heartbeat(self, message):
         with self.state.lock:
@@ -324,10 +335,11 @@ class ReferenceAdapter(Node):
                         if time.monotonic() - cancel_since >= delay:
                             return self.finish(handle, "canceled", "CANCELLED", started, 0.0)
                     speed = math.dist(s.vehicle.velocity, [0, 0, 0])
-                    if s.vehicle.distance <= 0.2 and speed <= 0.05:
+                    if (s.vehicle.distance <= LIMITS["positionToleranceMm"] / 1000
+                            and speed <= LIMITS["stoppedSpeedMmPerSecond"] / 1000):
                         stable_since = stable_since or time.monotonic()
                         stable = time.monotonic() - stable_since
-                        if stable >= 1:
+                        if stable >= LIMITS["dwellMs"] / 1000:
                             return self.finish(handle, "succeed", "HOME_REACHED", started, stable)
                     else:
                         stable_since = None

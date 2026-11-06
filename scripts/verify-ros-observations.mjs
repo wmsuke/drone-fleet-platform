@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import process from "node:process";
 import console from "node:console";
 /* global fetch */
@@ -30,6 +31,40 @@ async function until(check) {
   throw new Error("bounded observation wait expired");
 }
 const device = "ros-ref-001";
+let configuration;
+await until(async () => {
+  try {
+    configuration = await fetch(
+      `${url}/devices/${device}/bridge-configuration`,
+    ).then((r) => r.json());
+    return configuration.reported && configuration.fresh;
+  } catch {
+    return false;
+  }
+});
+assert.deepEqual(configuration.supportedOperations, ["RETURN_HOME"]);
+assert.equal(configuration.ready, false);
+assert.equal(configuration.reported.configuration.bridge.version, "0.2.0");
+assert.equal(configuration.reported.configuration.adapter.version, "0.2.0");
+assert.equal(configuration.reported.configuration.ai.status, "NOT_APPLICABLE");
+assert.equal(configuration.reported.configuration.runtime.rosDistro, "jazzy");
+await writeFile(
+  `${results}/bridge-configuration.json`,
+  JSON.stringify(configuration, null, 2),
+);
+const configurationId = configuration.reported.configurationId;
+const oldReportSequence = configuration.reported.reportSequence;
+const oldConfigurationRevision = configuration.reported.configurationRevision;
+const desired = await fetch(
+  `${url}/devices/${device}/bridge-configuration/desired`,
+  {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ revision: 1, configurationId: "0".repeat(64) }),
+  },
+).then((r) => r.json());
+assert.equal(desired.matchesDesired, false);
+assert.equal(desired.reported.configurationId, configurationId);
 let detail;
 for (let attempt = 0; attempt < 60; attempt++) {
   try {
@@ -147,7 +182,78 @@ await until(async () => {
     state.latestObservation.message.payload.quality.position.reason === "VALID"
   );
 });
+await until(async () => {
+  const state = await fetch(
+    `${url}/devices/${device}/bridge-configuration`,
+  ).then((r) => r.json());
+  return (
+    state.reported?.reportSequence > oldReportSequence &&
+    state.reported.configurationId === configurationId &&
+    state.reported.configurationRevision === oldConfigurationRevision
+  );
+});
+await until(
+  () =>
+    compose(
+      "exec",
+      "-T",
+      "ros-bridge",
+      "python3",
+      "-c",
+      "import sqlite3; print(sqlite3.connect('/data/fleet/bridge.sqlite3').execute('SELECT count(*) FROM bridge_outbox').fetchone()[0])",
+    ).trim() === "0",
+);
+const reports = await fetch(
+  `${url}/devices/${device}/bridge-configuration/reports`,
+).then((r) => r.json());
+const originalReport = reports.at(-1).message;
+for (let i = 0; i < 2; i++)
+  compose(
+    "exec",
+    "-T",
+    "mqtt",
+    "mosquitto_pub",
+    "-q",
+    "1",
+    "-t",
+    `fleet/v1/devices/${device}/bridge-events`,
+    "-m",
+    JSON.stringify(originalReport),
+  );
+const staleReport = { ...originalReport, eventId: randomUUID() };
+compose(
+  "exec",
+  "-T",
+  "mqtt",
+  "mosquitto_pub",
+  "-q",
+  "1",
+  "-t",
+  `fleet/v1/devices/${device}/bridge-events`,
+  "-m",
+  JSON.stringify(staleReport),
+);
+await until(async () =>
+  (
+    await fetch(`${url}/devices/${device}/bridge-configuration/reports`).then(
+      (r) => r.json(),
+    )
+  ).some(
+    (row) => row.eventId === staleReport.eventId && row.disposition === "STALE",
+  ),
+);
+assert.equal(
+  (
+    await fetch(`${url}/devices/${device}/bridge-configuration`).then((r) =>
+      r.json(),
+    )
+  ).reported.configurationId,
+  configurationId,
+);
 console.log("ROS publisher -> Bridge -> MQTT -> PostgreSQL -> API: passed");
+console.log(
+  "Actual configuration/capability -> DB receipt -> API, desired separation, persistent counters and stale report: passed",
+);
 console.log(
   "Publisher stop/stale, DB receipt, duplicate resend, process restart: passed",
 );

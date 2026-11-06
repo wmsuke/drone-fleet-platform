@@ -43,6 +43,11 @@ def run(config, stopping):
     telemetry_inflight = None
     telemetry_due = {}
     telemetry_epoch = None
+    report_serial = None
+    next_report = 0
+    next_event = 0
+    event_due = {}
+    event_inflight = None
     exit_code = 0
     try:
         journal = Journal(config)
@@ -68,10 +73,17 @@ def run(config, stopping):
             observation = ros.observations.snapshot()
             if observation is not None:
                 journal.observation(observation)
+            reported = ros.configuration_snapshot()
+            if reported and reported[0] != report_serial and time.monotonic() >= next_report:
+                journal.configuration_report(reported[1])
+                report_serial = reported[0]
+                next_report = time.monotonic() + 5
             if telemetry_epoch != state["mqtt_epoch"]:
                 telemetry_epoch = state["mqtt_epoch"]
                 telemetry_due.clear()
                 telemetry_inflight = None
+                event_due.clear()
+                event_inflight = None
             if telemetry_inflight and telemetry_inflight.is_published():
                 telemetry_inflight = None  # PUBACKだけではSQLiteから削除しない。
             if state["mqtt_subscribed"] and telemetry_inflight is None:
@@ -86,6 +98,19 @@ def run(config, stopping):
             if inflight and inflight[1].is_published():
                 journal.status_sent(inflight[0])
                 inflight = None
+            if event_inflight and event_inflight.is_published():
+                event_inflight = None
+            if state["mqtt_subscribed"] and event_inflight is None:
+                pending_events = journal.pending_bridge_events()
+                live_events = {row[0] for row in pending_events}
+                event_due = {key: value for key, value in event_due.items() if key in live_events}
+                for key, body in pending_events:
+                    due, delay = event_due.get(key, (0, 1))
+                    if time.monotonic() >= max(due, next_event):
+                        event_inflight = transport.publish_bridge_event(body)
+                        event_due[key] = (time.monotonic() + delay, min(delay * 2, 8))
+                        next_event = time.monotonic() + 0.2
+                        break
             pending = journal.pending_status()
             if pending and not inflight and state["mqtt_subscribed"]:
                 info = transport.publish_status(pending)

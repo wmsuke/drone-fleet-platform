@@ -99,6 +99,8 @@ Bridgeは最新値を最大5秒周期でまとめ、topic別queue上限はQoS de
 
 #193のCapability ProfileにprofileId/version/digest、型式、許可command→Action型/名前、単位/frame、必要sensor、home定義、制約を固定する。Bridge/Adapterのversion・release digest、ROS distro/RMW/Pythonのruntime manifest digest、運用policy ID/version/digest、安全設定ID/versionを報告する。運用policyはAWS IoT Policyではない。desiredとreportedを別にし、commandの開始時に報告構成の不変snapshotを保存する。同じID/別本文・古い報告・未知versionは拒否し、更新後も過去goalの参照を差し替えない。AI未使用はNOT_APPLICABLEとし、架空のmodel versionを加えない。
 
+#193で[構成報告の実装](../bridge-configuration.md)とGetConfiguration service、CONFIGURATION event/receipt v1、DB/APIを追加した。bindExecutionを不変なcommand/goal参照のDB境界として用意し、実Action開始時の呼出しは#194で接続する。操作readyは有効にしない。Bridge/Adapterは0.2.0、profileは1.0.0とし、実package/sourceとruntime manifestから識別を報告する。
+
 構成報告にはdevice journalで永続増加するconfigurationRevisionとreportSequenceを持たせる。再接続/Bridge起動sessionだけでは新旧を決めず、既保存以下の報告は履歴に残して現在構成を戻さない。journal消失でcounterを0へ戻した場合は自動上書きせず再登録・介入を必要とする。revision更新中にactive/不確定goalがあれば構成切替を拒否する。
 
 新規操作は現在構成と能力・鮮度・時刻・OTA予約・機体排他をAPIとBridge双方、さらに機体側で確認する。1device同時1goal。ROS喪失/前goal不確定中は別commandや別Bridgeからの操作も許可しない。機体側serverにも同時実行拒否を持たせる。ローカルOS lockでBridgeを1ownerに制限し、Cloud lease失効やMQTT clientId競合を停止証明にしない。

@@ -1,4 +1,6 @@
 import cors from "@fastify/cors";
+import { registerBridgeRoutes } from "./bridge-routes.js";
+import type { BridgeRepository } from "@drone-fleet/database";
 import { registerDeploymentRoutes } from "./deployment-routes.js";
 import type { DeploymentRepository } from "./deployment-repository.js";
 import { OtaReservationError } from "./ota-reservation.js";
@@ -39,6 +41,7 @@ export function buildApi(
   repository: DeviceRepository,
   commandService: CommandService,
   options: {
+    bridgeRepository?: BridgeRepository;
     dashboardOrigin?: string | null;
     releases?: ReleaseOptions;
     deploymentRepository?: DeploymentRepository;
@@ -51,6 +54,8 @@ export function buildApi(
   } = {},
 ): FastifyInstance {
   const app = Fastify();
+  if (options.bridgeRepository)
+    registerBridgeRoutes(app, options.bridgeRepository);
   if (options.deploymentRepository)
     registerDeploymentRoutes(app, options.deploymentRepository);
   if (options.releases) registerReleaseRoutes(app, options.releases);

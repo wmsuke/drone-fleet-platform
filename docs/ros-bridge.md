@@ -2,7 +2,7 @@
 
 Issue #191でPythonの`fleet_bridge`を追加した。MQTT transport、非同期ROS client、参照機体Adapterのidentity検査、lifecycle所有者、SQLite journalを分ける。[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)と[固定参照環境](ros-reference.md)を前提にする。
 
-#192で[ROS観測の変換・保存](ros-observations.md)を追加した。能力報告（#193）、command/goal実行（#194）、cancel（#195）は未実装。MQTTを購読してもcommand ACKを返さず、ROS Actionを送信せず、機体ownerを取得するheartbeatも送らない。`ready`と`accepting_operations`は常にfalse。受信記録を将来のversionで無条件に実行する契約ではない。
+#192で[ROS観測の変換・保存](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)を追加した。command/goal実行（#194）とcancel（#195）は未実装。MQTTを購読してもcommand ACKを返さず、ROS Actionを送信せず、機体ownerを取得するheartbeatも送らない。`ready`と`accepting_operations`は常にfalse。受信記録を将来のversionで無条件に実行する契約ではない。
 
 ## ローカルで起動する
 
