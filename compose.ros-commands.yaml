@@ -1,0 +1,47 @@
+services:
+  api:
+    environment:
+      OTA_RELEASE_DIR: /tmp/unused-ros-e2e-releases
+      OTA_TRUST_STORE_PATH: /tmp/unused-ros-e2e-trust.json
+  ros-reference:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    command:
+      [
+        "ros2",
+        "run",
+        "fleet_reference",
+        "serve",
+        "--config",
+        "/workspace/config/commands.json",
+      ]
+    ipc: shareable
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  ros-bridge:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    command: ["ros2", "run", "fleet_bridge", "run"]
+    environment:
+      BRIDGE_DEVICE_ID: ${ROS_COMMAND_DEVICE:-ros-command-success}
+      BRIDGE_STATE_DIR: /data/fleet/${ROS_COMMAND_DEVICE:-ros-command-success}
+      MQTT_HOST: mqtt
+      BRIDGE_INTEGRATION: "true"
+      BRIDGE_TEST_FAULT: ${ROS_COMMAND_FAULT:-}
+    network_mode: service:ros-reference
+    ipc: service:ros-reference
+    volumes: [ros-command-state:/data/fleet]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  ros-bridge-peer:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    command: ["ros2", "run", "fleet_bridge", "run"]
+    environment:
+      BRIDGE_DEVICE_ID: ros-command-reject
+      BRIDGE_STATE_DIR: /data/fleet/ros-command-reject
+      MQTT_HOST: mqtt
+    network_mode: service:ros-reference
+    ipc: service:ros-reference
+    volumes: [ros-command-state:/data/fleet]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  ros-command-state:

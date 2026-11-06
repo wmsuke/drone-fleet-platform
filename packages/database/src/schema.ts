@@ -314,7 +314,7 @@ export const bridgeReports = pgTable(
       .references(() => devices.deviceId, { onDelete: "cascade" }),
     payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
     message: jsonb("message")
-      .$type<import("@drone-fleet/protocol").BridgeEventMessage>()
+      .$type<import("@drone-fleet/protocol").BridgeConfigurationEvent>()
       .notNull(),
     disposition: text("disposition").notNull(),
     receivedAt: timestamp("received_at", {
@@ -438,12 +438,80 @@ export const commands = pgTable(
     ),
     check(
       "commands_execution_status_valid",
-      sql`${table.executionStatus} IN ('NOT_REPORTED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNCERTAIN')`,
+      sql`${table.executionStatus} IN ('NOT_REPORTED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'UNCERTAIN', 'REJECTED', 'CANCELLED')`,
     ),
     check(
       "commands_execution_times_required",
-      sql`${table.executionStatus} = 'NOT_REPORTED' OR (${table.executionStartedAt} IS NOT NULL AND ${table.executionStartedReceivedAt} IS NOT NULL AND ${table.expiresAt} IS NOT NULL AND ${table.executionStartedAt} >= ${table.createdAt} AND ${table.executionStartedAt} < ${table.expiresAt} AND (${table.executionStatus} = 'RUNNING' OR (${table.executionResultAt} IS NOT NULL AND ${table.executionResultReceivedAt} IS NOT NULL AND ${table.executionResultAt} >= ${table.executionStartedAt})))`,
+      sql`${table.executionStatus} = 'NOT_REPORTED'
+        OR (${table.executionStatus} IN ('REJECTED','UNCERTAIN')
+          AND ${table.executionStartedAt} IS NULL AND ${table.executionStartedReceivedAt} IS NULL
+          AND ${table.expiresAt} IS NOT NULL AND ${table.executionResultAt} IS NOT NULL
+          AND ${table.executionResultReceivedAt} IS NOT NULL AND ${table.executionResultAt} >= ${table.createdAt})
+        OR (${table.executionStatus} <> 'REJECTED' AND ${table.executionStartedAt} IS NOT NULL
+          AND ${table.executionStartedReceivedAt} IS NOT NULL AND ${table.expiresAt} IS NOT NULL
+          AND ${table.executionStartedAt} >= ${table.createdAt} AND ${table.executionStartedAt} < ${table.expiresAt}
+          AND (${table.executionStatus} = 'RUNNING' OR (${table.executionResultAt} IS NOT NULL
+            AND ${table.executionResultReceivedAt} IS NOT NULL AND ${table.executionResultAt} >= ${table.executionStartedAt})))`,
     ),
+  ],
+);
+
+export const rosCommandTargets = pgTable(
+  "ros_command_targets",
+  {
+    commandId: uuid("command_id")
+      .primaryKey()
+      .references(() => commands.commandId, { onDelete: "restrict" }),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId),
+    configurationId: varchar("configuration_id", { length: 64 })
+      .notNull()
+      .references(() => bridgeConfigurations.configurationId),
+    reportEventId: uuid("report_event_id")
+      .notNull()
+      .references(() => bridgeReports.eventId),
+    resultDeadline: timestamp("result_deadline", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    goalId: uuid("goal_id").unique(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: "date" }),
+    terminalEventId: uuid("terminal_event_id"),
+    stopConfirmed: boolean("stop_confirmed").notNull().default(false),
+    notStarted: boolean("not_started").notNull().default(false),
+    conflicted: boolean("conflicted").notNull().default(false),
+  },
+  (t) => [
+    check(
+      "ros_target_release_valid",
+      sql`NOT (${t.stopConfirmed} AND ${t.notStarted}) AND
+      (NOT ${t.conflicted} OR (NOT ${t.stopConfirmed} AND NOT ${t.notStarted}))`,
+    ),
+    index("ros_command_targets_device_open_idx").on(
+      t.deviceId,
+      t.stopConfirmed,
+    ),
+  ],
+);
+export const bridgeActionEvents = pgTable(
+  "bridge_action_events",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    commandId: uuid("command_id").notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    message: jsonb("message")
+      .$type<import("@drone-fleet/protocol").BridgeActionEvent>()
+      .notNull(),
+    disposition: text("disposition").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    index("bridge_action_events_command_idx").on(t.commandId, t.receivedAt),
   ],
 );
 

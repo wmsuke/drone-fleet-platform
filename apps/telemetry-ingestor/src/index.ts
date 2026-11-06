@@ -16,6 +16,7 @@ async function main(): Promise<void> {
   const repository = createTelemetryRepository(db);
   const statusRepository = createDeviceStatusRepository(db);
   const acknowledgementRepository = createCommandAcknowledgementRepository(db);
+  const bridgeRepository = createBridgeRepository(db);
 
   let ingestor;
   try {
@@ -29,7 +30,7 @@ async function main(): Promise<void> {
       undefined,
       undefined,
       process.env.OTA_ENABLED === "true" ? createOtaRepository(db) : undefined,
-      createBridgeRepository(db),
+      bridgeRepository,
     );
   } catch (error) {
     await databaseClient.end();
@@ -37,16 +38,30 @@ async function main(): Promise<void> {
   }
 
   let shutdownStarted = false;
+  let expiry: Promise<unknown> | undefined;
+  const expiryTimer = setInterval(() => {
+    if (!expiry)
+      expiry = bridgeRepository
+        .expireExecutions(new Date())
+        .catch(() =>
+          console.error("ROS commandの結果期限を評価できませんでした"),
+        )
+        .finally(() => {
+          expiry = undefined;
+        });
+  }, 1000);
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     if (shutdownStarted) {
       return;
     }
     shutdownStarted = true;
+    clearInterval(expiryTimer);
     console.log(`${signal}を受信したためMQTT受信処理を停止します`);
 
     try {
       try {
         await ingestor.shutdown();
+        await expiry;
       } finally {
         await databaseClient.end();
       }

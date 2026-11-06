@@ -11,7 +11,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "90246d2ee54f541a48cfd3f20da9b85ebf412391d701d52823d367425c864d24",
+      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -21,7 +21,7 @@
         "profile": {
           "definition": {
             "profileId": "reference-return-home",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "model": "reference_vehicle",
             "operations": [
               {
@@ -40,6 +40,7 @@
             },
             "requiredSensors": ["battery", "odometry", "runtime_state"],
             "homeDefinition": "SERVER_BOOT_REGISTERED_POSE",
+            "resultCacheMs": 900000,
             "limits": {
               "minBatteryPercent": 20,
               "maxDistanceMm": 10000,
@@ -50,18 +51,18 @@
               "dwellMs": 1000
             }
           },
-          "digest": "0ebbd46108807cf31e3d0ffefa4fd19ed3fbe21e41d3663108895528984e5fe3"
+          "digest": "c520e20eb3795e874ee7bce05ce962c7486e9744cf52bc5ca166a33ee1e19532"
         },
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
           "status": "KNOWN",
           "id": "fleet_reference",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "runtime": {
@@ -119,7 +120,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "90246d2ee54f541a48cfd3f20da9b85ebf412391d701d52823d367425c864d24",
+      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -129,7 +130,7 @@
         "profile": {
           "definition": {
             "profileId": "reference-return-home",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "model": "reference_vehicle",
             "operations": [
               {
@@ -148,6 +149,7 @@
             },
             "requiredSensors": ["battery", "odometry", "runtime_state"],
             "homeDefinition": "SERVER_BOOT_REGISTERED_POSE",
+            "resultCacheMs": 900000,
             "limits": {
               "minBatteryPercent": 20,
               "maxDistanceMm": 10000,
@@ -158,13 +160,13 @@
               "dwellMs": 1000
             }
           },
-          "digest": "0ebbd46108807cf31e3d0ffefa4fd19ed3fbe21e41d3663108895528984e5fe3"
+          "digest": "c520e20eb3795e874ee7bce05ce962c7486e9744cf52bc5ca166a33ee1e19532"
         },
         "bridge": { "status": "UNKNOWN", "reason": "VERSION_UNREPORTED" },
         "adapter": {
           "status": "KNOWN",
           "id": "fleet_reference",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "runtime": {
@@ -222,7 +224,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "90246d2ee54f541a48cfd3f20da9b85ebf412391d701d52823d367425c864d24",
+      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -232,7 +234,7 @@
         "profile": {
           "definition": {
             "profileId": "reference-return-home",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "model": "reference_vehicle",
             "operations": [
               {
@@ -251,6 +253,7 @@
             },
             "requiredSensors": ["battery", "odometry", "runtime_state"],
             "homeDefinition": "SERVER_BOOT_REGISTERED_POSE",
+            "resultCacheMs": 900000,
             "limits": {
               "minBatteryPercent": 20,
               "maxDistanceMm": 10000,
@@ -261,7 +264,7 @@
               "dwellMs": 1000
             }
           },
-          "digest": "0ebbd46108807cf31e3d0ffefa4fd19ed3fbe21e41d3663108895528984e5fe3"
+          "digest": "c520e20eb3795e874ee7bce05ce962c7486e9744cf52bc5ca166a33ee1e19532"
         },
         "bridge": {
           "status": "KNOWN",
@@ -272,7 +275,7 @@
         "adapter": {
           "status": "KNOWN",
           "id": "fleet_reference",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "runtime": {
@@ -330,7 +333,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "90246d2ee54f541a48cfd3f20da9b85ebf412391d701d52823d367425c864d24",
+      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -340,7 +343,7 @@
         "profile": {
           "definition": {
             "profileId": "reference-return-home",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "model": "reference_vehicle",
             "operations": [
               {
@@ -359,6 +362,7 @@
             },
             "requiredSensors": ["battery", "odometry", "runtime_state"],
             "homeDefinition": "SERVER_BOOT_REGISTERED_POSE",
+            "resultCacheMs": 900000,
             "limits": {
               "minBatteryPercent": 20,
               "maxDistanceMm": 10000,
@@ -369,18 +373,18 @@
               "dwellMs": 1000
             }
           },
-          "digest": "0ebbd46108807cf31e3d0ffefa4fd19ed3fbe21e41d3663108895528984e5fe3"
+          "digest": "c520e20eb3795e874ee7bce05ce962c7486e9744cf52bc5ca166a33ee1e19532"
         },
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
           "status": "KNOWN",
           "id": "fleet_reference",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "runtime": {
@@ -438,7 +442,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "90246d2ee54f541a48cfd3f20da9b85ebf412391d701d52823d367425c864d24",
+      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -448,7 +452,7 @@
         "profile": {
           "definition": {
             "profileId": "reference-return-home",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "model": "reference_vehicle",
             "operations": [
               {
@@ -467,6 +471,7 @@
             },
             "requiredSensors": ["battery", "odometry", "runtime_state"],
             "homeDefinition": "SERVER_BOOT_REGISTERED_POSE",
+            "resultCacheMs": 900000,
             "limits": {
               "minBatteryPercent": 20,
               "maxDistanceMm": 10000,
@@ -477,18 +482,18 @@
               "dwellMs": 1000
             }
           },
-          "digest": "0ebbd46108807cf31e3d0ffefa4fd19ed3fbe21e41d3663108895528984e5fe3"
+          "digest": "c520e20eb3795e874ee7bce05ce962c7486e9744cf52bc5ca166a33ee1e19532"
         },
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
           "status": "KNOWN",
           "id": "fleet_reference",
-          "version": "0.2.0",
+          "version": "0.3.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "runtime": {

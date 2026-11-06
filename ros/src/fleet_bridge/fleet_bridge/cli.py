@@ -11,6 +11,8 @@ import time
 import rclpy
 
 from .config import ConfigurationError, load_config
+from .command_journal import CommandJournal
+from .execution import Execution
 from .journal import Journal, JournalError
 from .ros_client import RosClient
 from .transport import MqttTransport, status_message
@@ -24,7 +26,7 @@ def health_file(config, state):
     os.replace(path, config.state_dir / "health.json")
 
 
-def receive_pending(transport, journal, deadline=None):
+def receive_pending(transport, journal, deadline=None, commands=None):
     for _ in range(transport.config.queue_limit):
         if deadline is not None and time.monotonic() >= deadline:
             break
@@ -32,7 +34,13 @@ def receive_pending(transport, journal, deadline=None):
             item = transport.inbox.get_nowait()
         except queue.Empty:
             break
-        journal.receive(item[3], item[4])
+        handled = (commands is not None
+                   and item[3] == f"fleet/v1/devices/{transport.config.device_id}/commands"
+                   and commands.receive(item[4], time.time()))
+        if not handled:
+            reason = ("QUARANTINED_COMMAND" if item[3].endswith("/commands")
+                      else "OPERATIONS_NOT_IMPLEMENTED")
+            journal.receive(item[3], item[4], reason=reason)
         transport.acknowledge(item)  # SQLite commitより前にPUBACKしない
 
 
@@ -48,17 +56,25 @@ def run(config, stopping):
     next_event = 0
     event_due = {}
     event_inflight = None
+    ack_inflight = None
+    commands = None
+    execution = None
     exit_code = 0
     try:
         journal = Journal(config)
+        commands = CommandJournal(journal)
         transport = MqttTransport(config)
         ros = RosClient(config)
+        execution = Execution(commands, ros)
         transport.start()
         while not stopping.is_set():
+            mqtt_state = transport.snapshot()
+            ready = execution.tick(mqtt_state["mqtt_subscribed"])
             state = {"device_id": config.device_id, **transport.snapshot(), **ros.snapshot(),
                      **ros.observations.health(),
-                     "ready": False, "accepting_operations": False,
-                     "operation_reason": "OPERATIONS_NOT_IMPLEMENTED", "stopping": False}
+                     "ready": ready, "accepting_operations": ready,
+                     "operation_reason": "READY" if ready else "ROS_NOT_READY_OR_GOAL_UNRESOLVED",
+                     "stopping": False}
             if state != last:
                 journal.record(state)
                 health_file(config, state)
@@ -69,21 +85,38 @@ def run(config, stopping):
                     journal.status(message)
                 print(json.dumps({"event": "BRIDGE_STATE", **state}), flush=True)
                 last = state
-            receive_pending(transport, journal, deadline=time.monotonic() + 0.1)
+            receive_pending(transport, journal, deadline=time.monotonic() + 0.1,
+                            commands=commands)
             observation = ros.observations.snapshot()
             if observation is not None:
                 journal.observation(observation)
             reported = ros.configuration_snapshot()
             if reported and reported[0] != report_serial and time.monotonic() >= next_report:
-                journal.configuration_report(reported[1])
-                report_serial = reported[0]
-                next_report = time.monotonic() + 5
+                from fleet_reference.configuration import digest
+                previous = journal.db.execute(
+                    "SELECT configuration FROM bridge_counters").fetchone()[0]
+                if (not commands.open_commands()
+                        or previous == digest(reported[1])):
+                    journal.configuration_report(reported[1])
+                    report_serial = reported[0]
+                    next_report = time.monotonic() + 5
             if telemetry_epoch != state["mqtt_epoch"]:
                 telemetry_epoch = state["mqtt_epoch"]
                 telemetry_due.clear()
                 telemetry_inflight = None
                 event_due.clear()
                 event_inflight = None
+                ack_inflight = None
+            if ack_inflight and ack_inflight[2].is_published():
+                commands.acknowledgement_sent(ack_inflight[0], ack_inflight[1])
+                ack_inflight = None
+            if state["mqtt_subscribed"] and ack_inflight is None:
+                acknowledgements = commands.pending_acknowledgements()
+                if acknowledgements:
+                    command_id, body = acknowledgements[0]
+                    info = transport.publish_acknowledgement(body)
+                    if info:
+                        ack_inflight = (command_id, body, info)
             if telemetry_inflight and telemetry_inflight.is_published():
                 telemetry_inflight = None  # PUBACKだけではSQLiteから削除しない。
             if state["mqtt_subscribed"] and telemetry_inflight is None:
@@ -125,6 +158,8 @@ def run(config, stopping):
         print(json.dumps({"event": "BRIDGE_FAILED", "reason": "RUNTIME_UNAVAILABLE"}), flush=True)
         exit_code = 1
     finally:
+        if execution:
+            execution.close()
         if transport:
             transport.stop_intake()
         if journal:
@@ -134,7 +169,8 @@ def run(config, stopping):
                          "reason": "SHUTDOWN" if exit_code == 0 else "JOURNAL_OR_RUNTIME_FAILED"}
                 health_file(config, state)
                 if transport:
-                    receive_pending(transport, journal, deadline=time.monotonic() + 3)
+                    receive_pending(transport, journal, deadline=time.monotonic() + 3,
+                                    commands=commands)
                     if not transport.inbox.empty():
                         exit_code = 1
                         state["reason"] = "INBOX_PENDING_REDELIVERY"

@@ -210,6 +210,8 @@ export function commandOutcome(
   if (command.executionStatus === "SUCCEEDED") return "SUCCEEDED";
   if (command.executionStatus === "FAILED") return "EXECUTION_FAILED";
   if (command.executionStatus === "UNCERTAIN") return "UNCERTAIN";
+  if (["REJECTED", "CANCELLED"].includes(command.executionStatus))
+    return command.executionStatus;
   if (command.status === "EXPIRED") return "EXPIRED";
   if (now >= deadline) return "UNRESPONSIVE";
   if (

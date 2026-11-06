@@ -123,7 +123,7 @@ SQLiteにdevice/command/payload hash、goal UUID、namespace・Action型、serve
 | server再起動/UNKNOWN goal/cache期限/応答なし | 過去の成否・停止を推測せずUNCERTAIN、排他保持、人間判断。新goalで穴埋めしない                                                                        |
 | journal/volume破損・owner不明                | 新規操作停止。再初期化や自動bootstrapで履歴を消さず介入へ                                                                                            |
 
-参照serverのresult cache保持は明示900秒とし、同server生存中のみ再照会可能とする。[rclpy server](https://github.com/ros2/rclpy/blob/jazzy/rclpy/rclpy/action/server.py)のcacheは永続DBではなく、restart後の履歴を保証しない。Bridgeは2秒timeout・1秒から上限8秒のbackoff、最大5回/合計30秒の再照会で打ち切り、以後は記録と手動照合へ移す。activeかもしれないgoalを再送して応答を得る方法は禁止する。
+参照serverのresult cache保持は既定900秒とし、実設定をCapability Profile v1.1.0のresultCacheMsへ記録する。短い保持期間の試験設定は別profile IDを使う。同server生存中のみ再照会可能とし、[rclpy server](https://github.com/ros2/rclpy/blob/jazzy/rclpy/rclpy/action/server.py)のcacheはrestart後の履歴を保証しない。Bridgeは2秒timeout・1秒から上限8秒のbackoff、最大5回/合計30秒の再照会で打ち切り、予算は再起動でもリセットしない。保持期間経過だけで実cache消失と断定せず、元UUIDを少なくとも一度照会し、取得不能ならUNCERTAINとする。activeかもしれないgoalを再送して応答を得る方法は禁止する。
 
 GetResultは生成された`<action>/_action/get_result`へ保存UUIDを指定する。1goalの照会は同時1件とし、timeoutしたローカルfuture/待ちを解除してから次へ進む。照会futureの取消をgoalのcancelと混同しない。再起動後のruntime heartbeatはserver世代・構成・active/last terminal goalがjournalと照合できてから再開し、不明なままwatchdogを延命しない。
 
@@ -164,7 +164,7 @@ Bridgeのjournal書込不能・owner喪失では新規操作を拒否してrunti
 
 ## 9. wire・DB・権限差分と更新順序
 
-新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。次の契約は後続Issueで明示的に追加し、現在使えるAPI/topicとして案内しない。
+新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。#194までにtelemetry・構成・ROS command・goal受付/feedback/実行終端/停止観測を実装した。Bridge/Adapter 0.3.0とCapability Profile 1.1.0を実行条件とし、旧0.2.0/1.0.0は履歴読み取りだけを維持する。以下のCANCEL・ROS_HEALTH・bridge-requestsは#195/#196の計画であり、現在使えるAPI/topicとして案内しない。
 
 | 経路                                | 採用する変更・責務                                                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

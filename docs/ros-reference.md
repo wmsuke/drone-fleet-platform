@@ -32,7 +32,7 @@ ROS依存は公式OCIに揃っており、追加のapt/pip/rosdep/vcs解決は�
 
 実行には観測が新鮮、batteryが20%以上、同じserver/configuration/home/frame、未実行command ID、空き状態が必要。`get_runtime_state`で得た識別子を使い`bridge_heartbeat`を1Hzで送る。smoke試験のprobeがこの役割を担う。heartbeatなしではgoalを拒否し、実行中に3秒途切れればabortする。これは参照モデルのwatchdogであり、実機の独立安全機構の実装ではない。
 
-`ReturnHome`はgoal IDとROS transport UUIDの一致、開始期限、結果期限を確認する。homeへの距離0.2m以下、速度0.05m/s以下が1秒続いた場合だけ成功とする。Action受付・feedback・result・cancel受付は別の事実。結果の保持は同一processの900秒のみで、restart後の復旧は未実装。REBOOTやNav2への読み替えはしない。
+`ReturnHome`はgoal IDとROS transport UUID、heartbeat ownerの一致、開始期限、結果期限を確認する。homeへの距離0.2m以下、速度0.05m/s以下が1秒続いた場合だけ成功とする。Action受付・feedback・result・cancel受付は別の事実。result cacheは同一processで既定900秒とし、設定値をCapability Profileへ報告する。短い保持期間の試験設定は別profile IDを使う。server restartでcacheは失われるため、Bridgeは新世代へ再投入せずUNCERTAINへ移す。REBOOTやNav2への読み替えはしない。
 
 command IDはUUIDをcanonical表記へ正規化して照合・保存する。同じUUIDの大文字/小文字・ハイフン有無は同一commandとし、終了後も別goalによる再受付を拒否する。この重複記録は同じserver process内だけで有効。
 
@@ -46,7 +46,7 @@ command IDはUUIDをcanonical表記へ正規化して照合・保存する。同
 | `cancel_reject` | cancelを拒否し、通常実行を継続 |
 | `disconnect` | `failure_after_sec`後にexit 72。resultを捏造しない |
 
-seedはuint32、cancel delayは0〜5秒、failure delayは0.1〜10秒に制限する。設定hashは全参照設定のSHA-256であり、後続のwire契約のconfiguration hashとはまだ統合しない。Action/観測をMQTTへ変換する実装は#191以降。
+seedはuint32、cancel delayは0〜5秒、failure delayは0.1〜10秒に制限する。Adapter設定hashとBridgeの複合configurationIdは別の識別子であり、構成snapshotが両者を関連付ける。観測のMQTT変換は#192、Actionの変換・保存・復旧は#194で実装した。
 
 ## 実ROS試験
 

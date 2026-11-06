@@ -43,9 +43,9 @@ await until(async () => {
   }
 });
 assert.deepEqual(configuration.supportedOperations, ["RETURN_HOME"]);
-assert.equal(configuration.ready, false);
-assert.equal(configuration.reported.configuration.bridge.version, "0.2.0");
-assert.equal(configuration.reported.configuration.adapter.version, "0.2.0");
+assert.equal(typeof configuration.ready, "boolean");
+assert.equal(configuration.reported.configuration.bridge.version, "0.3.0");
+assert.equal(configuration.reported.configuration.adapter.version, "0.3.0");
 assert.equal(configuration.reported.configuration.ai.status, "NOT_APPLICABLE");
 assert.equal(configuration.reported.configuration.runtime.rosDistro, "jazzy");
 await writeFile(

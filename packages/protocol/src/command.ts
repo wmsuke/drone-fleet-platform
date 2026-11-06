@@ -28,6 +28,43 @@ export const commandMessageSchema = z.union([
   commandV1MessageSchema,
 ]);
 
+// ROS用受付を有効にするまでは既存配送のunionに加えない。
+export const rosCommandMessageSchema = z
+  .object({
+    ...messageBaseSchema.shape,
+    schemaVersion: z.literal(3),
+    commandId: z
+      .string()
+      .regex(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
+    type: z.literal("RETURN_HOME"),
+    targetKind: z.literal("ROS2"),
+    expectedConfigurationId: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: messageBaseSchema.shape.timestamp,
+    resultDeadline: messageBaseSchema.shape.timestamp,
+  })
+  .strict()
+  .superRefine((message, context) => {
+    const start = Date.parse(message.timestamp);
+    if (Date.parse(message.expiresAt) !== start + 30_000)
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message:
+          "ROS command start deadline must be 30 seconds after acceptance",
+      });
+    if (Date.parse(message.resultDeadline) !== start + 120_000)
+      context.addIssue({
+        code: "custom",
+        path: ["resultDeadline"],
+        message:
+          "ROS command result deadline must be 120 seconds after acceptance",
+      });
+  });
+
+export type RosCommandMessage = z.infer<typeof rosCommandMessageSchema>;
+
 const commandAcknowledgementV1MessageSchema = z
   .object({
     ...messageBaseSchema.shape,

@@ -62,6 +62,8 @@ export function detail(
     EXPIRED: 0,
     UNRESPONSIVE: 0,
     UNCERTAIN: 0,
+    REJECTED: 0,
+    CANCELLED: 0,
   };
   statuses.forEach((s) => counts[s]++);
   const progress =

@@ -6,10 +6,12 @@ import { createHash } from "node:crypto";
 import { fixtures as bridgeFixtures } from "../test/fixtures/bridge.mjs";
 import { canonicalBridgeJson } from "../dist/bridge.js";
 import { format } from "prettier";
+import { rosCommandMessageSchema } from "../dist/command.js";
 import { connectionStatusMessageSchema } from "../dist/connection-status.js";
 import { rosObservationMessageSchema } from "../dist/ros-observation.js";
 import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
 import { fixtures } from "../test/fixtures/ros-observations.mjs";
+import { actionFixtures } from "../test/fixtures/bridge-actions.mjs";
 import {
   bridgeEventMessageSchema,
   bridgeReceiptMessageSchema,
@@ -21,6 +23,10 @@ const schema = z.toJSONSchema(connectionStatusMessageSchema, {
   io: "input",
 });
 const outputs = [
+  [
+    "action-fixtures.json",
+    await format(JSON.stringify(actionFixtures), { parser: "json" }),
+  ],
   [
     "configuration-fixtures.json",
     await format(
@@ -35,6 +41,7 @@ const outputs = [
   ...(await Promise.all(
     [
       ["bridge-event.schema.json", bridgeEventMessageSchema],
+      ["ros-command.schema.json", rosCommandMessageSchema],
       ["bridge-receipt.schema.json", bridgeReceiptMessageSchema],
       ["adapter-configuration.schema.json", adapterConfigurationSchema],
     ].map(async ([name, schema]) => [

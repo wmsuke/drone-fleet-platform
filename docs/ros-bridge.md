@@ -2,7 +2,7 @@
 
 Issue #191でPythonの`fleet_bridge`を追加した。MQTT transport、非同期ROS client、参照機体Adapterのidentity検査、lifecycle所有者、SQLite journalを分ける。[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)と[固定参照環境](ros-reference.md)を前提にする。
 
-#192で[ROS観測の変換・保存](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)を追加した。command/goal実行（#194）とcancel（#195）は未実装。MQTTを購読してもcommand ACKを返さず、ROS Actionを送信せず、機体ownerを取得するheartbeatも送らない。`ready`と`accepting_operations`は常にfalse。受信記録を将来のversionで無条件に実行する契約ではない。
+#192で[ROS観測の変換・保存](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)、#194で[command/goal実行と復旧](ros-command-journal.md)を追加した。新鮮な構成・観測、同じowner/server、排他、期限を満たすcommandだけを実行する。cancel受付は#195の範囲とする。既存inboxや隔離した不正受信を実行候補にしない。
 
 ## ローカルで起動する
 
@@ -43,13 +43,13 @@ AWS設定は既存simulatorと同じ`AWS_IOT_ENDPOINT`、`AWS_IOT_ROOT_CA_PATH`�
 
 `BRIDGE_STATE`ログと永続領域の`health.json`に`mqtt_connected`、`mqtt_subscribed`、`ros_available`、各reasonを別々に出す。health fileは同じdirectory内でatomic replaceする。MQTT接続だけでは購読完了にしない。SUBACKが全topicでQoS 1になった後だけ`mqtt_subscribed=true`とする。
 
-ROSは型付き`GetRuntimeState` serviceと`ReturnHome` Actionの到達性を調べ、device/frame/server/configurationのidentityを検証する。照会は非同期、1回2秒、同時1件。3失敗後は8秒待つ。最後の応答がmonotonic age 3秒を超えれば`ros_available=false`とする。これは機体の飛行readyではない。前goalや能力の照合を未実装のままwatchdogを延命しない。
+ROSは型付き`GetRuntimeState` serviceと`ReturnHome` Actionの到達性を調べ、device/frame/server/configurationのidentityを検証する。照会は非同期、1回2秒、同時1件。3失敗後は8秒待つ。最後の応答がmonotonic age 3秒を超えれば`ros_available=false`とする。到達性だけでは飛行readyにしない。実行ownerはjournal IDと対応goalを照合して1Hzのheartbeatを更新し、runtimeや世代が不明なら更新しない。
 
-MQTT切断でもROS照会を続け、ROS停止でもMQTT接続を維持する。再接続のたびに購読をやり直す。既存の`status` v1へONLINE/CONNECTED、終了時OFFLINE/SHUTDOWN、LWTへOFFLINE/CONNECTION_LOSTをQoS 1・retainなしで送る。ONLINEはBridgeのMQTT接続を表し、ROSのreadyを意味しない。新しいbridge-event/topicはまだ使わない。
+MQTT切断でもROS照会を続け、ROS停止でもMQTT接続を維持する。再接続のたびに購読をやり直す。既存の`status` v1へONLINE/CONNECTED、終了時OFFLINE/SHUTDOWN、LWTへOFFLINE/CONNECTION_LOSTをQoS 1・retainなしで送る。ONLINEはBridgeのMQTT接続を表し、ROSのreadyを意味しない。構成・実行証拠はbridge-eventsへ保存確認まで再送する。
 
-自機の`commands`と`telemetry-receipts`だけをQoS 1で購読する。MQTT callbackは最大100件のqueue投入だけを行い、専用のlifecycle workerがSQLiteへ保存する。commandsは未実装inboxへ保持し、receiptはschema・device/session/sequenceを照合してtelemetry outboxを削除する。manual PUBACKはcommit後かつ同じ接続世代だけで返す。満杯・過大packet・QoS不適合ではACKせず切断する。これはbrokerのPUBACKやアプリケーションのcommand受領ACKとは別で、commandを実行可能として受け付けたことを意味しない。
+自機の`commands`、`telemetry-receipts`、`bridge-receipts`をQoS 1で購読する。MQTT callbackは最大100件のqueue投入だけを行い、専用のlifecycle workerがSQLiteへ保存する。検証済みROS commandは受領ACKとともに保存し、不正本文・別device・同ID別本文は隔離する。receiptはschema・自機の識別子とhashを照合して対応outboxを削除する。manual PUBACKはcommit後かつ同じ接続世代だけで返す。満杯・過大packet・QoS不適合ではACKせず切断する。brokerのPUBACK、command受領ACK、goal受付と実行結果は別の事実である。
 
-inboxはtopicと本文のSHA-256で重複保存を避け、未実装操作として本文を保持する。受信callback到達後もSQLite commit前は配送保証外であり、brokerの永続session/QoS 1による再配送に依存する。broker保存期間・停止・disk喪失による欠損まで保証しない。Pahoのprocess内queueを永続領域の代わりにしない。
+隔離inboxはtopicと本文のSHA-256で重複保存を避け、実行処理から分離する。受信callback到達後もSQLite commit前は配送保証外であり、brokerの永続session/QoS 1による再配送に依存する。broker保存期間・停止・disk喪失による欠損まで保証しない。Pahoのprocess内queueを永続領域の代わりにしない。
 
 ## journalと終了
 

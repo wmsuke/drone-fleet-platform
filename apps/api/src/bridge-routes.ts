@@ -33,8 +33,7 @@ export function registerBridgeRoutes(
               supportsBridgeOperation(state.reported!.configuration, operation),
             )
           : [],
-        ready: false,
-        operationReason: "OPERATIONS_NOT_IMPLEMENTED",
+        ...(await repository.readiness(id.data)),
       };
     },
   );
@@ -73,6 +72,21 @@ export function registerBridgeRoutes(
           .code(error.message === "DEVICE_NOT_FOUND" ? 404 : 409)
           .send({ error: error.message });
       }
+    },
+  );
+  app.get<{ Params: { commandId: string } }>(
+    "/commands/:commandId/bridge-execution",
+    async (request, reply) => {
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+          request.params.commandId,
+        )
+      )
+        return reply.code(400).send({ error: "INVALID_COMMAND_ID" });
+      return (
+        (await repository.executionState(request.params.commandId)) ??
+        reply.code(404).send({ error: "EXECUTION_NOT_FOUND" })
+      );
     },
   );
   app.get<{ Params: { commandId: string } }>(

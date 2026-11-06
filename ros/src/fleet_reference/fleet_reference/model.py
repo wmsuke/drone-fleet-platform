@@ -28,6 +28,7 @@ class Config:
     failure_after_sec: float = 0.4
     battery_percentage: float = 0.8
     temperature: float | None = 24.0
+    result_cache_sec: float = 900.0
 
     def __post_init__(self):
         namespace(self.device_id)
@@ -38,6 +39,7 @@ class Config:
         for value, low, high in [
             (self.cancel_delay_sec, 0, 5), (self.failure_after_sec, 0.1, 10),
             (self.battery_percentage, 0, 1),
+            (self.result_cache_sec, 0.1, 900),
         ]:
             if (type(value) not in (int, float)
                     or not math.isfinite(value) or not low <= value <= high):

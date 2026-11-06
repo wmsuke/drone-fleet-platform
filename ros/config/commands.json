@@ -1,0 +1,14 @@
+{
+  "devices": [
+    { "device_id": "ros-command-success" },
+    { "device_id": "ros-command-reject", "scenario": "reject" },
+    { "device_id": "ros-command-abort", "scenario": "abort" },
+    { "device_id": "ros-command-before" },
+    { "device_id": "ros-command-intent" },
+    { "device_id": "ros-command-sent" },
+    { "device_id": "ros-command-result" },
+    { "device_id": "ros-command-cache", "result_cache_sec": 0.5 },
+    { "device_id": "ros-command-deadline", "scenario": "unresponsive" },
+    { "device_id": "ros-command-generation", "scenario": "unresponsive" }
+  ]
+}

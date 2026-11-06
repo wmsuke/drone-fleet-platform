@@ -144,6 +144,7 @@ class Probe:
     def send(self, change=None):
         identifier = uuid.uuid4()
         request = ReturnHome.Goal()
+        request.owner_id = "reference-smoke"
         request.device_id = self.device
         request.command_id = str(uuid.uuid4())
         request.goal_id = ros_uuid(identifier)
@@ -185,6 +186,17 @@ def test_seed_and_namespace(tmp_path):
     config.write_text('{"devices":[{"device_id":"a"},{"device_id":"a"}]}')
     with pytest.raises(ValueError):
         load_configs(config)
+
+
+def test_action_requires_the_heartbeat_owner(runtime):
+    node, start = runtime
+    start([{"device_id": "owner-check"}])
+    probe = Probe(node, "owner-check")
+    handle = probe.send(lambda request: setattr(request, "owner_id", "another-owner"))
+    assert not handle.accepted
+    state = probe.get_state()
+    assert state.accepted_count == 0 and state.execution_count == 0
+    assert state.reason == "OWNER_MISMATCH"
 
 
 def test_two_devices_topics_and_success(runtime):

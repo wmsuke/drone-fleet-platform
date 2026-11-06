@@ -12,6 +12,8 @@ export function operationAggregation(where: SQL, now: Date) {
     "EXPIRED",
     "UNRESPONSIVE",
     "UNCERTAIN",
+    "REJECTED",
+    "CANCELLED",
   ].map(
     (status) =>
       sql`count(*) FILTER (WHERE t.status = ${status})::integer AS ${sql.identifier(status)}`,
@@ -27,9 +29,12 @@ export function operationAggregation(where: SQL, now: Date) {
       c.execution_result_at AS "executionResultAt",
       c.execution_result_received_at AS "executionResultReceivedAt",
       CASE
+        WHEN r.conflicted = true THEN 'UNCERTAIN'
         WHEN c.execution_status = 'SUCCEEDED' THEN 'SUCCEEDED'
         WHEN c.execution_status = 'FAILED' THEN 'EXECUTION_FAILED'
         WHEN c.execution_status = 'UNCERTAIN' THEN 'UNCERTAIN'
+        WHEN c.execution_status = 'REJECTED' THEN 'REJECTED'
+        WHEN c.execution_status = 'CANCELLED' THEN 'CANCELLED'
         WHEN c.status = 'EXPIRED' THEN 'EXPIRED'
         WHEN ${time}::timestamptz >= o.result_deadline THEN 'UNRESPONSIVE'
         WHEN c.execution_status = 'RUNNING' THEN 'RUNNING'
@@ -49,6 +54,7 @@ export function operationAggregation(where: SQL, now: Date) {
     JOIN fleet_operations o ON o.operation_id = t.operation_id
     JOIN commands c ON c.command_id = t.command_id
     LEFT JOIN command_outbox b ON b.command_id = c.command_id
+    LEFT JOIN ros_command_targets r ON r.command_id = c.command_id
     WHERE ${where}
   ), counts AS (
     SELECT t.operation_id, ${sql.join(counts, sql`, `)},
@@ -66,7 +72,7 @@ export function operationAggregation(where: SQL, now: Date) {
         WHEN n."SUCCEEDED" > 0 THEN 'PARTIALLY_FAILED' ELSE 'FAILED' END AS status,
       to_jsonb(n) - 'operation_id' - 'acknowledgedCount' - 'updatedAt' AS counts,
       n."SUCCEEDED" AS "succeededCount",
-      (n."EXECUTION_FAILED" + n."DELIVERY_FAILED" + n."EXPIRED" + n."UNRESPONSIVE" + n."UNCERTAIN") AS "unsuccessfulCount",
+      (n."EXECUTION_FAILED" + n."DELIVERY_FAILED" + n."EXPIRED" + n."UNRESPONSIVE" + n."UNCERTAIN" + n."REJECTED" + n."CANCELLED") AS "unsuccessfulCount",
       (n."PENDING" + n."SENT" + n."ACKNOWLEDGED" + n."RUNNING") AS "inProgressCount",
       n."acknowledgedCount", n."updatedAt"
     FROM fleet_operations o JOIN counts n ON n.operation_id = o.operation_id

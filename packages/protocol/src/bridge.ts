@@ -26,7 +26,7 @@ const component = z.discriminatedUnion("status", [
     .object({
       status: z.literal("KNOWN"),
       id,
-      version: z.literal("0.2.0"),
+      version: z.enum(["0.2.0", "0.3.0"]),
       releaseDigest: digest,
     })
     .strict(),
@@ -43,7 +43,7 @@ const limits = z
     dwellMs: z.literal(1000),
   })
   .strict();
-export const capabilityProfileSchema = z
+const capabilityProfileBaseSchema = z
   .object({
     profileId: id,
     version: z.literal("1.0.0"),
@@ -79,6 +79,15 @@ export const capabilityProfileSchema = z
     limits,
   })
   .strict();
+export const capabilityProfileSchema = z.discriminatedUnion("version", [
+  capabilityProfileBaseSchema,
+  capabilityProfileBaseSchema
+    .extend({
+      version: z.literal("1.1.0"),
+      resultCacheMs: z.number().int().min(100).max(900000),
+    })
+    .strict(),
+]);
 const policy = z.discriminatedUnion("status", [
   z
     .object({
@@ -122,7 +131,7 @@ export const adapterConfigurationSchema = z
 export const bridgeConfigurationSchema = adapterConfigurationSchema
   .extend({ bridge: component })
   .strict();
-export const bridgeEventMessageSchema = z
+export const bridgeConfigurationEventSchema = z
   .object({
     ...messageBaseSchema.shape,
     kind: z.literal("CONFIGURATION"),
@@ -136,6 +145,153 @@ export const bridgeEventMessageSchema = z
     configuration: bridgeConfigurationSchema,
   })
   .strict();
+const eventBase = z.object({
+  ...messageBaseSchema.shape,
+  eventId: uuid,
+  sessionId: uuid,
+  journalId: uuid,
+  sequence: counter,
+  configurationId: digest,
+  commandId: uuid,
+  goalId: uuid,
+  serverInstanceId: uuid,
+});
+const metric = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const vector = z
+  .object({
+    x: z.number().int().safe(),
+    y: z.number().int().safe(),
+    z: z.number().int().safe(),
+  })
+  .strict();
+export const bridgeReasonSchema = z.enum([
+  "GOAL_ACCEPTED",
+  "ACTION_REJECTED",
+  "EXECUTION_STARTED",
+  "FEEDBACK",
+  "HOME_REACHED",
+  "INJECTED_FAILURE",
+  "BRIDGE_WATCHDOG",
+  "SENSOR_STALE",
+  "LOW_BATTERY",
+  "POLICY_REJECTED",
+  "REJECTED_EXPIRED",
+  "CANCELLED",
+  "SERVER_SHUTDOWN",
+  "GOAL_ID_MISMATCH",
+  "INVALID_GOAL",
+  "RESULT_INVALID",
+  "RESULT_UNKNOWN",
+  "SERVER_CHANGED",
+  "RESULT_TIMEOUT",
+  "RESULT_CACHE_UNAVAILABLE",
+  "RESULT_DEADLINE",
+  "BRIDGE_RESTART",
+  "CONFIGURATION_MISMATCH",
+  "DEVICE_BUSY",
+  "STOP_OBSERVED",
+]);
+export const bridgeResultEvidenceSchema = z
+  .object({
+    cdr: z
+      .string()
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+      .max(8192),
+    hash: digest,
+    rosStatus: z.union([z.literal(4), z.literal(5), z.literal(6)]),
+    started: z.boolean(),
+    startedAt: messageBaseSchema.shape.timestamp.nullable(),
+    finishedAt: messageBaseSchema.shape.timestamp,
+    poseFrame: z.string().max(192),
+    velocityFrame: z.string().max(192),
+    homeId: id,
+    poseMm: vector,
+    velocityMmPerSecond: vector,
+    homeDistanceMm: metric,
+    speedMmPerSecond: metric,
+    stableDurationMs: metric,
+  })
+  .strict();
+const executionBase = eventBase.extend({
+  kind: z.literal("EXECUTION"),
+  reason: bridgeReasonSchema,
+  startedAt: messageBaseSchema.shape.timestamp.optional(),
+  result: bridgeResultEvidenceSchema.optional(),
+  rawResult: z
+    .object({
+      hash: digest,
+      bytes: metric,
+      cdr: z
+        .string()
+        .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+        .max(8192)
+        .optional(),
+    })
+    .strict()
+    .optional(),
+});
+export const bridgeActionEventSchema = z.union([
+  eventBase
+    .extend({
+      kind: z.literal("GOAL_ACCEPTED"),
+      reason: z.literal("GOAL_ACCEPTED"),
+    })
+    .strict(),
+  eventBase
+    .extend({
+      kind: z.literal("GOAL_REJECTED"),
+      reason: z.literal("ACTION_REJECTED"),
+    })
+    .strict(),
+  eventBase
+    .extend({
+      kind: z.literal("FEEDBACK"),
+      reason: z.literal("FEEDBACK"),
+      startedAt: messageBaseSchema.shape.timestamp,
+      distanceMm: metric,
+    })
+    .strict(),
+  executionBase
+    .extend({
+      status: z.literal("RUNNING"),
+      startedAt: messageBaseSchema.shape.timestamp,
+    })
+    .strict(),
+  ...(["SUCCEEDED", "FAILED", "CANCELLED"] as const).map((status) =>
+    executionBase
+      .extend({
+        status: z.literal(status),
+        startedAt: messageBaseSchema.shape.timestamp,
+        result: bridgeResultEvidenceSchema,
+      })
+      .strict(),
+  ),
+  executionBase.extend({ status: z.literal("UNCERTAIN") }).strict(),
+  executionBase
+    .extend({ status: z.literal("REJECTED"), startedAt: z.never().optional() })
+    .strict(),
+  eventBase
+    .extend({
+      kind: z.literal("STOP_OBSERVATION"),
+      reason: z.literal("STOP_OBSERVED"),
+      terminalEventId: uuid,
+      flightStatus: z.literal("IDLE"),
+      speedMmPerSecond: metric,
+      dwellMs: metric,
+      poseFrame: z.string().max(192),
+      firstSampleAt: messageBaseSchema.shape.timestamp,
+      lastSampleAt: messageBaseSchema.shape.timestamp,
+    })
+    .strict(),
+]);
+export const bridgeEventMessageSchema = z.union([
+  bridgeConfigurationEventSchema,
+  bridgeActionEventSchema,
+]);
+export type BridgeActionEvent = z.infer<typeof bridgeActionEventSchema>;
+export type BridgeConfigurationEvent = z.infer<
+  typeof bridgeConfigurationEventSchema
+>;
 export const bridgeReceiptMessageSchema = z
   .object({
     ...messageBaseSchema.shape,

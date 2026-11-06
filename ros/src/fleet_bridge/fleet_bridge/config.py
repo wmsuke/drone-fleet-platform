@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import ssl
 import stat
+import uuid
 
 from fleet_reference.model import namespace
 
@@ -36,6 +37,8 @@ class Config:
     byte_limit: int = 32 * 1024 * 1024
     reconnect_min: int = 1
     reconnect_max: int = 8
+    test_fault: str | None = None
+    test_fault_command: str = ""
 
 
 def load_config(env=None):
@@ -92,9 +95,21 @@ def load_config(env=None):
         raise ConfigurationError("BRIDGE_STATE_DIR")
     low = integer(env, "BRIDGE_RECONNECT_MIN_SEC", 1, 1, 8)
     high = integer(env, "BRIDGE_RECONNECT_MAX_SEC", 8, low, 8)
+    fault = env.get("BRIDGE_TEST_FAULT") or None
+    fault_command = env.get("BRIDGE_TEST_FAULT_COMMAND_ID", "")
+    if fault or fault_command:
+        try:
+            if (env.get("BRIDGE_INTEGRATION") != "true" or fault not in (
+                    "BEFORE_SEND_INTENT", "AFTER_SEND_INTENT", "AFTER_SEND_GOAL", "AFTER_RESULT")
+                    or (fault_command and str(uuid.UUID(fault_command, version=4))
+                        != fault_command)):
+                raise ValueError()
+        except ValueError:
+            raise ConfigurationError("BRIDGE_TEST_FAULT") from None
     return Config(
         device, ns, host, port, client_id, directory, tls,
         integer(env, "BRIDGE_QUEUE_LIMIT", 100, 1, 100),
         integer(env, "BRIDGE_RECORD_LIMIT", 10000, 1, 10000),
         integer(env, "BRIDGE_BYTE_LIMIT", 33554432, 32768, 33554432), low, high,
+        fault, fault_command,
     )

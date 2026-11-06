@@ -48,7 +48,7 @@ def component(name):
 
 
 def configuration(state):
-    profile = {"profileId": "reference-return-home", "version": "1.0.0",
+    profile = {"profileId": "reference-return-home", "version": "1.1.0",
                "model": "reference_vehicle", "operations": [
                    {"command": "RETURN_HOME",
                     "actionType": "fleet_bridge_interfaces/action/ReturnHome",
@@ -56,7 +56,10 @@ def configuration(state):
                "frames": {"position": "map", "velocity": "base_link", "convention": "ENU",
                           "positionUnit": "m", "velocityUnit": "m/s", "angularUnit": "rad/s"},
                "requiredSensors": ["battery", "odometry", "runtime_state"],
-               "homeDefinition": "SERVER_BOOT_REGISTERED_POSE", "limits": LIMITS}
+               "homeDefinition": "SERVER_BOOT_REGISTERED_POSE", "limits": LIMITS,
+               "resultCacheMs": round(state.config.result_cache_sec * 1000)}
+    if state.config.result_cache_sec != 900:
+        profile["profileId"] += "-cache-" + str(profile["resultCacheMs"])
     raw = Path("/workspace/environment-manifest.json").read_bytes()
     manifest = json.loads(raw)
 

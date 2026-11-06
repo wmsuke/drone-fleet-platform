@@ -11,6 +11,8 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import paho.mqtt.client as mqtt
 import pytest
@@ -173,8 +175,8 @@ def test_separate_failures_reconnect_persistence_and_shutdown(processes, tmp_pat
                               MQTT_PORT=str(proxy.server_address[1]))
         until(lambda: health(directory).get("mqtt_subscribed")
               and health(directory).get("ros_available"))
-        assert health(directory)["ready"] is False
-        assert health(directory)["accepting_operations"] is False
+        until(lambda: health(directory).get("ready"))
+        assert health(directory)["accepting_operations"] is True
         until(lambda: any(m["deviceId"] == device and m["payload"]["status"] == "ONLINE"
                           for m in messages))
         payload = b'{"notYetACommand":true}'
@@ -324,3 +326,63 @@ def test_full_journal_fails_closed_without_deleting_records(processes, tmp_path)
     assert health(directory)["stopping"] and not health(directory)["ready"]
     with sqlite3.connect(directory / "bridge.sqlite3") as db:
         assert db.execute("SELECT count(*) FROM lifecycle").fetchone()[0] == 2
+
+
+def test_command_receipt_is_durable_before_mqtt_ack_and_sigkill_restart(processes, tmp_path):
+    device = "bridge-receipt"
+    directory = tmp_path / "receipt"
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    subscribed = threading.Event()
+    messages = []
+    committed = []
+    client.on_connect = lambda c, *_: c.subscribe(f"fleet/v1/devices/{device}/command-acks", 1)
+    client.on_subscribe = lambda *_: subscribed.set()
+
+    def on_message(_client, _data, message):
+        value = json.loads(message.payload)
+        with sqlite3.connect(directory / "bridge.sqlite3") as db:
+            stored = db.execute("SELECT ack FROM command_receipts WHERE command=?",
+                                (value["commandId"],)).fetchone()
+            committed.append(stored is not None and stored[0] == message.payload.decode())
+        messages.append(value)
+
+    client.on_message = on_message
+    client.connect("mqtt", 1883)
+    client.loop_start()
+    try:
+        assert subscribed.wait(5)
+        bridge = start_bridge(processes, directory, device)
+        until(lambda: health(directory).get("mqtt_subscribed"))
+        now = datetime.now(timezone.utc)
+
+        def utc(value):
+            return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+        command = {"schemaVersion": 3, "deviceId": device, "commandId": str(uuid.uuid4()),
+                   "type": "RETURN_HOME", "targetKind": "ROS2",
+                   "expectedConfigurationId": "a" * 64, "timestamp": utc(now),
+                   "expiresAt": utc(now + timedelta(seconds=30)),
+                   "resultDeadline": utc(now + timedelta(seconds=120))}
+        topic = f"fleet/v1/devices/{device}/commands"
+        client.publish(topic, json.dumps(command), qos=1).wait_for_publish(3)
+        until(lambda: len(messages) == 1)
+        original = messages[0]
+        assert original["status"] == "ACKNOWLEDGED" and committed == [True]
+        assert not health(directory)["ready"] and not health(directory)["ros_available"]
+        bridge.kill()
+        assert bridge.wait(timeout=5) == -9
+        restarted = start_bridge(processes, directory, device)
+        until(lambda: health(directory).get("mqtt_subscribed")
+              and health(directory).get("mqtt_epoch") and restarted.poll() is None)
+        client.publish(topic, json.dumps(command, sort_keys=True), qos=1).wait_for_publish(3)
+        until(lambda: len(messages) >= 2)
+        assert all(message == original for message in messages)
+        assert all(committed)
+        with sqlite3.connect(directory / "bridge.sqlite3") as db:
+            assert db.execute("SELECT count(*) FROM command_receipts").fetchone()[0] == 1
+            assert db.execute("SELECT count(*) FROM action_commands").fetchone()[0] == 0
+        restarted.terminate()
+        assert restarted.wait(timeout=10) == 0
+    finally:
+        client.disconnect()
+        client.loop_stop()
