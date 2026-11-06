@@ -29,6 +29,7 @@ import {
   deviceListResponseSchema,
   telemetryHistoryResponseSchema,
   telemetryLimitSchema,
+  rosObservationHistoryItemSchema,
 } from "./schema.js";
 
 const DEFAULT_TELEMETRY_LIMIT = 100;
@@ -82,6 +83,27 @@ export function buildApi(
     const devices = await repository.list();
     return deviceListResponseSchema.parse(devices);
   });
+
+  if (repository.observationHistory)
+    app.get<{ Params: { deviceId: string }; Querystring: { limit?: string } }>(
+      "/devices/:deviceId/observations",
+      async (request, reply) => {
+        const deviceId = deviceIdSchema.safeParse(request.params.deviceId);
+        const limit =
+          request.query.limit === undefined
+            ? { success: true as const, data: 100 }
+            : telemetryLimitSchema.safeParse(request.query.limit);
+        if (!deviceId.success || !limit.success)
+          return reply.code(400).send({ error: "Invalid request" });
+        const rows = await repository.observationHistory!(
+          deviceId.data,
+          limit.data,
+        );
+        if (rows === null)
+          return reply.code(404).send({ error: "Device not found" });
+        return rows.map((row) => rosObservationHistoryItemSchema.parse(row));
+      },
+    );
 
   app.get<{ Params: { deviceId: string } }>(
     "/devices/:deviceId",

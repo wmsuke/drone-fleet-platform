@@ -147,6 +147,10 @@ class MqttTransport:
         info = self.client.publish(self.prefix + "status", body, qos=1, retain=False)
         return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
 
+    def publish_observation(self, body):
+        info = self.client.publish(self.prefix + "telemetry", body, qos=1, retain=False)
+        return info if info.rc == mqtt.MQTT_ERR_SUCCESS else None
+
     def stop_intake(self):
         with self.guard:
             self.accepting = False

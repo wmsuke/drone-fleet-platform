@@ -56,11 +56,11 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ## 共通項目
 
-### Phase 6のROS 2契約（設計のみ）
+### Phase 6のROS 2契約
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)にROS topic/Action、QoS、batteryの比率→%、LOCAL/GPSと欠測、ROS時刻/UTC、commandId/goal UUID、cancel/停止の対応を定めた。現行telemetry v1/v2とACK v3にはROSのLOCAL・非開始拒否・CANCELLEDを無理に詰め込まない。
 
-後続の#192〜#196でROS telemetry v3、ROS command v3、bridge-events/bridge-receipts/bridge-requests各v1を`packages/protocol`と送受信側へ追加する。既存topicとschemaは維持し、未知の新形式を旧parserで扱えるとは仮定しない。型・DB・ingestor・API・Bridge・必要なIoT Policyを揃えた後に対象別に有効化する。現在これらの新形式/APIは未実装である。
+#192で[ROS telemetry v3の変換・永続再送・DB保存・観測API](ros-observations.md)を追加した。既存telemetry topicとreceipt v1を使い、LOCAL・欠測をGPS列へ投影しない。後続の#193〜#196で能力報告、ROS command v3、bridge-events/bridge-receipts/bridge-requests各v1を追加する。これらの操作形式は未実装で、Bridgeの操作readyはfalseを維持する。未知の新形式を旧parserで扱えるとは仮定しない。
 
 ### Phase 5の通信契約（opt-in OTA）
 

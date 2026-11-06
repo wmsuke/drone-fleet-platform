@@ -1,0 +1,661 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 3 },
+    "deviceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "const": "ROS2" },
+        "battery": {
+          "anyOf": [
+            { "type": "number", "minimum": 0, "maximum": 100 },
+            { "type": "null" }
+          ]
+        },
+        "temperature": { "type": ["number", "null"] },
+        "position": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": { "type": "string", "const": "LOCAL" },
+                    "frameId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "convention": { "type": "string", "const": "ENU" },
+                    "unit": { "type": "string", "const": "m" },
+                    "pose": {
+                      "type": "object",
+                      "properties": {
+                        "x": { "type": "number" },
+                        "y": { "type": "number" },
+                        "z": { "type": "number" }
+                      },
+                      "required": ["x", "y", "z"],
+                      "additionalProperties": false
+                    },
+                    "velocity": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "frameId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "linear": {
+                              "type": "object",
+                              "properties": {
+                                "x": { "type": "number" },
+                                "y": { "type": "number" },
+                                "z": { "type": "number" }
+                              },
+                              "required": ["x", "y", "z"],
+                              "additionalProperties": false
+                            },
+                            "angular": {
+                              "type": "object",
+                              "properties": {
+                                "x": { "type": "number" },
+                                "y": { "type": "number" },
+                                "z": { "type": "number" }
+                              },
+                              "required": ["x", "y", "z"],
+                              "additionalProperties": false
+                            },
+                            "linearUnit": { "type": "string", "const": "m/s" },
+                            "angularUnit": {
+                              "type": "string",
+                              "const": "rad/s"
+                            }
+                          },
+                          "required": [
+                            "frameId",
+                            "linear",
+                            "angular",
+                            "linearUnit",
+                            "angularUnit"
+                          ],
+                          "additionalProperties": false
+                        },
+                        { "type": "null" }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "frameId",
+                    "convention",
+                    "unit",
+                    "pose",
+                    "velocity"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": { "type": "string", "const": "GEODETIC" },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "altitude": { "type": ["number", "null"] },
+                    "altitudeReference": {
+                      "type": "string",
+                      "const": "WGS84_ELLIPSOID"
+                    },
+                    "unit": { "type": "string", "const": "m" }
+                  },
+                  "required": [
+                    "kind",
+                    "latitude",
+                    "longitude",
+                    "altitude",
+                    "altitudeReference",
+                    "unit"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            { "type": "null" }
+          ]
+        },
+        "flightStatus": {
+          "type": "string",
+          "enum": ["IDLE", "FLYING", "RETURNING_HOME", "UNKNOWN"]
+        },
+        "diagnostics": {
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "hardwareId": { "type": "string", "maxLength": 256 },
+              "level": {
+                "type": "string",
+                "enum": ["OK", "WARN", "ERROR", "STALE"]
+              }
+            },
+            "required": ["name", "hardwareId", "level"],
+            "additionalProperties": false
+          }
+        },
+        "diagnosticsTruncated": { "type": "boolean" },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "battery": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "VALID",
+                    "MISSING",
+                    "INVALID",
+                    "FRAME_MISMATCH",
+                    "STALE",
+                    "CLOCK_RESET",
+                    "QOS_INCOMPATIBLE"
+                  ]
+                },
+                "stamp": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "sec": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "nanosec": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 999999999
+                        }
+                      },
+                      "required": ["sec", "nanosec"],
+                      "additionalProperties": false
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "timeDomain": { "type": "string", "enum": ["ROS", "SYSTEM"] },
+                "clockEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "reason",
+                "stamp",
+                "timeDomain",
+                "clockEpoch",
+                "receivedAt"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": { "properties": { "reason": { "const": "VALID" } } },
+                  "then": {
+                    "properties": {
+                      "stamp": { "not": { "type": "null" } },
+                      "receivedAt": { "not": { "type": "null" } }
+                    }
+                  }
+                }
+              ]
+            },
+            "temperature": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "VALID",
+                    "MISSING",
+                    "INVALID",
+                    "FRAME_MISMATCH",
+                    "STALE",
+                    "CLOCK_RESET",
+                    "QOS_INCOMPATIBLE"
+                  ]
+                },
+                "stamp": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "sec": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "nanosec": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 999999999
+                        }
+                      },
+                      "required": ["sec", "nanosec"],
+                      "additionalProperties": false
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "timeDomain": { "type": "string", "enum": ["ROS", "SYSTEM"] },
+                "clockEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "reason",
+                "stamp",
+                "timeDomain",
+                "clockEpoch",
+                "receivedAt"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": { "properties": { "reason": { "const": "VALID" } } },
+                  "then": {
+                    "properties": {
+                      "stamp": { "not": { "type": "null" } },
+                      "receivedAt": { "not": { "type": "null" } }
+                    }
+                  }
+                }
+              ]
+            },
+            "position": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "VALID",
+                    "MISSING",
+                    "INVALID",
+                    "FRAME_MISMATCH",
+                    "STALE",
+                    "CLOCK_RESET",
+                    "QOS_INCOMPATIBLE"
+                  ]
+                },
+                "stamp": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "sec": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "nanosec": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 999999999
+                        }
+                      },
+                      "required": ["sec", "nanosec"],
+                      "additionalProperties": false
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "timeDomain": { "type": "string", "enum": ["ROS", "SYSTEM"] },
+                "clockEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "reason",
+                "stamp",
+                "timeDomain",
+                "clockEpoch",
+                "receivedAt"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": { "properties": { "reason": { "const": "VALID" } } },
+                  "then": {
+                    "properties": {
+                      "stamp": { "not": { "type": "null" } },
+                      "receivedAt": { "not": { "type": "null" } }
+                    }
+                  }
+                }
+              ]
+            },
+            "flightStatus": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "VALID",
+                    "MISSING",
+                    "INVALID",
+                    "FRAME_MISMATCH",
+                    "STALE",
+                    "CLOCK_RESET",
+                    "QOS_INCOMPATIBLE"
+                  ]
+                },
+                "stamp": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "sec": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "nanosec": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 999999999
+                        }
+                      },
+                      "required": ["sec", "nanosec"],
+                      "additionalProperties": false
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "timeDomain": { "type": "string", "enum": ["ROS", "SYSTEM"] },
+                "clockEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "reason",
+                "stamp",
+                "timeDomain",
+                "clockEpoch",
+                "receivedAt"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": { "properties": { "reason": { "const": "VALID" } } },
+                  "then": {
+                    "properties": {
+                      "stamp": { "not": { "type": "null" } },
+                      "receivedAt": { "not": { "type": "null" } }
+                    }
+                  }
+                }
+              ]
+            },
+            "diagnostics": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "VALID",
+                    "MISSING",
+                    "INVALID",
+                    "FRAME_MISMATCH",
+                    "STALE",
+                    "CLOCK_RESET",
+                    "QOS_INCOMPATIBLE"
+                  ]
+                },
+                "stamp": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "sec": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "nanosec": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 999999999
+                        }
+                      },
+                      "required": ["sec", "nanosec"],
+                      "additionalProperties": false
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "timeDomain": { "type": "string", "enum": ["ROS", "SYSTEM"] },
+                "clockEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "receivedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "reason",
+                "stamp",
+                "timeDomain",
+                "clockEpoch",
+                "receivedAt"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": { "properties": { "reason": { "const": "VALID" } } },
+                  "then": {
+                    "properties": {
+                      "stamp": { "not": { "type": "null" } },
+                      "receivedAt": { "not": { "type": "null" } }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "battery",
+            "temperature",
+            "position",
+            "flightStatus",
+            "diagnostics"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "source",
+        "battery",
+        "temperature",
+        "position",
+        "flightStatus",
+        "diagnostics",
+        "diagnosticsTruncated",
+        "quality"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "battery": {
+                    "properties": { "reason": { "const": "VALID" } }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": { "battery": { "not": { "type": "null" } } }
+          },
+          "else": { "properties": { "battery": { "type": "null" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "temperature": {
+                    "properties": { "reason": { "const": "VALID" } }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": { "temperature": { "not": { "type": "null" } } }
+          },
+          "else": { "properties": { "temperature": { "type": "null" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "position": {
+                    "properties": { "reason": { "const": "VALID" } }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": { "position": { "not": { "type": "null" } } }
+          },
+          "else": { "properties": { "position": { "type": "null" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "flightStatus": {
+                    "properties": { "reason": { "const": "VALID" } }
+                  }
+                }
+              }
+            }
+          },
+          "else": { "properties": { "flightStatus": { "const": "UNKNOWN" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "diagnostics": {
+                    "properties": { "reason": { "const": "VALID" } }
+                  }
+                }
+              }
+            }
+          },
+          "else": { "properties": { "diagnostics": { "maxItems": 0 } } }
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "deviceId",
+    "timestamp",
+    "sessionId",
+    "sequence",
+    "payload"
+  ],
+  "additionalProperties": false
+}

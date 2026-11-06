@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { messageBaseSchema } from "./common.js";
+import { rosObservationMessageSchema } from "./ros-observation.js";
 
 const finiteNumberSchema = z
   .number()
@@ -36,7 +37,12 @@ export const telemetryV2MessageSchema = telemetryV1MessageSchema.extend({
 export const telemetryMessageSchema = z.discriminatedUnion("schemaVersion", [
   telemetryV1MessageSchema,
   telemetryV2MessageSchema,
+  rosObservationMessageSchema,
 ]);
 
 export type TelemetryMessage = z.infer<typeof telemetryMessageSchema>;
 export type TelemetryV2Message = z.infer<typeof telemetryV2MessageSchema>;
+export type LegacyTelemetryMessage = Exclude<
+  TelemetryMessage,
+  { schemaVersion: 3 }
+>;

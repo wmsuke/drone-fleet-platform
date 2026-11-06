@@ -20,6 +20,8 @@ import { createDeviceStatusRepository } from "../../telemetry-ingestor/src/statu
 import { createCommandAcknowledgementRepository } from "../../telemetry-ingestor/src/acknowledgement.js";
 import { createAlertRepository } from "../src/repository.js";
 import { loadAlertPolicy } from "../src/config.js";
+import { rosObservationMessageSchema } from "../../../packages/protocol/src/index.js";
+import { observation } from "../../../packages/protocol/test/fixtures/ros-observations.mjs";
 const enabled = process.env.DATABASE_INTEGRATION === "true";
 const database = enabled ? createDatabase() : undefined;
 const id = "integration-alert-device";
@@ -172,6 +174,42 @@ async function execution(
   );
 }
 describe.skipIf(!enabled)("durable alert evaluation", () => {
+  it("does not clear low battery on ROS missing samples or count repeated snapshots as new measurements", async () => {
+    async function ros(ms: number, battery: number | null, measuredMs = ms) {
+      const message = rosObservationMessageSchema.parse({
+        ...observation,
+        deviceId: id,
+        sessionId: session,
+        sequence: ms,
+        timestamp: at(ms).toISOString(),
+        payload: {
+          ...observation.payload,
+          battery,
+          quality: {
+            ...observation.payload.quality,
+            battery: {
+              ...observation.payload.quality.battery,
+              reason: battery === null ? "STALE" : "VALID",
+              receivedAt: at(measuredMs).toISOString(),
+            },
+          },
+        },
+      });
+      await createTelemetryRepository(configured().db).saveBatch([
+        { message, receivedAt: at(ms), isRetained: false },
+      ]);
+      await repo().evaluateDevice(id, at(ms));
+    }
+    for (let ms = 0; ms <= 30000; ms += 5000) await ros(ms, 10);
+    expect((await stored("LOW_BATTERY"))[0]!.status).toBe("ACTIVE");
+    for (let ms = 35000; ms <= 70000; ms += 5000) await ros(ms, null);
+    expect((await stored("LOW_BATTERY"))[0]!.status).toBe("ACTIVE");
+    // 同一source受信時刻をsnapshotだけ更新しても回復継続には数えない。
+    for (let ms = 75000; ms <= 110000; ms += 5000) await ros(ms, 90, 75000);
+    expect((await stored("LOW_BATTERY"))[0]!.status).toBe("ACTIVE");
+    for (let ms = 115000; ms <= 150000; ms += 5000) await ros(ms, 90);
+    expect((await stored("LOW_BATTERY"))[0]!.status).toBe("RESOLVED");
+  });
   beforeAll(async () => {
     await migrate(configured().db, {
       migrationsFolder: fileURLToPath(

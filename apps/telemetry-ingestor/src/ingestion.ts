@@ -33,6 +33,8 @@ export function parseTelemetry(
     return { success: false, reason: "本文が有効なJSONではありません" };
   }
 
+  if (payload.length > 32768)
+    return { success: false, reason: "本文が32 KiBを超えています" };
   const parsedMessage = telemetryMessageSchema.safeParse(input);
   if (!parsedMessage.success) {
     return {
@@ -95,7 +97,7 @@ export async function ingestTelemetry(
       logger.warn("テレメトリの識別子と内容が衝突しました", {
         deviceId: parsed.message.deviceId,
         sessionId:
-          parsed.message.schemaVersion === 2
+          parsed.message.schemaVersion !== 1
             ? parsed.message.sessionId
             : undefined,
         sequence: parsed.message.sequence,
@@ -108,7 +110,7 @@ export async function ingestTelemetry(
         performance.now() - measurementStartedAt,
       );
     }
-    if (parsed.message.schemaVersion === 2 && publishReceipt !== undefined) {
+    if (parsed.message.schemaVersion !== 1 && publishReceipt !== undefined) {
       try {
         await publishReceipt({
           schemaVersion: 1,

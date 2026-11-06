@@ -17,13 +17,14 @@ jobs:
   ros-reference:
     name: ROS 2 reference and Bridge lifecycle smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Build locked workspace and test real DDS
         run: |
           bash scripts/test-ros-reference.sh
           bash scripts/test-ros-bridge.sh
+          bash scripts/test-ros-observations.sh
         env:
           TMPDIR: ${{ runner.temp }}
       - name: Upload ROS environment and observations
@@ -34,6 +35,7 @@ jobs:
           path: |
             ${{ runner.temp }}/ros-reference-*/
             ${{ runner.temp }}/ros-bridge-*/
+            ${{ runner.temp }}/ros-observations-*/
           retention-days: 14
   ota-fleet:
     name: OTA ten-device staged rollout and rollback E2E

@@ -2,7 +2,7 @@
 
 Issue #191でPythonの`fleet_bridge`を追加した。MQTT transport、非同期ROS client、参照機体Adapterのidentity検査、lifecycle所有者、SQLite journalを分ける。[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)と[固定参照環境](ros-reference.md)を前提にする。
 
-今回は接続基盤だけで、telemetry v3変換（#192）、能力報告（#193）、command/goal実行（#194）、cancel（#195）は未実装。MQTTを購読してもcommand ACKを返さず、ROS Actionを送信せず、機体ownerを取得するheartbeatも送らない。`ready`と`accepting_operations`は常にfalse。受信記録を将来のversionで無条件に実行する契約ではない。
+#192で[ROS観測の変換・保存](ros-observations.md)を追加した。能力報告（#193）、command/goal実行（#194）、cancel（#195）は未実装。MQTTを購読してもcommand ACKを返さず、ROS Actionを送信せず、機体ownerを取得するheartbeatも送らない。`ready`と`accepting_operations`は常にfalse。受信記録を将来のversionで無条件に実行する契約ではない。
 
 ## ローカルで起動する
 
@@ -47,7 +47,7 @@ ROSは型付き`GetRuntimeState` serviceと`ReturnHome` Actionの到達性を調
 
 MQTT切断でもROS照会を続け、ROS停止でもMQTT接続を維持する。再接続のたびに購読をやり直す。既存の`status` v1へONLINE/CONNECTED、終了時OFFLINE/SHUTDOWN、LWTへOFFLINE/CONNECTION_LOSTをQoS 1・retainなしで送る。ONLINEはBridgeのMQTT接続を表し、ROSのreadyを意味しない。新しいbridge-event/topicはまだ使わない。
 
-自機の`commands`と`telemetry-receipts`だけをQoS 1で購読する。MQTT callbackは最大100件のqueue投入だけを行い、専用のlifecycle workerがSQLiteへ保存する。manual PUBACKはcommit後かつ同じ接続世代だけで返す。満杯・過大packet・QoS不適合ではACKせず切断する。これはbrokerのPUBACKやアプリケーションのcommand受領ACKとは別で、commandを実行可能として受け付けたことを意味しない。
+自機の`commands`と`telemetry-receipts`だけをQoS 1で購読する。MQTT callbackは最大100件のqueue投入だけを行い、専用のlifecycle workerがSQLiteへ保存する。commandsは未実装inboxへ保持し、receiptはschema・device/session/sequenceを照合してtelemetry outboxを削除する。manual PUBACKはcommit後かつ同じ接続世代だけで返す。満杯・過大packet・QoS不適合ではACKせず切断する。これはbrokerのPUBACKやアプリケーションのcommand受領ACKとは別で、commandを実行可能として受け付けたことを意味しない。
 
 inboxはtopicと本文のSHA-256で重複保存を避け、未実装操作として本文を保持する。受信callback到達後もSQLite commit前は配送保証外であり、brokerの永続session/QoS 1による再配送に依存する。broker保存期間・停止・disk喪失による欠損まで保証しない。Pahoのprocess内queueを永続領域の代わりにしない。
 
@@ -65,8 +65,9 @@ SIGTERM/SIGINTでは受信投入を停止し、残ったbounded queueを最大3�
 pnpm protocol:export:ros
 pnpm test:ros-reference
 pnpm test:ros-bridge
+pnpm test:ros-observations
 ```
 
 wireの正は`packages/protocol`のZod定義。既存device ID検証を同じ正規表現へ保ったままJSON Schemaへ変換できる形にし、status v1のschemaと正常/不正fixtureを`ros/contracts`へ生成する。Vitestがschema/fixtureのdriftとZodの結果を検査し、Pythonは同じfixtureをfastjsonschemaで検査する。PythonへZod定義を手書き複製しない。command v3や相関検証はまだ追加していない。
 
-追加Python依存は[hash固定wheel](../ros/vendor/README.md)を同梱し、ネットワークなしで展開・buildする。実Mosquittoと独立ROS/Bridge processで、2機体の分離、ROS単独停止/復帰、MQTT経路の切断/復帰、切断中のbroker queue、再起動後の記録保持、接続不能時の終了、設定不備の秘匿、local mTLSを試す。テスト用project・container/image・volume・一時証明書を終了時に削除し、結果をCI artifactへ残す。実機操作やCloudへの保存確認は証明対象ではない。
+追加Python依存は[hash固定wheel](../ros/vendor/README.md)を同梱し、ネットワークなしで展開・buildする。実Mosquittoと独立ROS/Bridge processで、2機体の分離、ROS単独停止/復帰、MQTT経路の切断/復帰、切断中のbroker queue、再起動後の記録保持、接続不能時の終了、設定不備の秘匿、local mTLSを試す。観測E2Eでは実PostgreSQL/APIへの到達と保存確認も検証する。テスト用project・container/image・volume・一時証明書を終了時に削除し、結果をCI artifactへ残す。実AWS・実機操作は証明対象ではない。

@@ -230,6 +230,68 @@ export const telemetry = pgTable(
   ],
 );
 
+export const observationIdentities = pgTable(
+  "observation_identities",
+  {
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").notNull(),
+    sequence: bigint("sequence", { mode: "number" }).notNull(),
+    message: jsonb("message").$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.deviceId, t.sessionId, t.sequence] })],
+);
+
+export const observationConflicts = pgTable("observation_conflicts", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  deviceId: varchar("device_id", { length: 64 }).notNull(),
+  sessionId: uuid("session_id").notNull(),
+  sequence: bigint("sequence", { mode: "number" }).notNull(),
+  message: jsonb("message").$type<Record<string, unknown>>().notNull(),
+  receivedAt: timestamp("received_at", {
+    withTimezone: true,
+    mode: "date",
+  }).notNull(),
+});
+
+export const rosObservations = pgTable(
+  "ros_observations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    deviceId: varchar("device_id", { length: 64 })
+      .notNull()
+      .references(() => devices.deviceId, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").notNull(),
+    sequence: bigint("sequence", { mode: "number" }).notNull(),
+    deviceTimestamp: timestamp("device_timestamp", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    isRetained: boolean("is_retained").notNull(),
+    payload: jsonb("payload")
+      .$type<import("@drone-fleet/protocol").RosObservationPayload>()
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("ros_observations_identity_idx").on(
+      t.deviceId,
+      t.sessionId,
+      t.sequence,
+    ),
+    index("ros_observations_device_time_idx").on(
+      t.deviceId,
+      t.receivedAt.desc(),
+      t.id.desc(),
+    ),
+    check("ros_observations_sequence_valid", sql`${t.sequence} >= 0`),
+  ],
+);
+
 export const commands = pgTable(
   "commands",
   {

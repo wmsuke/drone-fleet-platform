@@ -40,6 +40,9 @@ def run(config, stopping):
     journal = transport = ros = None
     last = None
     inflight = None
+    telemetry_inflight = None
+    telemetry_due = {}
+    telemetry_epoch = None
     exit_code = 0
     try:
         journal = Journal(config)
@@ -48,6 +51,7 @@ def run(config, stopping):
         transport.start()
         while not stopping.is_set():
             state = {"device_id": config.device_id, **transport.snapshot(), **ros.snapshot(),
+                     **ros.observations.health(),
                      "ready": False, "accepting_operations": False,
                      "operation_reason": "OPERATIONS_NOT_IMPLEMENTED", "stopping": False}
             if state != last:
@@ -61,6 +65,24 @@ def run(config, stopping):
                 print(json.dumps({"event": "BRIDGE_STATE", **state}), flush=True)
                 last = state
             receive_pending(transport, journal, deadline=time.monotonic() + 0.1)
+            observation = ros.observations.snapshot()
+            if observation is not None:
+                journal.observation(observation)
+            if telemetry_epoch != state["mqtt_epoch"]:
+                telemetry_epoch = state["mqtt_epoch"]
+                telemetry_due.clear()
+                telemetry_inflight = None
+            if telemetry_inflight and telemetry_inflight.is_published():
+                telemetry_inflight = None  # PUBACKだけではSQLiteから削除しない。
+            if state["mqtt_subscribed"] and telemetry_inflight is None:
+                pending_rows = journal.pending_observations()
+                live_ids = {row[0] for row in pending_rows}
+                telemetry_due = {key: due for key, due in telemetry_due.items() if key in live_ids}
+                for key, body in pending_rows:
+                    if time.monotonic() >= telemetry_due.get(key, 0):
+                        telemetry_inflight = transport.publish_observation(body)
+                        telemetry_due[key] = time.monotonic() + 5
+                        break
             if inflight and inflight[1].is_published():
                 journal.status_sent(inflight[0])
                 inflight = None

@@ -1,0 +1,697 @@
+[
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": 0,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": null,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "IDLE",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [
+          { "name": "component", "hardwareId": "device", "level": "OK" }
+        ],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": true,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "not-a-session",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": -1,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 101,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "GPS",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "valid": false,
+    "message": {
+      "schemaVersion": 3,
+      "deviceId": "ros-test",
+      "sessionId": "a065e32b-c00b-452e-9cb1-3b52c43962fb",
+      "sequence": 0,
+      "timestamp": "2026-11-06T00:00:00.000Z",
+      "payload": {
+        "source": "ROS2",
+        "battery": 0,
+        "temperature": null,
+        "position": {
+          "kind": "LOCAL",
+          "frameId": "fleet/map",
+          "convention": "ENU",
+          "unit": "m",
+          "pose": { "x": 1, "y": 2, "z": -3 },
+          "velocity": null
+        },
+        "flightStatus": "UNKNOWN",
+        "diagnostics": [],
+        "diagnosticsTruncated": false,
+        "quality": {
+          "battery": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "UTC",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "temperature": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "position": {
+            "reason": "VALID",
+            "stamp": { "sec": 100, "nanosec": 0 },
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": "2026-11-06T00:00:00.000Z"
+          },
+          "flightStatus": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          },
+          "diagnostics": {
+            "reason": "MISSING",
+            "stamp": null,
+            "timeDomain": "SYSTEM",
+            "clockEpoch": 0,
+            "receivedAt": null
+          }
+        }
+      }
+    }
+  }
+]

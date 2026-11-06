@@ -2,8 +2,13 @@
 
 import threading
 import time
+import json
 
+from diagnostic_msgs.msg import DiagnosticArray
 from fleet_bridge_interfaces.action import ReturnHome
+from fleet_bridge_interfaces.msg import RuntimeState
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import BatteryState, NavSatFix
 from fleet_bridge_interfaces.srv import GetRuntimeState
 import rclpy
 from rclpy.action import ActionClient
@@ -12,8 +17,11 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.signals import SignalHandlerOptions
+from rclpy.event_handler import SubscriptionEventCallbacks
+from rclpy.duration import Duration
 
 from .adapter import matches_runtime
+from .observations import Observations
 
 
 class RosClient:
@@ -30,6 +38,22 @@ class RosClient:
         self.closing_at = None
         rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
         self.node = Node("fleet_bridge", namespace=config.namespace)
+        self.observations = Observations(config)
+        self.subscriptions = []
+        for topic, message_type, reliable, depth in (
+                ("battery", BatteryState, False, 5), ("odometry", Odometry, False, 5),
+                ("fix", NavSatFix, False, 5), ("diagnostics", DiagnosticArray, True, 10),
+                ("runtime_state", RuntimeState, True, 1)):
+            qos = QoSProfile(depth=depth, deadline=Duration(seconds=2), reliability=(
+                ReliabilityPolicy.RELIABLE if reliable else ReliabilityPolicy.BEST_EFFORT))
+            self.subscriptions.append(self.node.create_subscription(
+                message_type, topic,
+                lambda message, name=topic: self.observations.receive(
+                    name, message, self.node.get_parameter("use_sim_time").value), qos,
+                event_callbacks=SubscriptionEventCallbacks(
+                    incompatible_qos=lambda event, name=topic: (
+                        self.observations.incompatible(name))),
+            ))
         self.group = ReentrantCallbackGroup()
         self.client = self.node.create_client(
             GetRuntimeState, config.namespace + "/get_runtime_state", callback_group=self.group,
@@ -50,7 +74,9 @@ class RosClient:
         try:
             while self.closing_at is None or time.monotonic() < self.closing_at + 1:
                 self.executor.spin_once(timeout_sec=0.05)
-        except Exception:
+        except Exception as error:
+            print(json.dumps({"event": "ROS_EXECUTOR_FAILED", "error_type": type(error).__name__}),
+                  flush=True)
             with self.guard:
                 self.available = False
                 self.last_response = 0
@@ -60,7 +86,8 @@ class RosClient:
         with self.guard:
             fresh = time.monotonic() - self.last_response < 3
             return {"ros_available": self.available and fresh,
-                    "ros_reason": self.reason if fresh else "ROS_UNAVAILABLE"}
+                    "ros_reason": self.reason if fresh or self.reason == "ROS_EXECUTOR_FAILED"
+                    else "ROS_UNAVAILABLE"}
 
     def tick(self):
         now = time.monotonic()

@@ -4,12 +4,43 @@ import process from "node:process";
 import { z } from "zod";
 import { format } from "prettier";
 import { connectionStatusMessageSchema } from "../dist/connection-status.js";
+import { rosObservationMessageSchema } from "../dist/ros-observation.js";
+import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
+import { fixtures } from "../test/fixtures/ros-observations.mjs";
 
 const schema = z.toJSONSchema(connectionStatusMessageSchema, {
   target: "draft-7",
   io: "input",
 });
 const outputs = [
+  [
+    "observation-fixtures.json",
+    await format(JSON.stringify(fixtures), { parser: "json" }),
+  ],
+  [
+    "ros-observation.schema.json",
+    await format(
+      JSON.stringify(
+        z.toJSONSchema(rosObservationMessageSchema, {
+          target: "draft-7",
+          io: "input",
+        }),
+      ),
+      { parser: "json" },
+    ),
+  ],
+  [
+    "telemetry-receipt.schema.json",
+    await format(
+      JSON.stringify(
+        z.toJSONSchema(telemetryReceiptMessageSchema, {
+          target: "draft-7",
+          io: "input",
+        }),
+      ),
+      { parser: "json" },
+    ),
+  ],
   [
     "connection-status.schema.json",
     await format(JSON.stringify(schema), { parser: "json" }),

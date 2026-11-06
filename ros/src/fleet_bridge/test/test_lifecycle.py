@@ -201,7 +201,8 @@ def test_separate_failures_reconnect_persistence_and_shutdown(processes, tmp_pat
         client.publish(f"fleet/v1/devices/{device}/commands", queued, qos=1).wait_for_publish(3)
         expected.append((queued,))
         proxy.cut.clear()
-        until(lambda: health(directory).get("mqtt_subscribed"))
+        until(lambda: health(directory).get("mqtt_subscribed")
+              and health(directory).get("ros_available"))
         assert health(directory)["ros_available"]
         until(saved)
         bridge.terminate()

@@ -1,4 +1,4 @@
-import type { TelemetryMessage } from "@drone-fleet/protocol";
+import type { LegacyTelemetryMessage as TelemetryMessage } from "@drone-fleet/protocol";
 
 const BASE_LATITUDE = 35.681236;
 const BASE_LONGITUDE = 139.767125;
