@@ -177,7 +177,7 @@ class ReferenceAdapter(Node):
         self.action = ActionServer(
             self, ReturnHome, "return_home", execute_callback=self.execute,
             goal_callback=self.goal, cancel_callback=self.cancel, callback_group=group,
-            feedback_pub_qos_profile=feedback_qos, result_timeout=900,
+            feedback_pub_qos_profile=feedback_qos, result_timeout=state.config.result_cache_sec,
         )
 
     def get_configuration(self, request, response):
@@ -246,6 +246,8 @@ class ReferenceAdapter(Node):
                 identifiers_valid = False
             if not identifiers_valid or request.device_id != s.config.device_id:
                 s.reason = "INVALID_GOAL"
+            elif request.owner_id != s.owner:
+                s.reason = "OWNER_MISMATCH"
             elif s.active is not None:
                 s.reason = "DEVICE_BUSY"
             elif len(s.commands) >= 10000 or canonical_command in s.commands:

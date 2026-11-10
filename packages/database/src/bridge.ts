@@ -3,6 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   canonicalBridgeJson,
   bridgeEventMessageSchema,
+  bridgeConfigurationEventSchema,
   supportsBridgeOperation,
   type BridgeConfiguration,
   type BridgeEventMessage,
@@ -16,9 +17,13 @@ import {
   bridgeCommandConfigurations as bindings,
   commands,
   devices,
+  bridgeActionEvents,
+  rosCommandTargets,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import { appendAudit } from "./audit.js";
+import { createBridgeExecutionRepository } from "./bridge-execution.js";
+import { rosReadiness, RosCommandError } from "./ros-commands.js";
 
 export function bridgeDigest(value: unknown) {
   return createHash("sha256").update(canonicalBridgeJson(value)).digest("hex");
@@ -59,9 +64,32 @@ function documents(
   return result.sort(([a], [b]) => a.localeCompare(b));
 }
 export function createBridgeRepository(db: Database) {
+  const executions = createBridgeExecutionRepository(db);
   return {
+    executionState: executions.get,
+    expireExecutions: executions.expire,
+    async readiness(deviceId: string) {
+      try {
+        const ready = !!(await rosReadiness(
+          db,
+          deviceId,
+          "RETURN_HOME",
+          new Date(),
+        ));
+        return {
+          ready,
+          operationReason: ready ? "READY" : "ROS_CONFIGURATION_UNAVAILABLE",
+        };
+      } catch (error) {
+        if (error instanceof RosCommandError)
+          return { ready: false, operationReason: error.message };
+        throw error;
+      }
+    },
     async save(input: BridgeEventMessage, receivedAt: Date) {
       const message = bridgeEventMessageSchema.parse(input);
+      if (message.kind !== "CONFIGURATION")
+        return executions.save(message, receivedAt);
       if (
         !verified(message.configuration, message.deviceId) ||
         bridgeDigest(message.configuration) !== message.configurationId ||
@@ -78,6 +106,16 @@ export function createBridgeRepository(db: Database) {
           .select()
           .from(reports)
           .where(eq(reports.eventId, message.eventId));
+        const [action] = await tx
+          .select()
+          .from(bridgeActionEvents)
+          .where(eq(bridgeActionEvents.eventId, message.eventId));
+        if (action) {
+          await tx
+            .insert(conflicts)
+            .values({ eventId: message.eventId, payloadHash, receivedAt });
+          return null;
+        }
         if (old) {
           if (old.payloadHash !== payloadHash) {
             await tx
@@ -146,6 +184,17 @@ export function createBridgeRepository(db: Database) {
             ),
           )
           .limit(1);
+        const [reserved] = await tx
+          .select()
+          .from(rosCommandTargets)
+          .where(
+            and(
+              eq(rosCommandTargets.deviceId, message.deviceId),
+              eq(rosCommandTargets.stopConfirmed, false),
+              eq(rosCommandTargets.notStarted, false),
+            ),
+          )
+          .limit(1);
         const stale =
           message.configurationRevision < head!.configurationRevision ||
           message.reportSequence <= head!.reportSequence ||
@@ -161,7 +210,8 @@ export function createBridgeRepository(db: Database) {
             ? "JOURNAL_MISMATCH"
             : stale
               ? "STALE"
-              : active && head!.configurationId !== message.configurationId
+              : (active || reserved) &&
+                  head!.configurationId !== message.configurationId
                 ? "ACTIVE_EXECUTION"
                 : clockInvalid
                   ? "CLOCK_INVALID"
@@ -290,7 +340,7 @@ export function createBridgeRepository(db: Database) {
       configurationId: string,
       startedAt: Date,
     ) {
-      bridgeEventMessageSchema.shape.eventId.parse(goalId);
+      bridgeConfigurationEventSchema.shape.eventId.parse(goalId);
       return db.transaction(async (tx) => {
         const [command] = await tx
           .select()

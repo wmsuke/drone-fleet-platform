@@ -38,7 +38,7 @@ docker build --network=none -t "$ROS_BRIDGE_TEST_IMAGE" ros 2>&1 | tee "$results
 "${demo[@]}" up --no-build -d
 wait_for_bridge() {
   for attempt in $(seq 1 25); do
-    if "${demo[@]}" exec -T bridge python3 -c 'import json,sys; s=json.load(open("/data/fleet/health.json")); sys.exit(not(s.get("mqtt_subscribed") and s.get("ros_available") and not s.get("ready") and not s.get("stopping")))' 2>/dev/null; then
+    if "${demo[@]}" exec -T bridge python3 -c 'import json,sys; s=json.load(open("/data/fleet/health.json")); sys.exit(not(s.get("mqtt_subscribed") and s.get("ros_available") and s.get("ready") and not s.get("stopping")))' 2>/dev/null; then
       return 0
     fi
     sleep 1

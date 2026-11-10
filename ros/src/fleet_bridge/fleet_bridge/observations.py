@@ -188,3 +188,15 @@ class Observations:
             return {"observation_quality": reasons,
                     "observation_qos_incompatible": sorted(self.qos_errors),
                     "observation_clock_epoch": self.epoch}
+
+    def execution_sample(self):
+        with self.guard:
+            now = self.now()
+            values = {}
+            for name in ("battery", "position", "flightStatus"):
+                sample = self.samples.get(name)
+                if not sample or sample[1]["reason"] != "VALID" or now - sample[2] >= 3:
+                    return None
+                values[name] = sample[0]
+            values["positionReceivedAt"] = self.samples["position"][1]["receivedAt"]
+            return values

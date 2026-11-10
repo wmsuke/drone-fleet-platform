@@ -212,7 +212,11 @@ describe.skipIf(!enabled)("fleet operation result aggregation", () => {
     await notify(c[9]!, "UNCERTAIN");
     const result = (await repo().find(f.operationId, page))!;
     expect(result.status).toBe("IN_PROGRESS");
-    expect(Object.values(result.counts)).toEqual(Array(10).fill(1));
+    expect(Object.values(result.counts).filter((v) => v > 0)).toEqual(
+      Array(10).fill(1),
+    );
+    expect(result.counts.REJECTED).toBe(0);
+    expect(result.counts.CANCELLED).toBe(0);
     expect(result).toMatchObject({
       succeededCount: 1,
       unsuccessfulCount: 5,

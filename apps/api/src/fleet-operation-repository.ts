@@ -12,6 +12,10 @@ import {
   appendAudit,
   appendAudits,
   operationAuditStates,
+  reserveRosCommand,
+  RosCommandError,
+  bridgeConfigurationHeads,
+  rosObservations,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -240,19 +244,45 @@ export function createFleetOperationRepository(
         }));
         await tx.insert(commands).values(pending);
         mark("commands");
+        const payloads = new Map<string, unknown>();
+        const candidateIds = pending.map((c) => c.deviceId);
+        const rosDevices = new Set(
+          [
+            ...(await tx
+              .select({ id: bridgeConfigurationHeads.deviceId })
+              .from(bridgeConfigurationHeads)
+              .where(inArray(bridgeConfigurationHeads.deviceId, candidateIds))),
+            ...(await tx
+              .selectDistinct({ id: rosObservations.deviceId })
+              .from(rosObservations)
+              .where(inArray(rosObservations.deviceId, candidateIds))),
+          ].map((r) => r.id),
+        );
+        try {
+          for (const command of pending) {
+            if (!rosDevices.has(command.deviceId)) continue;
+            const payload = await reserveRosCommand(tx, command);
+            if (payload) payloads.set(command.commandId, payload);
+          }
+        } catch (error) {
+          if (error instanceof RosCommandError)
+            throw new FleetOperationError(409, error.message, error.message);
+          throw error;
+        }
         await tx.insert(commandOutbox).values(
           pending.map((command) => ({
             commandId: command.commandId,
             topic: createCommandsTopic(command.deviceId),
             payload: JSON.stringify(
-              commandV2MessageSchema.parse({
-                schemaVersion: 2,
-                commandId: command.commandId,
-                deviceId: command.deviceId,
-                type: command.type,
-                timestamp: createdAt.toISOString(),
-                expiresAt: expiresAt.toISOString(),
-              }),
+              payloads.get(command.commandId) ??
+                commandV2MessageSchema.parse({
+                  schemaVersion: 2,
+                  commandId: command.commandId,
+                  deviceId: command.deviceId,
+                  type: command.type,
+                  timestamp: createdAt.toISOString(),
+                  expiresAt: expiresAt.toISOString(),
+                }),
             ),
             createdAt,
             expiresAt,

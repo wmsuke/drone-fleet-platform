@@ -212,8 +212,13 @@ def test_real_dds_incompatible_qos_and_publisher_stop(tmp_path):
         else:
             pytest.fail("DDS QoS event or battery observation was not received")
         publisher.destroy_publisher(battery)
-        time.sleep(3.1)
-        state = bridge.observations.health()
+        # destroy直前のDDS callbackが遅着するため、固定sleepで判定しない。
+        end = time.monotonic() + 6
+        while time.monotonic() < end:
+            state = bridge.observations.health()
+            if state["observation_quality"]["battery"] == "STALE":
+                break
+            time.sleep(0.05)
         assert state["observation_quality"]["battery"] == "STALE"
         assert "diagnostics" in state["observation_qos_incompatible"]
     finally:

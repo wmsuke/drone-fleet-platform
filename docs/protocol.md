@@ -62,7 +62,7 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)にROS topic/Action、QoS、batteryの比率→%、LOCAL/GPSと欠測、ROS時刻/UTC、commandId/goal UUID、cancel/停止の対応を定めた。現行telemetry v1/v2とACK v3にはROSのLOCAL・非開始拒否・CANCELLEDを無理に詰め込まない。
 
-#192で[ROS telemetry v3の変換・永続再送・DB保存・観測API](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)を追加した。既存telemetry topicとreceipt v1を使い、LOCAL・欠測をGPS列へ投影しない。bridge-events/bridge-receipts v1はCONFIGURATIONとDB保存確認だけを扱う。後続の#194〜#196でROS command v3、実行event、bridge-requestsを追加する。操作readyはfalseを維持し、未知の新形式を旧parserで扱えるとは仮定しない。
+#192で[ROS telemetry v3の変換・永続再送・DB保存・観測API](ros-observations.md)、#193で[能力と実稼働構成の記録](bridge-configuration.md)、#194で[ROS command v3とAction実行・復旧](ros-command-journal.md)を追加した。LOCAL・欠測をGPS列へ投影しない。ROS対象だけへtargetKind=ROS2・expectedConfigurationId・resultDeadlineを持つcommand v3を送り、受領/期限拒否はACK v2、実行結果はbridge-events v1で通知する。simulatorのcommand v2/ACK v3と混在させない。bridge-events/bridge-receiptsは構成・goal受付・feedback・実行終端・停止観測とDB保存確認を扱う。readyは構成・観測・排他から判定する。cancelとbridge-requestsは後続Issueであり、未知の形式を旧parserで扱えるとは仮定しない。
 
 ### Phase 5の通信契約（opt-in OTA）
 

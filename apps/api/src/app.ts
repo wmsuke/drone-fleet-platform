@@ -4,6 +4,7 @@ import type { BridgeRepository } from "@drone-fleet/database";
 import { registerDeploymentRoutes } from "./deployment-routes.js";
 import type { DeploymentRepository } from "./deployment-repository.js";
 import { OtaReservationError } from "./ota-reservation.js";
+import { RosCommandError } from "@drone-fleet/database";
 import type { Database } from "@drone-fleet/database";
 import {
   registerReleaseRoutes,
@@ -165,6 +166,8 @@ export function buildApi(
         );
         return reply.code(202).send(commandResponseSchema.parse(command));
       } catch (error) {
+        if (error instanceof RosCommandError)
+          return reply.code(409).send({ error: error.message });
         if (error instanceof OtaReservationError)
           return reply.code(409).send({ error: "DEVICE_RESERVED_FOR_OTA" });
         if (error instanceof DeviceNotFoundError) {

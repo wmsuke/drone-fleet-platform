@@ -24,6 +24,15 @@ const statusLabels: Record<CommandStatus, string> = {
   TIMED_OUT: "ACK待ちタイムアウト",
   EXPIRED: "操作開始期限切れ",
 };
+const executionLabels = {
+  NOT_REPORTED: "実行未報告",
+  RUNNING: "実行中",
+  SUCCEEDED: "実行成功",
+  FAILED: "実行失敗",
+  UNCERTAIN: "実行結果不明",
+  REJECTED: "実行拒否（未開始）",
+  CANCELLED: "実行中断",
+} as const;
 
 function formatTimestamp(value: string | null): string {
   if (value === null) {
@@ -44,6 +53,12 @@ function CommandHistoryRow({ command }: { command: CommandHistoryItem }) {
           {statusLabels[command.status]}
         </span>
       </div>
+      {command.executionStatus !== undefined && (
+        <p>
+          {executionLabels[command.executionStatus]}
+          （ACK・停止確認とは別の状態）
+        </p>
+      )}
       <p>
         <Link to={`/audit-logs?commandId=${command.commandId}`}>
           監査ログ {command.commandId}

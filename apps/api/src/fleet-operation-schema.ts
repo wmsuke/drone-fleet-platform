@@ -40,6 +40,8 @@ export const targetStatusSchema = z.enum([
   "EXPIRED",
   "UNRESPONSIVE",
   "UNCERTAIN",
+  "REJECTED",
+  "CANCELLED",
 ]);
 const count = z.number().int().nonnegative();
 export const operationCountsSchema = z.object({
@@ -53,6 +55,8 @@ export const operationCountsSchema = z.object({
   EXPIRED: count,
   UNRESPONSIVE: count,
   UNCERTAIN: count,
+  REJECTED: count.default(0),
+  CANCELLED: count.default(0),
 });
 export const operationSummarySchema = fleetOperationResponseSchema.extend({
   groupName: z.string(),
@@ -76,6 +80,8 @@ export const operationTargetSchema = z.object({
     "SUCCEEDED",
     "FAILED",
     "UNCERTAIN",
+    "REJECTED",
+    "CANCELLED",
   ]),
   outboxState: z
     .enum([

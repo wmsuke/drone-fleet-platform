@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="fleet_bridge", version="0.2.0", packages=find_packages(exclude=["test"]),
+    name="fleet_bridge", version="0.3.0", packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/fleet_bridge"]),
         ("share/fleet_bridge", ["package.xml"]),

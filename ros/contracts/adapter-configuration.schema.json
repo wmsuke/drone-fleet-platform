@@ -18,101 +18,214 @@
       "properties": {
         "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "definition": {
-          "type": "object",
-          "properties": {
-            "profileId": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_.-]{1,128}$"
-            },
-            "version": { "type": "string", "const": "1.0.0" },
-            "model": { "type": "string", "const": "reference_vehicle" },
-            "operations": {
-              "minItems": 1,
-              "maxItems": 1,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "command": { "type": "string", "const": "RETURN_HOME" },
-                  "actionType": {
-                    "type": "string",
-                    "const": "fleet_bridge_interfaces/action/ReturnHome"
-                  },
-                  "actionName": { "type": "string", "const": "return_home" }
-                },
-                "required": ["command", "actionType", "actionName"],
-                "additionalProperties": false
-              }
-            },
-            "frames": {
+          "oneOf": [
+            {
               "type": "object",
               "properties": {
-                "position": { "type": "string", "const": "map" },
-                "velocity": { "type": "string", "const": "base_link" },
-                "convention": { "type": "string", "const": "ENU" },
-                "positionUnit": { "type": "string", "const": "m" },
-                "velocityUnit": { "type": "string", "const": "m/s" },
-                "angularUnit": { "type": "string", "const": "rad/s" }
+                "profileId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "1.0.0" },
+                "model": { "type": "string", "const": "reference_vehicle" },
+                "operations": {
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": { "type": "string", "const": "RETURN_HOME" },
+                      "actionType": {
+                        "type": "string",
+                        "const": "fleet_bridge_interfaces/action/ReturnHome"
+                      },
+                      "actionName": { "type": "string", "const": "return_home" }
+                    },
+                    "required": ["command", "actionType", "actionName"],
+                    "additionalProperties": false
+                  }
+                },
+                "frames": {
+                  "type": "object",
+                  "properties": {
+                    "position": { "type": "string", "const": "map" },
+                    "velocity": { "type": "string", "const": "base_link" },
+                    "convention": { "type": "string", "const": "ENU" },
+                    "positionUnit": { "type": "string", "const": "m" },
+                    "velocityUnit": { "type": "string", "const": "m/s" },
+                    "angularUnit": { "type": "string", "const": "rad/s" }
+                  },
+                  "required": [
+                    "position",
+                    "velocity",
+                    "convention",
+                    "positionUnit",
+                    "velocityUnit",
+                    "angularUnit"
+                  ],
+                  "additionalProperties": false
+                },
+                "requiredSensors": {
+                  "type": "array",
+                  "items": [
+                    { "type": "string", "const": "battery" },
+                    { "type": "string", "const": "odometry" },
+                    { "type": "string", "const": "runtime_state" }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "homeDefinition": {
+                  "type": "string",
+                  "const": "SERVER_BOOT_REGISTERED_POSE"
+                },
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "minBatteryPercent": { "type": "number", "const": 20 },
+                    "maxDistanceMm": { "type": "number", "const": 10000 },
+                    "sensorFreshnessMs": { "type": "number", "const": 3000 },
+                    "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
+                    "positionToleranceMm": { "type": "number", "const": 200 },
+                    "stoppedSpeedMmPerSecond": {
+                      "type": "number",
+                      "const": 50
+                    },
+                    "dwellMs": { "type": "number", "const": 1000 }
+                  },
+                  "required": [
+                    "minBatteryPercent",
+                    "maxDistanceMm",
+                    "sensorFreshnessMs",
+                    "heartbeatTimeoutMs",
+                    "positionToleranceMm",
+                    "stoppedSpeedMmPerSecond",
+                    "dwellMs"
+                  ],
+                  "additionalProperties": false
+                }
               },
               "required": [
-                "position",
-                "velocity",
-                "convention",
-                "positionUnit",
-                "velocityUnit",
-                "angularUnit"
+                "profileId",
+                "version",
+                "model",
+                "operations",
+                "frames",
+                "requiredSensors",
+                "homeDefinition",
+                "limits"
               ],
               "additionalProperties": false
             },
-            "requiredSensors": {
-              "type": "array",
-              "items": [
-                { "type": "string", "const": "battery" },
-                { "type": "string", "const": "odometry" },
-                { "type": "string", "const": "runtime_state" }
-              ],
-              "additionalItems": false,
-              "minItems": 3,
-              "maxItems": 3
-            },
-            "homeDefinition": {
-              "type": "string",
-              "const": "SERVER_BOOT_REGISTERED_POSE"
-            },
-            "limits": {
+            {
               "type": "object",
               "properties": {
-                "minBatteryPercent": { "type": "number", "const": 20 },
-                "maxDistanceMm": { "type": "number", "const": 10000 },
-                "sensorFreshnessMs": { "type": "number", "const": 3000 },
-                "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
-                "positionToleranceMm": { "type": "number", "const": 200 },
-                "stoppedSpeedMmPerSecond": { "type": "number", "const": 50 },
-                "dwellMs": { "type": "number", "const": 1000 }
+                "profileId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+                },
+                "version": { "type": "string", "const": "1.1.0" },
+                "model": { "type": "string", "const": "reference_vehicle" },
+                "operations": {
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": { "type": "string", "const": "RETURN_HOME" },
+                      "actionType": {
+                        "type": "string",
+                        "const": "fleet_bridge_interfaces/action/ReturnHome"
+                      },
+                      "actionName": { "type": "string", "const": "return_home" }
+                    },
+                    "required": ["command", "actionType", "actionName"],
+                    "additionalProperties": false
+                  }
+                },
+                "frames": {
+                  "type": "object",
+                  "properties": {
+                    "position": { "type": "string", "const": "map" },
+                    "velocity": { "type": "string", "const": "base_link" },
+                    "convention": { "type": "string", "const": "ENU" },
+                    "positionUnit": { "type": "string", "const": "m" },
+                    "velocityUnit": { "type": "string", "const": "m/s" },
+                    "angularUnit": { "type": "string", "const": "rad/s" }
+                  },
+                  "required": [
+                    "position",
+                    "velocity",
+                    "convention",
+                    "positionUnit",
+                    "velocityUnit",
+                    "angularUnit"
+                  ],
+                  "additionalProperties": false
+                },
+                "requiredSensors": {
+                  "type": "array",
+                  "items": [
+                    { "type": "string", "const": "battery" },
+                    { "type": "string", "const": "odometry" },
+                    { "type": "string", "const": "runtime_state" }
+                  ],
+                  "additionalItems": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "homeDefinition": {
+                  "type": "string",
+                  "const": "SERVER_BOOT_REGISTERED_POSE"
+                },
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "minBatteryPercent": { "type": "number", "const": 20 },
+                    "maxDistanceMm": { "type": "number", "const": 10000 },
+                    "sensorFreshnessMs": { "type": "number", "const": 3000 },
+                    "heartbeatTimeoutMs": { "type": "number", "const": 3000 },
+                    "positionToleranceMm": { "type": "number", "const": 200 },
+                    "stoppedSpeedMmPerSecond": {
+                      "type": "number",
+                      "const": 50
+                    },
+                    "dwellMs": { "type": "number", "const": 1000 }
+                  },
+                  "required": [
+                    "minBatteryPercent",
+                    "maxDistanceMm",
+                    "sensorFreshnessMs",
+                    "heartbeatTimeoutMs",
+                    "positionToleranceMm",
+                    "stoppedSpeedMmPerSecond",
+                    "dwellMs"
+                  ],
+                  "additionalProperties": false
+                },
+                "resultCacheMs": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 900000
+                }
               },
               "required": [
-                "minBatteryPercent",
-                "maxDistanceMm",
-                "sensorFreshnessMs",
-                "heartbeatTimeoutMs",
-                "positionToleranceMm",
-                "stoppedSpeedMmPerSecond",
-                "dwellMs"
+                "profileId",
+                "version",
+                "model",
+                "operations",
+                "frames",
+                "requiredSensors",
+                "homeDefinition",
+                "limits",
+                "resultCacheMs"
               ],
               "additionalProperties": false
             }
-          },
-          "required": [
-            "profileId",
-            "version",
-            "model",
-            "operations",
-            "frames",
-            "requiredSensors",
-            "homeDefinition",
-            "limits"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": ["digest", "definition"],
@@ -125,7 +238,7 @@
           "properties": {
             "status": { "type": "string", "const": "KNOWN" },
             "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
-            "version": { "type": "string", "const": "0.2.0" },
+            "version": { "type": "string", "enum": ["0.2.0", "0.3.0"] },
             "releaseDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
           },
           "required": ["status", "id", "version", "releaseDigest"],

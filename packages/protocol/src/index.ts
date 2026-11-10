@@ -5,6 +5,8 @@ export {
   commandAcknowledgementMessageSchema,
   commandMessageSchema,
   commandV2MessageSchema,
+  rosCommandMessageSchema,
+  type RosCommandMessage,
   commandAcknowledgementV2MessageSchema,
   commandAcknowledgementV3MessageSchema,
   type CommandAcknowledgementMessage,

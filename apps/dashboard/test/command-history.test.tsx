@@ -50,6 +50,32 @@ function historyResponse(status: "SENT" | "ACKNOWLEDGED" = "ACKNOWLEDGED") {
 }
 
 describe("CommandHistory", () => {
+  it("distinguishes a ROS not-started rejection from receipt and stop confirmation", async () => {
+    const old = await historyResponse().json();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            {
+              ...old[0],
+              executionStatus: "REJECTED",
+              executionStartedAt: null,
+              executionResultAt: "2026-10-01T03:00:03.000Z",
+            },
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+    renderHistory();
+    expect(
+      await screen.findByText(
+        "実行拒否（未開始）（ACK・停止確認とは別の状態）",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("ACK受信済み")).toBeVisible();
+  });
   it("shows expiration separately from acceptance and displays the operation deadline", async () => {
     vi.stubGlobal(
       "fetch",

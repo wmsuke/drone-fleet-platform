@@ -119,6 +119,17 @@ def test_puback_is_scoped_to_connection_epoch(tmp_path):
     assert calls == [(7, 1)]
 
 
+def test_retained_commands_are_rejected_before_intake(tmp_path):
+    transport = MqttTransport(settings(tmp_path))
+    calls = []
+    client = SimpleNamespace(disconnect=lambda: calls.append("disconnect"))
+    transport.on_message(client, None, SimpleNamespace(
+        topic=transport.topics[0], qos=1, mid=1, payload=b"{}", retain=True))
+    assert transport.inbox.empty()
+    assert calls == ["disconnect"]
+    assert transport.snapshot()["mqtt_last_failure"] == "MQTT_PACKET_REJECTED"
+
+
 def test_connection_is_not_subscription_readiness(tmp_path):
     transport = MqttTransport(settings(tmp_path))
     calls = []

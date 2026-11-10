@@ -3,6 +3,7 @@ import {
   commandExecutionEvents,
   appendAudit,
   commandAuditLinks,
+  rosCommandTargets,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -47,6 +48,12 @@ export function createCommandAcknowledgementRepository(
           )
           .for("update");
         if (!row) return "not_found";
+        const [ros] = await tx
+          .select()
+          .from(rosCommandTargets)
+          .where(eq(rosCommandTargets.commandId, row.commandId));
+        // ROS v3の受領はACK v2だけ。simulatorのACK v3を実行証拠へ混ぜない。
+        if (ros && message.schemaVersion !== 2) return "conflict";
         const execution = !["ACKNOWLEDGED", "REJECTED_EXPIRED"].includes(
           message.status,
         );
@@ -106,6 +113,22 @@ export function createCommandAcknowledgementRepository(
           } else if (row.executionStatus !== "NOT_REPORTED")
             disposition = "conflict";
           else if (row.status === "EXPIRED") disposition = "ignored";
+          if (ros && !execution) {
+            if (
+              !row.expiresAt ||
+              deviceTimestamp < row.expiresAt ||
+              ros.goalId ||
+              ros.acceptedAt
+            )
+              disposition = "conflict";
+            else if (
+              receivedAt >= ros.resultDeadline ||
+              row.executionStatus === "UNCERTAIN"
+            )
+              disposition = "ignored";
+            else if (row.executionStatus === "NOT_REPORTED")
+              disposition = "applied";
+          }
           await tx.insert(commandExecutionEvents).values({
             commandId: row.commandId,
             deviceId: row.deviceId,
@@ -153,6 +176,39 @@ export function createCommandAcknowledgementRepository(
               .update(commands)
               .set({ status: "EXPIRED", expiredAt: receivedAt })
               .where(eq(commands.commandId, row.commandId));
+          if (
+            !execution &&
+            disposition === "applied" &&
+            ros &&
+            !ros.goalId &&
+            !ros.acceptedAt &&
+            row.expiresAt &&
+            deviceTimestamp >= row.expiresAt
+          ) {
+            await tx
+              .update(commands)
+              .set({
+                executionStatus: "REJECTED",
+                executionResultAt: deviceTimestamp,
+                executionResultReceivedAt: receivedAt,
+              })
+              .where(eq(commands.commandId, row.commandId));
+            await tx
+              .update(rosCommandTargets)
+              .set({ notStarted: true })
+              .where(eq(rosCommandTargets.commandId, row.commandId));
+            await appendAudit(tx, {
+              action: "command.execution_changed",
+              targetKind: "command",
+              targetId: row.commandId,
+              commandId: row.commandId,
+              system: "telemetry-ingestor",
+              metadata: {
+                beforeStatus: row.executionStatus,
+                afterStatus: "REJECTED",
+              },
+            });
+          }
           await appendAudit(tx, {
             action: execution ? "command.execution_changed" : "command.expired",
             targetKind: "command",

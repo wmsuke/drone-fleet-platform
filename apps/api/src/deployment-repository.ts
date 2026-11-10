@@ -17,6 +17,8 @@ import {
   otaReservations,
   otaAttempts,
   otaOutbox,
+  assertNoRosExecution,
+  RosCommandError,
   type Database,
 } from "@drone-fleet/database";
 import {
@@ -176,6 +178,13 @@ export function createDeploymentRepository(
           .for("update");
         if (locked.length !== selected.length)
           throw new DeploymentError(404, "DEVICE_NOT_FOUND");
+        try {
+          await assertNoRosExecution(tx, selected);
+        } catch (error) {
+          if (error instanceof RosCommandError)
+            throw new DeploymentError(409, error.message);
+          throw error;
+        }
         if (
           (
             await tx
