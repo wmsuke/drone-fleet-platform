@@ -2,6 +2,7 @@
 
 from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -13,7 +14,7 @@ from action_msgs.srv import CancelGoal
 import fastjsonschema
 import pytest
 from unique_identifier_msgs.msg import UUID
-from rclpy.serialization import serialize_message
+from rclpy.serialization import deserialize_message
 
 from fleet_bridge.cancellation import Cancellation
 from fleet_bridge.command_journal import CommandJournal, instant
@@ -166,7 +167,11 @@ def test_invalid_response_keeps_raw_hash_without_inventing_acceptance(tmp_path):
     value = cancel.get(request["cancelId"])
     event = json.loads(value["last"])
     assert value["state"] == "UNCERTAIN" and event["reason"] == "RESULT_INVALID"
-    assert event["rawResponse"]["hash"] == hashlib.sha256(serialize_message(invalid)).hexdigest()
+    # CDRのpaddingは再serialize時に同一byteとは限らない。保存原文のhashと内容を照合する。
+    raw = base64.b64decode(event["rawResponse"]["cdr"])
+    assert event["rawResponse"]["hash"] == hashlib.sha256(raw).hexdigest()
+    assert event["rawResponse"]["bytes"] == len(raw)
+    assert deserialize_message(raw, CancelGoal.Response) == invalid
     journal.close()
 
 

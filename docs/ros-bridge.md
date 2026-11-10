@@ -45,7 +45,7 @@ AWS設定は既存simulatorと同じ`AWS_IOT_ENDPOINT`、`AWS_IOT_ROOT_CA_PATH`�
 
 `BRIDGE_STATE`ログと永続領域の`health.json`に`mqtt_connected`、`mqtt_subscribed`、`ros_available`、各reasonを別々に出す。health fileは同じdirectory内でatomic replaceする。MQTT接続だけでは購読完了にしない。SUBACKが全topicでQoS 1になった後だけ`mqtt_subscribed=true`とする。
 
-ROSは型付き`GetRuntimeState` serviceと`ReturnHome` Actionの到達性を調べ、device/frame/server/configurationのidentityを検証する。照会は非同期、1回2秒、同時1件。3失敗後は8秒待つ。最後の応答がmonotonic age 3秒を超えれば`ros_available=false`とする。到達性だけでは飛行readyにしない。実行ownerはjournal IDと対応goalを照合して1Hzのheartbeatを更新し、runtimeや世代が不明なら更新しない。
+ROSは型付き`GetRuntimeState` serviceと`ReturnHome` Actionの到達性を調べ、device/frame/server/configurationのidentityを検証する。照会は非同期、1回2秒、同時1件。3失敗後は8秒待つ。最後の応答がmonotonic age 3秒を超えれば`ros_available=false`とする。到達性だけでは飛行readyにしない。実行ownerはjournal IDと対応goalを照合して1Hzのheartbeatを更新し、runtimeや世代が不明なら更新しない。検証済みowner/goalの切替時は旧周期を待たず次のtimerで送信する。旧goalのheartbeatがAdapterに拒否される移行時間を短くし、permissionの1.5秒失効とAdapterの3秒watchdogは延長しない。
 
 MQTT切断でもROS照会を続け、ROS停止でもMQTT接続を維持する。再接続のたびに購読をやり直す。既存の`status` v1へONLINE/CONNECTED、終了時OFFLINE/SHUTDOWN、LWTへOFFLINE/CONNECTION_LOSTをQoS 1・retainなしで送る。ONLINEはBridgeのMQTT接続を表し、ROSのreadyを意味しない。構成・実行証拠はbridge-eventsへ保存確認まで再送する。
 

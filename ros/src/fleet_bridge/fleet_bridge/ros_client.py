@@ -123,13 +123,16 @@ class RosClient:
                     "ros_reason": self.reason if fresh or self.reason == "ROS_EXECUTOR_FAILED"
                     else "ROS_UNAVAILABLE"}
 
-    def tick(self):
-        now = time.monotonic()
+    def publish_heartbeat(self, now):
         with self.guard:
             permission = self.owner_permission if now - self.owner_permission_at < 1.5 else None
-        if permission and now >= self.next_heartbeat:
-            self.next_heartbeat = now + 1
-            self.heartbeat_publisher.publish(permission)
+            if permission and now >= self.next_heartbeat:
+                self.next_heartbeat = now + 1
+                self.heartbeat_publisher.publish(permission)
+
+    def tick(self):
+        now = time.monotonic()
+        self.publish_heartbeat(now)
         self.tick_configuration(now)
         if self.pending:
             if self.pending.done():
@@ -221,6 +224,7 @@ class RosClient:
 
     def permit_heartbeat(self, owner_id, state):
         with self.guard:
+            previous = self.owner_permission
             self.owner_permission = None
             if state is not None:
                 message = BridgeHeartbeat()
@@ -232,6 +236,13 @@ class RosClient:
                 message.expected_configuration_id = state.configuration_id
                 message.has_goal = state.has_active_goal
                 message.goal_id = state.active_goal_id
+                # goal切替直後に旧goalの周期を引き継ぐと、Adapterが旧heartbeatを
+                # 拒否する間にwatchdogが発火する。新たに検証したidentityは即送信する。
+                identity = ("owner_id", "server_instance_id", "expected_configuration_id",
+                            "has_goal", "goal_id")
+                if previous is None or any(getattr(previous, key) != getattr(message, key)
+                                           for key in identity):
+                    self.next_heartbeat = 0
                 self.owner_permission = message
                 self.owner_permission_at = time.monotonic()
 
