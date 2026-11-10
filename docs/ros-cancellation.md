@@ -45,7 +45,7 @@ CANCEL eventはRECEIVED / SEND_INTENT / ACCEPTED / REJECTED / UNCERTAINを区別
 
 中断ケースだけを確認する場合は`ROS_COMMANDS_CASES=cancel corepack pnpm test:ros-commands`を使う。CIでは指定せず、通常Actionも含めて実行する。
 
-件数確認用の読み取り専用DDS probeは、期限付き照会の成否を出力してprocess境界で終了する。RMW終了待ちで照会結果の検証を止めないためで、Bridgeの正常終了試験は別のlifecycle試験を正とする。
+件数確認用の読み取り専用DDS probeは、各照会を最大3回・合計12秒で試み、実応答だけを返してprocess境界で終了する。discovery/応答待ちの失敗も記録し、応答なしを成功に置き換えずgoalを再送しない。RMW終了待ちで照会結果の検証を止めないためで、Bridgeの正常終了試験は別のlifecycle試験を正とする。
 
 command受付停止→migration 0024→protocol/ingestor/API/中断worker→Bridge 0.4.0の順に更新する。Adapter/interfacesは0.3.0のまま、Profile 1.1.0を維持する。旧構成・結果の読み取りとsimulator command v1/v2/ACK v1/v2/v3は維持する。旧Bridgeへ中断topicを配送しない。
 
