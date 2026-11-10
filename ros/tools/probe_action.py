@@ -1,6 +1,7 @@
 """E2Eの読み取り専用probe。goal送信・heartbeat/cancelを行わない。"""
 
 import json
+import os
 import sys
 import uuid
 
@@ -45,10 +46,13 @@ def main():
             result["resultStatus"] = query(node, ReturnHome.Impl.GetResultService,
                                            namespace(device) + "/return_home/_action/get_result",
                                            request).status
-        print(json.dumps(result))
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        print(json.dumps(result), flush=True)
+    except Exception:
+        print("DDS_READ_UNAVAILABLE", file=sys.stderr, flush=True)
+        os._exit(1)
+    # 読み取り専用の使い捨てprocess。DDS照会後のRMW終了待ちに試験を依存させない。
+    # heartbeat/goal/DB書込を持たず、socket等はOSで回収する。Bridgeの終了試験とは別。
+    os._exit(0)
 
 
 if __name__ == "__main__":
