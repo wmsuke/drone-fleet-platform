@@ -118,7 +118,8 @@ export function createBridgeHealthRepository(db: Database) {
             : Math.abs(receivedAt.getTime() - Date.parse(message.timestamp)) >=
                 15000
               ? "CLOCK_INVALID"
-              : previous && previous.message.sequence >= message.sequence
+              : message.sequence <= head.reportSequence ||
+                  (previous && previous.message.sequence >= message.sequence)
                 ? "STALE"
                 : "CURRENT";
         await tx.insert(events).values({
@@ -177,9 +178,11 @@ export function createBridgeHealthRepository(db: Database) {
           ).length > 0
         : false;
       const fresh =
+        !!head &&
         !!latest &&
         !conflict &&
         latest.message.configurationId === head?.configurationId &&
+        latest.message.sequence > head.reportSequence &&
         [
           latest.receivedAt.getTime(),
           Date.parse(latest.message.timestamp),

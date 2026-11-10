@@ -24,7 +24,7 @@ Bridge 0.5.0はbridge-events v1の`ROS_HEALTH`を、状態変化時と同状態�
 
 ingestorは`bridge_health_events`へ原文・canonical hash・採否・受信UTCをcommitしてからreceiptを返す。同ID同本文は同receipt、別本文や別kindとのID衝突は元正本を維持して衝突記録を残す。UPDATEは禁止する。現在のjournal/configに対応しない、15秒以上時計がずれる、古いsequenceの報告は復旧の正本へ昇格しない。
 
-`GET /devices/:deviceId/bridge-health?limit=100`は最新の採用記録、fresh/ready、人間判断要否と件数制限付き履歴を返す。送信UTCと受信UTCの両方が15秒未満であることを必要とし、古いoutboxが再到着しても復旧済みにしない。Bridge 0.5.0の新規commandには新鮮なready報告と現在server UUIDの一致も必要とする。旧0.3.0/0.4.0の実行・中断契約は維持する。
+`GET /devices/:deviceId/bridge-health?limit=100`は最新の採用記録、fresh/ready、人間判断要否と件数制限付き履歴を返す。送信UTCと受信UTCの両方が15秒未満であり、同じjournalの最新構成報告のreportSequenceよりhealthのsequenceが大きいことを必要とする。同じ構成digestの再報告でも、先に保存されたhealthはfresh/readyから外す。構成報告以下の連番で後着したhealthはSTALEとして保存し、古いoutboxを復旧済みの証拠にしない。Bridge 0.5.0の新規commandには新鮮なready報告と現在server UUIDの一致も必要とする。旧0.3.0/0.4.0の実行・中断契約は維持する。
 
 `GET /commands/:commandId/bridge-execution`の`recovery`は、保存済みの結果不明・矛盾・終端後5秒を過ぎた停止未確認を人間へ引き継ぐ。停止観測を正常に待つ最初の5秒は人間対応必須としない。証拠event、RESULT_DEADLINE / EVENT_CONFLICT / STOP_UNCONFIRMED等の理由、`automaticResubmit=false`、`RECONCILE_EVIDENCE_AND_INSPECT_DEVICE`を返す。接続復帰でこの判断を解除せず、実機・保存証拠・機体側制約の確認を求める。本Issueは安全性を確認できない予約の強制解除APIを作らない。
 
