@@ -110,6 +110,14 @@ class Execution:
         if pending:
             pending.cancel()  # GetResult待ちを破棄するだけでgoalはcancelしない。
 
+    def consume_result(self, value, response):
+        if response.status == 0:
+            # 通常のGoalHandle待ちにもserver再起動後のUNKNOWNが届き得る。
+            # 不正resultとして確定せず、元UUIDと新鮮な世代の再照合へ移る。
+            self.begin_recovery(value["commandId"])
+        else:
+            self.process_result(value, response)
+
     def process_result(self, value, response):
         result = response.result
         config = value["configuration"]
@@ -394,7 +402,7 @@ class Execution:
                 except Exception:
                     self.begin_recovery(command_id)
                 else:
-                    self.process_result(self.commands.get(command_id), response)
+                    self.consume_result(self.commands.get(command_id), response)
             value = self.commands.get(command_id)
             if (self.unresolved(value) and not progress["terminalEvent"]
                     and value["state"] != "READY"):

@@ -154,6 +154,18 @@ def test_recovery_does_not_query_an_unconfirmed_server(tmp_path):
     journal.close()
 
 
+def test_normal_result_wait_unknown_reconciles_instead_of_invalid_result(tmp_path):
+    journal, commands, execution, value, _ = fixture(tmp_path)
+    execution.consume_result(value, SimpleNamespace(status=0))
+    assert commands.get(value["commandId"])["state"] == "UNCERTAIN"
+    assert commands.progress(value["commandId"])["terminalEvent"] is None
+    execution.reconcile(commands.get(value["commandId"]),
+                        SimpleNamespace(server_instance_id=str(uuid.uuid4())))
+    assert commands.get(value["commandId"])["reason"] == "SERVER_CHANGED"
+    assert not commands.progress(value["commandId"])["stopConfirmed"]
+    journal.close()
+
+
 @pytest.mark.parametrize("changed", [False, True])
 def test_unknown_result_requires_a_new_generation_probe(tmp_path, changed):
     journal, commands, execution, value, now = fixture(tmp_path)

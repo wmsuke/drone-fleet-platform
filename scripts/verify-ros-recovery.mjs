@@ -185,6 +185,11 @@ export async function verifyRecovery({
   const before = runtime();
   signal("SIGHUP");
   const changed = await execution(generation.id, ["UNCERTAIN"]);
+  assert.equal(
+    changed.events.find((e) => e.message.status === "UNCERTAIN")?.message
+      .reason,
+    "SERVER_CHANGED",
+  );
   assert.equal(changed.target.stopConfirmed, false);
   assert.equal(changed.recovery.humanReviewRequired, true);
   await until(
