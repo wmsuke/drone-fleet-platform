@@ -13,6 +13,8 @@ import {
   bridgeCommandConfigurations as bindings,
   commands,
   devices,
+  bridgeCancelEvents,
+  rosCommandCancels,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import type { Transaction } from "./ros-commands.js";
@@ -57,6 +59,20 @@ export function createBridgeExecutionRepository(db: Database) {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bridge-event:${message.eventId}`},0))`,
         );
+        const [cancelEvent] = await tx
+          .select()
+          .from(bridgeCancelEvents)
+          .where(eq(bridgeCancelEvents.eventId, message.eventId));
+        if (cancelEvent) {
+          await tx
+            .insert(conflicts)
+            .values({ eventId: message.eventId, payloadHash, receivedAt });
+          await tx
+            .update(rosCommandCancels)
+            .set({ assessment: "UNCERTAIN" })
+            .where(eq(rosCommandCancels.cancelId, cancelEvent.cancelId));
+          return null;
+        }
         const [old] = await tx
           .select()
           .from(events)

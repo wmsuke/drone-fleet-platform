@@ -19,6 +19,79 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+export const rosCommandCancels = pgTable(
+  "ros_command_cancels",
+  {
+    cancelId: uuid("cancel_id").primaryKey(),
+    commandId: uuid("command_id")
+      .notNull()
+      .references(() => commands.commandId, { onDelete: "restrict" }),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    key: varchar("key", { length: 128 }).notNull(),
+    request: jsonb("request")
+      .$type<import("@drone-fleet/protocol").BridgeCancelRequest>()
+      .notNull(),
+    interventionId: uuid("intervention_id").notNull(),
+    actorKind: text("actor_kind").notNull().default("anonymous"),
+    actorId: text("actor_id"),
+    requestId: uuid("request_id").notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    phase: text("phase").notNull().default("REQUESTED"),
+    assessment: text("assessment").notNull().default("PENDING"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => [
+    uniqueIndex("ros_cancel_command_unique").on(t.commandId),
+    check(
+      "ros_cancel_actor_valid",
+      sql`${t.actorKind}='anonymous' AND ${t.actorId} IS NULL`,
+    ),
+    check("ros_cancel_attempts_valid", sql`${t.attempts} BETWEEN 0 AND 3`),
+    check(
+      "ros_cancel_phase_valid",
+      sql`${t.phase} IN ('REQUESTED','RECEIVED','SEND_INTENT','ACCEPTED','REJECTED','UNCERTAIN')`,
+    ),
+    check(
+      "ros_cancel_assessment_valid",
+      sql`${t.assessment} IN ('PENDING','REJECTED','UNCERTAIN','CANCELLED','COMPLETED','FAILED')`,
+    ),
+  ],
+);
+export const bridgeCancelEvents = pgTable(
+  "bridge_cancel_events",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    cancelId: uuid("cancel_id").notNull(),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    message: jsonb("message")
+      .$type<import("@drone-fleet/protocol").BridgeCancelEvent>()
+      .notNull(),
+    disposition: text("disposition").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [
+    index("bridge_cancel_events_cancel_idx").on(t.cancelId, t.receivedAt),
+  ],
+);
 export const auditLogs = pgTable(
   "audit_logs",
   {
@@ -67,7 +140,7 @@ export const auditLogs = pgTable(
     index("audit_logs_target_idx").on(t.targetKind, t.targetId, t.occurredAt),
     check(
       "audit_logs_actor_valid",
-      sql`(${t.actorKind}='anonymous' AND ${t.actorId} IS NULL) OR (${t.actorKind}='system' AND ${t.actorId} IS NOT NULL AND ${t.actorId} IN ('telemetry-ingestor','alert-evaluator','operation-evaluator','ota-worker'))`,
+      sql`(${t.actorKind}='anonymous' AND ${t.actorId} IS NULL) OR (${t.actorKind}='system' AND ${t.actorId} IS NOT NULL AND ${t.actorId} IN ('telemetry-ingestor','alert-evaluator','operation-evaluator','ota-worker','cancel-worker'))`,
     ),
     check(
       "audit_logs_result_valid",

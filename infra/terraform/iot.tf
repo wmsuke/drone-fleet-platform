@@ -128,6 +128,20 @@ resource "aws_iot_policy" "device" {
         Action    = "iot:Receive"
         Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-receipts"
         Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid       = "SubscribeBridgeRequests"
+        Effect    = "Allow"
+        Action    = "iot:Subscribe"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-requests"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
+      },
+      {
+        Sid       = "ReceiveBridgeRequests"
+        Effect    = "Allow"
+        Action    = "iot:Receive"
+        Resource  = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-requests"
+        Condition = { Bool = { "iot:Connection.Thing.IsAttached" = "true" } }
       }
     ]
   })
@@ -248,6 +262,12 @@ resource "aws_iot_policy" "api" {
         Effect   = "Allow"
         Action   = "iot:Publish"
         Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/ota-requests"
+      },
+      {
+        Sid      = "PublishBridgeRequests"
+        Effect   = "Allow"
+        Action   = "iot:Publish"
+        Resource = "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/fleet/v1/devices/*/bridge-requests"
       }
     ]
   })

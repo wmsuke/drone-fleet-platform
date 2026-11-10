@@ -39,7 +39,7 @@ class Journal:
             if self.db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise JournalError()
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4, 5, 6) or (existed and version == 0):
+            if version not in (0, 1, 2, 3, 4, 5, 6, 7) or (existed and version == 0):
                 raise JournalError()
             with self.db:
                 self.db.execute("CREATE TABLE IF NOT EXISTS identity (device TEXT NOT NULL)")
@@ -82,7 +82,11 @@ class Journal:
                                 "stop_confirmed INTEGER DEFAULT 0)")
                 self.db.execute("INSERT OR IGNORE INTO action_progress(command) "
                                 "SELECT command FROM action_commands")
-                self.db.execute("PRAGMA user_version=6")
+                self.db.execute("CREATE TABLE IF NOT EXISTS cancel_requests ("
+                                "id TEXT PRIMARY KEY, hash TEXT NOT NULL, body TEXT NOT NULL, "
+                                "state TEXT NOT NULL, attempts INTEGER DEFAULT 0, "
+                                "sent_at REAL, last_event TEXT, response_event TEXT)")
+                self.db.execute("PRAGMA user_version=7")
             self.session = str(uuid.uuid4())
             self.sequence = 0
             contracts = Path("/workspace/contracts")
@@ -102,7 +106,7 @@ class Journal:
         rows, total = self.db.execute(
             "SELECT (SELECT count(*) FROM inbox)+(SELECT count(*) FROM lifecycle)+"
             "(SELECT count(*) FROM bridge_outbox)+(SELECT count(*) FROM action_commands)+"
-            "(SELECT count(*) FROM command_receipts),"
+            "(SELECT count(*) FROM command_receipts)+(SELECT count(*) FROM cancel_requests),"
             "coalesce((SELECT sum(length(body)) FROM inbox),0)+"
             "coalesce((SELECT sum(length(body)) FROM lifecycle),0)+"
             "coalesce((SELECT sum(length(CAST(body AS BLOB))) FROM bridge_outbox),0)+"
@@ -113,7 +117,9 @@ class Journal:
             "FROM command_receipts),0)+"
             "coalesce((SELECT sum(coalesce(length(terminal_event),0)+"
             "coalesce(length(stop_event),0)+"
-            "coalesce(length(last_event),0)) FROM action_progress),0)"
+            "coalesce(length(last_event),0)) FROM action_progress),0)+"
+            "coalesce((SELECT sum(length(CAST(body AS BLOB))+coalesce(length(last_event),0)+"
+            "coalesce(length(response_event),0)) FROM cancel_requests),0)"
         ).fetchone()
         if rows >= self.config.record_limit or total + size > self.config.byte_limit:
             raise JournalError("JOURNAL_FULL")

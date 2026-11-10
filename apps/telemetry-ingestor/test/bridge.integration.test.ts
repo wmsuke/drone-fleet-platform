@@ -175,7 +175,7 @@ describe.skipIf(!enabled)(
           bridge: {
             status: "KNOWN",
             id: "fleet_bridge",
-            version: "0.3.0",
+            version: "0.4.0",
             releaseDigest: "f".repeat(64),
           },
         };

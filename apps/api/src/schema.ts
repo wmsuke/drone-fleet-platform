@@ -65,6 +65,30 @@ export const commandResponseSchema = z.object({
 });
 
 export const commandHistoryItemSchema = commandResponseSchema.extend({
+  cancellation: z
+    .object({
+      cancelId: z.uuid(),
+      phase: z.enum([
+        "REQUESTED",
+        "RECEIVED",
+        "SEND_INTENT",
+        "ACCEPTED",
+        "REJECTED",
+        "UNCERTAIN",
+      ]),
+      assessment: z.enum([
+        "PENDING",
+        "REJECTED",
+        "UNCERTAIN",
+        "CANCELLED",
+        "COMPLETED",
+        "FAILED",
+      ]),
+      stopConfirmation: z.enum(["OBSERVED", "NOT_STARTED", "UNKNOWN"]),
+      humanReviewRequired: z.boolean(),
+      interventionId: z.uuid(),
+    })
+    .optional(),
   executionStatus: z
     .enum([
       "NOT_REPORTED",

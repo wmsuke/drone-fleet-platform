@@ -133,6 +133,8 @@ Bridgeのcommand/goal履歴と重要eventは自動削除せず10,000件/32 MiB�
 
 ## 7. cancel・終端・停止の競合
 
+#195で[中断API・永続配送・証拠/介入記録](../ros-cancellation.md)を実装した。Bridge 0.4.0、SQLite schema 7を使う。CANCEL_COMMANDだけを追加し、下記のQUERY_COMMAND_STATEは今回実装せず、Bridge内部の元UUID GetResult照会で復旧する。通常command履歴では受付・終端・停止・不確定/人間判断待ちを分けて表示する。
+
 #195で`POST /devices/:deviceId/commands/:commandId/cancel`を追加する。理由コード・Idempotency-Keyを必須にし、cancelId、対象command/goal UUID/server世代、作成/送信期限、操作者を固定する。cancel送信は作成後10秒以内、最大3回、同じcancelId/対象だけを再送する。全goal cancel（zero UUID）や時刻指定の一括cancelは禁止し、対象UUID＋zero timestampで特定goalだけを指定する。[CancelGoal契約](https://github.com/ros2/rcl_interfaces/blob/jazzy/action_msgs/srv/CancelGoal.srv)を参照する。
 
 command→goal対応がまだ確認できない受付直後やSEND_INTENT不明では、APIは409 GOAL_UNCONFIRMEDでcancelを実行せず、照会・人間判断へ進む。cancelのためにgoalを作り直さない。機体側から明示的に拒否されたgoalを、cancel再送で実行へ進めない。
@@ -164,7 +166,7 @@ Bridgeのjournal書込不能・owner喪失では新規操作を拒否してrunti
 
 ## 9. wire・DB・権限差分と更新順序
 
-新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。#194までにtelemetry・構成・ROS command・goal受付/feedback/実行終端/停止観測を実装した。Bridge/Adapter 0.3.0とCapability Profile 1.1.0を実行条件とし、旧0.2.0/1.0.0は履歴読み取りだけを維持する。以下のCANCEL・ROS_HEALTH・bridge-requestsは#195/#196の計画であり、現在使えるAPI/topicとして案内しない。
+新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。#194までにtelemetry・構成・ROS command・goal受付/feedback/実行終端/停止観測を実装し、#195でCANCELとbridge-requestsのCANCEL_COMMANDを追加した。通常実行はBridge 0.3.0/0.4.0・Adapter 0.3.0・Capability Profile 1.1.0、中断はBridge 0.4.0を条件とする。旧0.2.0/1.0.0は履歴読み取りだけを維持する。ROS_HEALTHと外部QUERY_COMMAND_STATEは後続計画であり、現在使えるAPI/topicとして案内しない。
 
 | 経路                                | 採用する変更・責務                                                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -56,7 +56,7 @@ export function configuration(digest, deviceId = "bridge-fixture") {
     homeId: "home-fixture",
     adapterConfigurationId: "b".repeat(64),
     profile: { definition, digest: digest(definition) },
-    bridge: known("fleet_bridge"),
+    bridge: { ...known("fleet_bridge"), version: "0.4.0" },
     adapter: known("fleet_reference"),
     runtime: {
       status: "KNOWN",

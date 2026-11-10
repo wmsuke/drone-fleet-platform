@@ -29,6 +29,7 @@ export {
 export {
   createCommandAcksTopic,
   createBridgeEventsTopic,
+  createBridgeRequestsTopic,
   createBridgeReceiptsTopic,
   createOtaRequestsTopic,
   createOtaEventsTopic,

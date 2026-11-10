@@ -19,10 +19,13 @@ import {
   devices,
   bridgeActionEvents,
   rosCommandTargets,
+  bridgeCancelEvents,
+  rosCommandCancels,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import { appendAudit } from "./audit.js";
 import { createBridgeExecutionRepository } from "./bridge-execution.js";
+import { createRosCancelRepository } from "./ros-cancels.js";
 import { rosReadiness, RosCommandError } from "./ros-commands.js";
 
 export function bridgeDigest(value: unknown) {
@@ -65,7 +68,9 @@ function documents(
 }
 export function createBridgeRepository(db: Database) {
   const executions = createBridgeExecutionRepository(db);
+  const cancellations = createRosCancelRepository(db);
   return {
+    cancellations,
     executionState: executions.get,
     expireExecutions: executions.expire,
     async readiness(deviceId: string) {
@@ -88,6 +93,8 @@ export function createBridgeRepository(db: Database) {
     },
     async save(input: BridgeEventMessage, receivedAt: Date) {
       const message = bridgeEventMessageSchema.parse(input);
+      if (message.kind === "CANCEL")
+        return cancellations.save(message, receivedAt);
       if (message.kind !== "CONFIGURATION")
         return executions.save(message, receivedAt);
       if (
@@ -102,6 +109,20 @@ export function createBridgeRepository(db: Database) {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bridge-event:${message.eventId}`},0))`,
         );
+        const [cancelEvent] = await tx
+          .select()
+          .from(bridgeCancelEvents)
+          .where(eq(bridgeCancelEvents.eventId, message.eventId));
+        if (cancelEvent) {
+          await tx
+            .insert(conflicts)
+            .values({ eventId: message.eventId, payloadHash, receivedAt });
+          await tx
+            .update(rosCommandCancels)
+            .set({ assessment: "UNCERTAIN" })
+            .where(eq(rosCommandCancels.cancelId, cancelEvent.cancelId));
+          return null;
+        }
         const [old] = await tx
           .select()
           .from(reports)

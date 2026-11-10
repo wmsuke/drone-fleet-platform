@@ -26,7 +26,7 @@ const component = z.discriminatedUnion("status", [
     .object({
       status: z.literal("KNOWN"),
       id,
-      version: z.enum(["0.2.0", "0.3.0"]),
+      version: z.enum(["0.2.0", "0.3.0", "0.4.0"]),
       releaseDigest: digest,
     })
     .strict(),
@@ -284,7 +284,151 @@ export const bridgeActionEventSchema = z.union([
     })
     .strict(),
 ]);
+export const bridgeCancelRequestSchema = eventBase
+  .omit({ eventId: true, sessionId: true, journalId: true, sequence: true })
+  .extend({
+    kind: z.literal("CANCEL_COMMAND"),
+    requestId: uuid,
+    cancelId: uuid,
+    expiresAt: messageBaseSchema.shape.timestamp,
+    reason: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+  })
+  .strict()
+  .superRefine((request, context) => {
+    if (request.requestId !== request.cancelId)
+      context.addIssue({
+        code: "custom",
+        path: ["requestId"],
+        message: "requestId must equal cancelId",
+      });
+    if (Date.parse(request.expiresAt) !== Date.parse(request.timestamp) + 10000)
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "cancel deadline must be ten seconds after acceptance",
+      });
+  });
+export function validCancelDeadline(
+  request: z.infer<typeof bridgeCancelRequestSchema>,
+) {
+  return (
+    request.requestId === request.cancelId &&
+    Date.parse(request.expiresAt) === Date.parse(request.timestamp) + 10000
+  );
+}
+export const bridgeCancelEventSchema = eventBase
+  .extend({
+    kind: z.literal("CANCEL"),
+    requestId: uuid,
+    cancelId: uuid,
+    phase: z.enum([
+      "RECEIVED",
+      "SEND_INTENT",
+      "ACCEPTED",
+      "REJECTED",
+      "UNCERTAIN",
+    ]),
+    reason: z.enum([
+      "RECEIVED",
+      "CANCEL_SENT",
+      "CANCEL_ACCEPTED",
+      "CANCEL_REJECTED",
+      "NO_GOAL_CANCELING",
+      "UNKNOWN_GOAL",
+      "ALREADY_TERMINAL",
+      "EXPIRED",
+      "RESPONSE_TIMEOUT",
+      "SERVER_CHANGED",
+      "SCOPE_MISMATCH",
+      "BRIDGE_RESTART",
+      "RESULT_INVALID",
+    ]),
+    attempt: z.number().int().min(0).max(3),
+    rawResponse: z
+      .object({
+        hash: digest,
+        bytes: metric,
+        cdr: z
+          .string()
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+          .max(8192)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    response: z
+      .object({
+        returnCode: z.number().int().min(0).max(3),
+        goalsCanceling: z.array(uuid).max(1),
+        cdr: z
+          .string()
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+          .max(8192),
+        hash: digest,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((event, context) => {
+    const fail = () =>
+      context.addIssue({
+        code: "custom",
+        message: "cancel phase, attempt and response must agree",
+      });
+    if (event.requestId !== event.cancelId) fail();
+    if (
+      event.phase === "RECEIVED" &&
+      (event.attempt !== 0 || event.reason !== "RECEIVED" || event.response)
+    )
+      fail();
+    if (
+      event.phase === "SEND_INTENT" &&
+      (event.attempt === 0 || event.reason !== "CANCEL_SENT" || event.response)
+    )
+      fail();
+    if (
+      event.phase === "ACCEPTED" &&
+      (event.attempt === 0 ||
+        event.reason !== "CANCEL_ACCEPTED" ||
+        !event.response ||
+        event.response.returnCode !== 0 ||
+        event.response.goalsCanceling.length !== 1 ||
+        event.response.goalsCanceling[0] !== event.goalId)
+    )
+      fail();
+    if (
+      event.phase === "REJECTED" &&
+      (event.attempt === 0 ||
+        !event.response ||
+        event.response.goalsCanceling.length !== 0 ||
+        event.reason !==
+          [
+            "NO_GOAL_CANCELING",
+            "CANCEL_REJECTED",
+            "UNKNOWN_GOAL",
+            "ALREADY_TERMINAL",
+          ][event.response.returnCode])
+    )
+      fail();
+    if (
+      event.phase === "UNCERTAIN" &&
+      (event.response ||
+        ![
+          "EXPIRED",
+          "RESPONSE_TIMEOUT",
+          "SERVER_CHANGED",
+          "SCOPE_MISMATCH",
+          "BRIDGE_RESTART",
+          "RESULT_INVALID",
+        ].includes(event.reason))
+    )
+      fail();
+  });
+export type BridgeCancelRequest = z.infer<typeof bridgeCancelRequestSchema>;
+export type BridgeCancelEvent = z.infer<typeof bridgeCancelEventSchema>;
 export const bridgeEventMessageSchema = z.union([
+  bridgeCancelEventSchema,
   bridgeConfigurationEventSchema,
   bridgeActionEventSchema,
 ]);

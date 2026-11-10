@@ -1,10 +1,11 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>fleet_bridge</name><version>0.3.0</version>
+  <name>fleet_bridge</name><version>0.4.0</version>
   <description>MQTTとROS clientの独立したlifecycle。</description>
   <maintainer email="maintainers@example.invalid">Fleet Platform</maintainer><license>MIT</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend><exec_depend>fleet_bridge_interfaces</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
   <exec_depend>fleet_reference</exec_depend>
   <exec_depend>sensor_msgs</exec_depend><exec_depend>nav_msgs</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>

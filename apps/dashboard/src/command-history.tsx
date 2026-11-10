@@ -33,6 +33,22 @@ const executionLabels = {
   REJECTED: "実行拒否（未開始）",
   CANCELLED: "実行中断",
 } as const;
+const cancelLabels = {
+  REQUESTED: "中断要求を保存（端末受領は未確認）",
+  RECEIVED: "中断要求をBridgeが受領",
+  SEND_INTENT: "ROSへの中断送信意図を記録（送信結果は未確認）",
+  ACCEPTED: "ROSが中断を受付（終端・停止は未確定）",
+  REJECTED: "ROSの中断受付なし（理由は証拠で確認）",
+  UNCERTAIN: "中断応答が不明",
+} as const;
+const cancelAssessments = {
+  PENDING: "中断結果を確認中",
+  REJECTED: "中断要求は拒否",
+  UNCERTAIN: "中断確認は不確定",
+  CANCELLED: "実行中断の終端と停止観測あり",
+  COMPLETED: "元の操作が実行成功",
+  FAILED: "元の操作が実行失敗",
+} as const;
 
 function formatTimestamp(value: string | null): string {
   if (value === null) {
@@ -58,6 +74,26 @@ function CommandHistoryRow({ command }: { command: CommandHistoryItem }) {
           {executionLabels[command.executionStatus]}
           （ACK・停止確認とは別の状態）
         </p>
+      )}
+      {command.cancellation && (
+        <div aria-label="中断の状態">
+          <p>{cancelLabels[command.cancellation.phase]}</p>
+          <p>
+            {cancelAssessments[command.cancellation.assessment]}
+            {command.cancellation.humanReviewRequired && "・人間判断待ち"}
+          </p>
+          <p>
+            {command.cancellation.stopConfirmation === "OBSERVED"
+              ? "参照モデルの停止観測あり（物理安全停止の保証ではない）"
+              : command.cancellation.stopConfirmation === "NOT_STARTED"
+                ? "実行未開始"
+                : "停止観測は未確認"}
+          </p>
+          <p>
+            介入ID {command.cancellation.interventionId} / 中断ID{" "}
+            {command.cancellation.cancelId}
+          </p>
+        </div>
       )}
       <p>
         <Link to={`/audit-logs?commandId=${command.commandId}`}>

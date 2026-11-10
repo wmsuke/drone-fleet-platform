@@ -44,7 +44,7 @@ await until(async () => {
 });
 assert.deepEqual(configuration.supportedOperations, ["RETURN_HOME"]);
 assert.equal(typeof configuration.ready, "boolean");
-assert.equal(configuration.reported.configuration.bridge.version, "0.3.0");
+assert.equal(configuration.reported.configuration.bridge.version, "0.4.0");
 assert.equal(configuration.reported.configuration.adapter.version, "0.3.0");
 assert.equal(configuration.reported.configuration.ai.status, "NOT_APPLICABLE");
 assert.equal(configuration.reported.configuration.runtime.rosDistro, "jazzy");
@@ -128,12 +128,21 @@ await writeFile(
 );
 // namespace所有containerの停止はMQTT linkも切るため、publisherだけを凍結する。
 compose("pause", "ros-reference");
-await until(async () => {
-  const state = await fetch(`${url}/devices/${device}`).then((r) => r.json());
-  return (
-    state.latestObservation.message.payload.quality.battery.reason === "STALE"
+let staleState;
+try {
+  await until(async () => {
+    staleState = await fetch(`${url}/devices/${device}`).then((r) => r.json());
+    return (
+      staleState.latestObservation.message.payload.quality.battery.reason ===
+      "STALE"
+    );
+  });
+} finally {
+  await writeFile(
+    `${results}/stale-wait.json`,
+    JSON.stringify(staleState ?? null, null, 2),
   );
-});
+}
 await until(
   () =>
     compose(

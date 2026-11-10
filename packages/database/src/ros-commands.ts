@@ -79,7 +79,7 @@ export async function rosReadiness(
   const snapshot = configuration.snapshot;
   if (
     snapshot.bridge.status !== "KNOWN" ||
-    snapshot.bridge.version !== "0.3.0" ||
+    !["0.3.0", "0.4.0"].includes(snapshot.bridge.version) ||
     snapshot.adapter.status !== "KNOWN" ||
     snapshot.adapter.version !== "0.3.0" ||
     snapshot.profile.definition.version !== "1.1.0"

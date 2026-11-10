@@ -1,0 +1,18 @@
+{
+  "devices": [
+    {
+      "device_id": "ros-cancel-normal",
+      "scenario": "delayed_cancel",
+      "cancel_delay_sec": 1.5
+    },
+    {
+      "device_id": "ros-cancel-race",
+      "scenario": "delayed_cancel",
+      "cancel_delay_sec": 5
+    },
+    { "device_id": "ros-cancel-reject", "scenario": "cancel_reject" },
+    { "device_id": "ros-cancel-timeout", "scenario": "unresponsive" },
+    { "device_id": "ros-cancel-offline", "scenario": "unresponsive" },
+    { "device_id": "ros-cancel-unknown", "result_cache_sec": 0.1 }
+  ]
+}

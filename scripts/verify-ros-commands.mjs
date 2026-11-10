@@ -5,12 +5,14 @@ import { writeFile } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 import process from "node:process";
 import console from "node:console";
+import { verifyCancellations } from "./verify-ros-cancels.mjs";
 import { Buffer } from "node:buffer";
 /* global fetch */
 
 const [url, results, project] = process.argv.slice(2);
 let device = "ros-command-success",
-  fault = "";
+  fault = "",
+  referenceConfig = "/workspace/config/commands.json";
 function compose(...args) {
   return execFileSync(
     "docker",
@@ -32,6 +34,7 @@ function compose(...args) {
         ...process.env,
         ROS_COMMAND_DEVICE: device,
         ROS_COMMAND_FAULT: fault,
+        ROS_REFERENCE_CONFIG: referenceConfig,
       },
     },
   );
@@ -166,6 +169,14 @@ async function switchDevice(next, point = "") {
   compose("up", "-d", "--no-deps", "--force-recreate", "ros-bridge");
   return ready();
 }
+async function switchReference(config, next) {
+  referenceConfig = `/workspace/config/${config}.json`;
+  compose("stop", "ros-bridge", "ros-bridge-peer");
+  // 停止済みpeerも旧referenceのnetwork/IPC IDを保持するため、切替前に除く。
+  compose("rm", "-f", "ros-bridge-peer");
+  compose("up", "-d", "--no-deps", "--force-recreate", "ros-reference");
+  await switchDevice(next);
+}
 function kill() {
   compose("kill", "-s", "SIGKILL", "ros-bridge");
 }
@@ -188,6 +199,31 @@ async function barrier(id) {
   }, `fault ${fault}`);
 }
 const evidence = [];
+if (process.env.ROS_COMMANDS_CASES === "cancel") {
+  await switchReference("cancels", "ros-cancel-normal");
+  await verifyCancellations({
+    api,
+    send,
+    switchDevice,
+    execution,
+    compose,
+    until,
+    sql,
+    publish,
+    evidence,
+    kill,
+    restart,
+    barrier,
+  });
+  await writeFile(
+    `${results}/action-evidence.json`,
+    JSON.stringify(evidence, null, 2),
+  );
+  console.log(
+    "Real CancelGoal accept/reject/delay/race/unknown, ten-second uncertainty and restart: passed",
+  );
+  process.exit(0);
+}
 await ready();
 assert.equal(
   (await api(`/devices/${device}/commands`, { type: "REBOOT" })).status,
@@ -422,6 +458,22 @@ await until(
 );
 evidence.push({ case: "simulator-v2-coexistence", id: legacy.body.commandId });
 
+await switchReference("cancels", "ros-cancel-normal");
+await verifyCancellations({
+  api,
+  send,
+  switchDevice,
+  execution,
+  compose,
+  until,
+  sql,
+  publish,
+  evidence,
+  kill,
+  restart,
+  barrier,
+});
+await switchReference("commands", "ros-command-generation");
 await switchDevice("ros-command-generation", "AFTER_SEND_GOAL");
 const changed = await send();
 await barrier(changed.id);
@@ -493,4 +545,7 @@ console.log(
 );
 console.log(
   "Quarantine, 120-second unreported deadline, stop-held exclusivity, OTA gate, fleet aggregation and simulator v2: passed",
+);
+console.log(
+  "Real CancelGoal accept/reject/delay/race/unknown, ten-second uncertainty and restart: passed",
 );

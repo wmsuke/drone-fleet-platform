@@ -12,10 +12,12 @@ import { rosObservationMessageSchema } from "../dist/ros-observation.js";
 import { telemetryReceiptMessageSchema } from "../dist/telemetry-receipt.js";
 import { fixtures } from "../test/fixtures/ros-observations.mjs";
 import { actionFixtures } from "../test/fixtures/bridge-actions.mjs";
+import { cancelFixtures } from "../test/fixtures/bridge-cancels.mjs";
 import {
   bridgeEventMessageSchema,
   bridgeReceiptMessageSchema,
   adapterConfigurationSchema,
+  bridgeCancelRequestSchema,
 } from "../dist/bridge.js";
 
 const schema = z.toJSONSchema(connectionStatusMessageSchema, {
@@ -23,6 +25,10 @@ const schema = z.toJSONSchema(connectionStatusMessageSchema, {
   io: "input",
 });
 const outputs = [
+  [
+    "cancel-fixtures.json",
+    await format(JSON.stringify(cancelFixtures), { parser: "json" }),
+  ],
   [
     "action-fixtures.json",
     await format(JSON.stringify(actionFixtures), { parser: "json" }),
@@ -41,6 +47,7 @@ const outputs = [
   ...(await Promise.all(
     [
       ["bridge-event.schema.json", bridgeEventMessageSchema],
+      ["bridge-cancel.schema.json", bridgeCancelRequestSchema],
       ["ros-command.schema.json", rosCommandMessageSchema],
       ["bridge-receipt.schema.json", bridgeReceiptMessageSchema],
       ["adapter-configuration.schema.json", adapterConfigurationSchema],

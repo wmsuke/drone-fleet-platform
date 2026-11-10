@@ -27,6 +27,7 @@ from rclpy.signals import SignalHandlerOptions
 from rclpy.event_handler import SubscriptionEventCallbacks
 from rclpy.duration import Duration
 from unique_identifier_msgs.msg import UUID
+from action_msgs.srv import CancelGoal
 
 from .adapter import matches_runtime
 from .observations import Observations
@@ -92,6 +93,9 @@ class RosClient:
         self.result_client = self.node.create_client(
             ReturnHome.Impl.GetResultService, config.namespace + "/return_home/_action/get_result",
             callback_group=self.group)
+        self.cancel_client = self.node.create_client(
+            CancelGoal, config.namespace + "/return_home/_action/cancel_goal",
+            callback_group=self.group)
         self.heartbeat_publisher = self.node.create_publisher(
             BridgeHeartbeat, "bridge_heartbeat", QoSProfile(depth=1, deadline=Duration(seconds=2)))
         self.timer = self.node.create_timer(0.2, self.tick)
@@ -119,13 +123,16 @@ class RosClient:
                     "ros_reason": self.reason if fresh or self.reason == "ROS_EXECUTOR_FAILED"
                     else "ROS_UNAVAILABLE"}
 
-    def tick(self):
-        now = time.monotonic()
+    def publish_heartbeat(self, now):
         with self.guard:
             permission = self.owner_permission if now - self.owner_permission_at < 1.5 else None
-        if permission and now >= self.next_heartbeat:
-            self.next_heartbeat = now + 1
-            self.heartbeat_publisher.publish(permission)
+            if permission and now >= self.next_heartbeat:
+                self.next_heartbeat = now + 1
+                self.heartbeat_publisher.publish(permission)
+
+    def tick(self):
+        now = time.monotonic()
+        self.publish_heartbeat(now)
         self.tick_configuration(now)
         if self.pending:
             if self.pending.done():
@@ -217,6 +224,7 @@ class RosClient:
 
     def permit_heartbeat(self, owner_id, state):
         with self.guard:
+            previous = self.owner_permission
             self.owner_permission = None
             if state is not None:
                 message = BridgeHeartbeat()
@@ -228,6 +236,13 @@ class RosClient:
                 message.expected_configuration_id = state.configuration_id
                 message.has_goal = state.has_active_goal
                 message.goal_id = state.active_goal_id
+                # goal切替直後に旧goalの周期を引き継ぐと、Adapterが旧heartbeatを
+                # 拒否する間にwatchdogが発火する。新たに検証したidentityは即送信する。
+                identity = ("owner_id", "server_instance_id", "expected_configuration_id",
+                            "has_goal", "goal_id")
+                if previous is None or any(getattr(previous, key) != getattr(message, key)
+                                           for key in identity):
+                    self.next_heartbeat = 0
                 self.owner_permission = message
                 self.owner_permission_at = time.monotonic()
 
@@ -268,6 +283,16 @@ class RosClient:
     def abandon_query(self, future):
         self.result_client.remove_pending_request(future)
         future.cancel()  # goal cancelではなくローカル照会の取消。
+
+    def cancel(self, goal_id):
+        request = CancelGoal.Request()
+        request.goal_info.goal_id = UUID(uuid=list(uuid.UUID(goal_id).bytes))
+        # timestampはzeroのまま。特定goal以外や時刻以前の全goalを中断しない。
+        return self.cancel_client.call_async(request)
+
+    def abandon_cancel(self, future):
+        self.cancel_client.remove_pending_request(future)
+        future.cancel()  # 中断要求を取り消すのではなくローカル待ちだけを解放する。
 
     def close(self):
         self.timer.cancel()

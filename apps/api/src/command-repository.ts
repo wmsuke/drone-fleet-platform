@@ -2,6 +2,8 @@ import {
   commands,
   commandOutbox,
   devices,
+  rosCommandCancels,
+  rosCommandTargets,
   appendAudit,
   reserveRosCommand,
   type Database,
@@ -134,12 +136,51 @@ export function createCommandRepository(database: Database): CommandRepository {
         return null;
       }
       const history = await database
-        .select()
+        .select({
+          command: commands,
+          cancellation: rosCommandCancels,
+          target: rosCommandTargets,
+        })
         .from(commands)
+        .leftJoin(
+          rosCommandCancels,
+          eq(rosCommandCancels.commandId, commands.commandId),
+        )
+        .leftJoin(
+          rosCommandTargets,
+          eq(rosCommandTargets.commandId, commands.commandId),
+        )
         .where(eq(commands.deviceId, deviceId))
         .orderBy(desc(commands.createdAt), desc(commands.commandId))
         .limit(limit);
-      return history.map(toCommandHistoryItem);
+      return history.map(({ command, cancellation, target }) => ({
+        ...toCommandHistoryItem(command),
+        ...(cancellation && target
+          ? {
+              cancellation: {
+                cancelId: cancellation.cancelId,
+                phase: cancellation.phase as NonNullable<
+                  CommandHistoryItem["cancellation"]
+                >["phase"],
+                assessment: cancellation.assessment as NonNullable<
+                  CommandHistoryItem["cancellation"]
+                >["assessment"],
+                stopConfirmation: target.stopConfirmed
+                  ? ("OBSERVED" as const)
+                  : target.notStarted
+                    ? ("NOT_STARTED" as const)
+                    : ("UNKNOWN" as const),
+                humanReviewRequired:
+                  cancellation.assessment === "UNCERTAIN" ||
+                  target.conflicted ||
+                  (new Date() >= cancellation.expiresAt &&
+                    !target.stopConfirmed &&
+                    !target.notStarted),
+                interventionId: cancellation.interventionId,
+              },
+            }
+          : {}),
+      }));
     },
   };
 }

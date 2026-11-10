@@ -15,10 +15,13 @@ import {
   rosCommandTargets,
   bridgeActionEvents,
   bridgeCommandConfigurations,
+  rosCommandCancels,
+  bridgeCancelEvents,
 } from "@drone-fleet/database";
 import {
   bridgeConfigurationEventSchema,
   bridgeActionEventSchema,
+  bridgeCancelEventSchema,
   rosObservationMessageSchema,
 } from "@drone-fleet/protocol";
 import { report } from "../../../packages/protocol/test/fixtures/bridge.mjs";
@@ -45,6 +48,18 @@ describe.skipIf(!enabled)(
     afterAll(async () => {
       for (const app of apps) await app.close();
       for (const id of commandIds) {
+        const [cancel] = await database!.db
+          .select()
+          .from(rosCommandCancels)
+          .where(eq(rosCommandCancels.commandId, id));
+        if (cancel) {
+          await database!.db
+            .delete(bridgeCancelEvents)
+            .where(eq(bridgeCancelEvents.cancelId, cancel.cancelId));
+          await database!.db
+            .delete(rosCommandCancels)
+            .where(eq(rosCommandCancels.commandId, id));
+        }
         await database!.db
           .delete(bridgeActionEvents)
           .where(eq(bridgeActionEvents.commandId, id));
@@ -189,6 +204,248 @@ describe.skipIf(!enabled)(
         evidence,
       };
     }
+    it("keeps idempotent cancel acceptance distinct from result/stop and preserves late responses", async () => {
+      const f = await fixture(),
+        path = `/devices/${f.id}/commands/${f.commandId}/cancel`;
+      const post = (key = "fixed", reason = "OPERATOR_REQUEST") =>
+        f.app.inject({
+          method: "POST",
+          url: path,
+          headers: { "idempotency-key": key },
+          payload: { reason },
+        });
+      expect((await post()).statusCode).toBe(409);
+      await f.repo.save(
+        f.event({
+          kind: "GOAL_ACCEPTED",
+          reason: "GOAL_ACCEPTED",
+          timestamp: f.time(0.1).toISOString(),
+        }),
+        f.time(0.1),
+      );
+      const results = await Promise.all([post(), post()]);
+      expect(results.map((r) => r.statusCode)).toEqual([202, 202]);
+      const first = results[0]!.json().state;
+      expect(results[1]!.json().cancelId).toBe(first.cancelId);
+      expect((await post("fixed", "DIFFERENT_REASON")).statusCode).toBe(409);
+      expect((await post("different")).statusCode).toBe(409);
+      const request = first.request;
+      const message = bridgeCancelEventSchema.parse({
+        ...f.event({ kind: "GOAL_ACCEPTED", reason: "GOAL_ACCEPTED" }),
+        timestamp: new Date(Date.parse(request.timestamp) + 1000).toISOString(),
+        kind: "CANCEL",
+        phase: "ACCEPTED",
+        reason: "CANCEL_ACCEPTED",
+        requestId: request.requestId,
+        cancelId: request.cancelId,
+        attempt: 1,
+        response: {
+          returnCode: 0,
+          goalsCanceling: [f.goalId],
+          cdr: "dW5pdA==",
+          hash: createHash("sha256").update("unit").digest("hex"),
+        },
+      });
+      const receipt = await f.repo.save(message, new Date(message.timestamp));
+      expect(await f.repo.save(message, new Date(message.timestamp))).toEqual(
+        receipt,
+      );
+      let state = (await f.repo.cancellations.get(
+        f.id,
+        f.commandId,
+        new Date(message.timestamp),
+      ))!;
+      expect(state).toMatchObject({
+        phase: "ACCEPTED",
+        assessment: "PENDING",
+        terminalStatus: "NOT_REPORTED",
+        stopConfirmation: "UNKNOWN",
+        actorKind: "anonymous",
+        actorId: null,
+      });
+      state = (await f.repo.cancellations.get(
+        f.id,
+        f.commandId,
+        new Date(Date.parse(request.expiresAt) + 1),
+      ))!;
+      expect(state).toMatchObject({
+        assessment: "UNCERTAIN",
+        terminalStatus: "NOT_REPORTED",
+        humanReviewRequired: true,
+      });
+      const late = { ...message, eventId: randomUUID() };
+      await f.repo.save(late, new Date(Date.parse(request.expiresAt) + 2000));
+      state = (await f.repo.cancellations.get(
+        f.id,
+        f.commandId,
+        new Date(Date.parse(request.expiresAt) + 2001),
+      ))!;
+      expect(state.assessment).toBe("UNCERTAIN");
+      const history = await f.app.inject(`/devices/${f.id}/commands`);
+      expect(history.statusCode).toBe(200);
+      expect(history.json()[0].cancellation).toMatchObject({
+        assessment: "UNCERTAIN",
+        humanReviewRequired: true,
+        stopConfirmation: "UNKNOWN",
+      });
+      expect(state.events.some((e) => e.disposition === "LATE")).toBe(true);
+      await expect(
+        f.db
+          .update(rosCommandCancels)
+          .set({ request: { ...request, goalId: randomUUID() } })
+          .where(eq(rosCommandCancels.cancelId, first.cancelId)),
+      ).rejects.toThrow();
+      await expect(
+        f.db
+          .update(bridgeCancelEvents)
+          .set({ disposition: "OTHER" })
+          .where(eq(bridgeCancelEvents.eventId, message.eventId)),
+      ).rejects.toThrow();
+      expect(
+        await f.repo.save({ ...f.config, eventId: message.eventId }, f.time(9)),
+      ).toBeNull();
+    });
+    it("retains cancel rejection but requires human review if no terminal and stop arrive", async () => {
+      const f = await fixture();
+      await f.repo.save(
+        f.event({
+          kind: "GOAL_ACCEPTED",
+          reason: "GOAL_ACCEPTED",
+          timestamp: f.time(0.1).toISOString(),
+        }),
+        f.time(0.1),
+      );
+      const r = await f.repo.cancellations.create(
+        f.id,
+        f.commandId,
+        "reject-timeout",
+        "OPERATOR_REQUEST",
+        f.time(0.2),
+      );
+      const event = bridgeCancelEventSchema.parse({
+        ...f.event({ kind: "GOAL_ACCEPTED", reason: "GOAL_ACCEPTED" }),
+        kind: "CANCEL",
+        phase: "REJECTED",
+        reason: "CANCEL_REJECTED",
+        requestId: r.cancelId,
+        cancelId: r.cancelId,
+        attempt: 1,
+        response: {
+          returnCode: 1,
+          goalsCanceling: [],
+          cdr: "dW5pdA==",
+          hash: createHash("sha256").update("unit").digest("hex"),
+        },
+      });
+      await f.repo.save(event, f.time(5));
+      expect(
+        (await f.repo.cancellations.get(f.id, f.commandId, f.time(6)))!
+          .assessment,
+      ).toBe("REJECTED");
+      expect(
+        await f.repo.cancellations.get(f.id, f.commandId, f.time(11)),
+      ).toMatchObject({
+        phase: "REJECTED",
+        assessment: "UNCERTAIN",
+        humanReviewRequired: true,
+        terminalStatus: "NOT_REPORTED",
+        stopConfirmation: "UNKNOWN",
+      });
+    });
+    it("bounds cancel transport attempts across worker instances without changing the command", async () => {
+      const f = await fixture();
+      await f.repo.save(
+        f.event({
+          kind: "GOAL_ACCEPTED",
+          reason: "GOAL_ACCEPTED",
+          timestamp: f.time(0.1).toISOString(),
+        }),
+        f.time(0.1),
+      );
+      const at = f.time(1),
+        r = await f.repo.cancellations.create(
+          f.id,
+          f.commandId,
+          "bounded",
+          "OPERATOR_REQUEST",
+          at,
+        );
+      const sent: string[] = [];
+      for (const offset of [1, 4, 7, 9])
+        await createBridgeRepository(f.db).cancellations.dispatch(
+          async (topic, body) => {
+            sent.push(body);
+            expect(topic).toBe(`fleet/v1/devices/${f.id}/bridge-requests`);
+          },
+          () => f.time(offset),
+        );
+      expect(sent).toHaveLength(3);
+      expect(new Set(sent).size).toBe(1);
+      const state = (await f.repo.cancellations.get(
+        f.id,
+        f.commandId,
+        f.time(12),
+      ))!;
+      expect(state).toMatchObject({
+        cancelId: r.cancelId,
+        attempts: 3,
+        assessment: "UNCERTAIN",
+        terminalStatus: "NOT_REPORTED",
+        stopConfirmation: "UNKNOWN",
+      });
+    });
+    it("does not erase a terminal success when a cancel response arrives before or after it", async () => {
+      for (const acceptedFirst of [true, false]) {
+        const f = await fixture();
+        await f.repo.save(
+          f.event({
+            kind: "GOAL_ACCEPTED",
+            reason: "GOAL_ACCEPTED",
+            timestamp: f.time(0.1).toISOString(),
+          }),
+          f.time(0.1),
+        );
+        const r = await f.repo.cancellations.create(
+          f.id,
+          f.commandId,
+          "race",
+          "OPERATOR_REQUEST",
+          f.time(0.2),
+        );
+        const cancel = bridgeCancelEventSchema.parse({
+          ...f.event({ kind: "GOAL_ACCEPTED", reason: "GOAL_ACCEPTED" }),
+          kind: "CANCEL",
+          phase: "ACCEPTED",
+          reason: "CANCEL_ACCEPTED",
+          requestId: r.cancelId,
+          cancelId: r.cancelId,
+          attempt: 1,
+          response: {
+            returnCode: 0,
+            goalsCanceling: [f.goalId],
+            cdr: "dW5pdA==",
+            hash: createHash("sha256").update("unit").digest("hex"),
+          },
+        });
+        const success = f.event({
+          kind: "EXECUTION",
+          status: "SUCCEEDED",
+          reason: "HOME_REACHED",
+          startedAt: f.time(1).toISOString(),
+          result: f.evidence,
+        });
+        if (acceptedFirst) await f.repo.save(cancel, f.time(4));
+        await f.repo.save(success, f.time(5));
+        if (!acceptedFirst) await f.repo.save(cancel, f.time(5.1));
+        expect(
+          (await f.repo.executionState(f.commandId))!.command.executionStatus,
+        ).toBe("SUCCEEDED");
+        expect(
+          (await f.repo.cancellations.get(f.id, f.commandId, f.time(6)))!
+            .stopConfirmation,
+        ).toBe("UNKNOWN");
+      }
+    });
     it("routes v3, separates receipt/accept/feedback/result/stop, and defers an out-of-order stop", async () => {
       const f = await fixture();
       const [outbox] = await f.db

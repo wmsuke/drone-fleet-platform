@@ -50,6 +50,46 @@ function historyResponse(status: "SENT" | "ACKNOWLEDGED" = "ACKNOWLEDGED") {
 }
 
 describe("CommandHistory", () => {
+  it.each([
+    ["PENDING", false, "中断結果を確認中"],
+    ["UNCERTAIN", true, "中断確認は不確定・人間判断待ち"],
+  ] as const)(
+    "keeps cancel acceptance, assessment %s and stop distinct",
+    async (assessment, humanReviewRequired, label) => {
+      const old = await historyResponse().json();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify([
+              {
+                ...old[0],
+                executionStatus: "RUNNING",
+                cancellation: {
+                  cancelId: "11111111-1111-4111-8111-111111111111",
+                  interventionId: "22222222-2222-4222-8222-222222222222",
+                  phase: "ACCEPTED",
+                  assessment,
+                  humanReviewRequired,
+                  stopConfirmation: "UNKNOWN",
+                },
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+      );
+      renderHistory();
+      expect(
+        await screen.findByText("ROSが中断を受付（終端・停止は未確定）"),
+      ).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText("停止観測は未確認")).toBeInTheDocument();
+      expect(
+        screen.queryByText("実行中断の終端と停止観測あり"),
+      ).not.toBeInTheDocument();
+    },
+  );
   it("distinguishes a ROS not-started rejection from receipt and stop confirmation", async () => {
     const old = await historyResponse().json();
     vi.stubGlobal(

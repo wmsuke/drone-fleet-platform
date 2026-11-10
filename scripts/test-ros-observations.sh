@@ -9,6 +9,7 @@ compose=(docker compose -p "$project" -f compose.yaml -f compose.ros-observation
 echo "Results: $results"
 cleanup() {
   local status=$?
+  "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(r) FROM ros_observations r ORDER BY received_at,id' > "$results/db-observations.jsonl" 2>/dev/null || true
   "${compose[@]}" exec -T ros-bridge python3 -c 'import sqlite3,json; db=sqlite3.connect("/data/fleet/bridge.sqlite3"); print(json.dumps(db.execute("SELECT id,session,sequence,body FROM telemetry_outbox ORDER BY id").fetchall()))' > "$results/pending.json" 2>/dev/null || true
   "${compose[@]}" exec -T ros-bridge cat /data/fleet/health.json > "$results/health.json" 2>/dev/null || true
   "${compose[@]}" logs --no-color > "$results/services.log" 2>&1 || true

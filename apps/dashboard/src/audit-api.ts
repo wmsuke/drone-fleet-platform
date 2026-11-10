@@ -1,5 +1,9 @@
 import { ApiError } from "./api.js";
 export const auditActions = [
+  "command.cancel_requested",
+  "command.cancel_replayed",
+  "command.cancel_sent",
+  "command.cancel_changed",
   "bridge.desired_changed",
   "deployment.intervention_started",
   "deployment.intervention_completed",

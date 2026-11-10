@@ -238,7 +238,10 @@
           "properties": {
             "status": { "type": "string", "const": "KNOWN" },
             "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$" },
-            "version": { "type": "string", "enum": ["0.2.0", "0.3.0"] },
+            "version": {
+              "type": "string",
+              "enum": ["0.2.0", "0.3.0", "0.4.0"]
+            },
             "releaseDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
           },
           "required": ["status", "id", "version", "releaseDigest"],

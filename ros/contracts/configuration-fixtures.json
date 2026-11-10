@@ -11,7 +11,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
+      "configurationId": "27fa94d5d61976152becfe668f8e717f9fc6b5fa778e3fffa39f34af60fc975c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -56,7 +56,7 @@
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.3.0",
+          "version": "0.4.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
@@ -120,7 +120,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
+      "configurationId": "27fa94d5d61976152becfe668f8e717f9fc6b5fa778e3fffa39f34af60fc975c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -224,7 +224,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
+      "configurationId": "27fa94d5d61976152becfe668f8e717f9fc6b5fa778e3fffa39f34af60fc975c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -333,7 +333,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
+      "configurationId": "27fa94d5d61976152becfe668f8e717f9fc6b5fa778e3fffa39f34af60fc975c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -378,7 +378,7 @@
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.3.0",
+          "version": "0.4.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
@@ -442,7 +442,7 @@
       "sequence": 1,
       "reportSequence": 1,
       "configurationRevision": 1,
-      "configurationId": "35090ae05b6f0169a8cb248c916e9f11734d255d6b022846d8b97c7f5443974c",
+      "configurationId": "27fa94d5d61976152becfe668f8e717f9fc6b5fa778e3fffa39f34af60fc975c",
       "configuration": {
         "deviceId": "bridge-fixture",
         "namespace": "/fleet/d_6272696467652d66697874757265",
@@ -487,7 +487,7 @@
         "bridge": {
           "status": "KNOWN",
           "id": "fleet_bridge",
-          "version": "0.3.0",
+          "version": "0.4.0",
           "releaseDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         "adapter": {
