@@ -169,6 +169,13 @@
       "when": 1793951509135,
       "tag": "0023_new_ink",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794270672401,
+      "tag": "0024_amused_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

@@ -334,7 +334,9 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
-## Phase 6のROS 2 Bridge設計（Action実行・結果保存・再照会まで実装）
+## Phase 6のROS 2 Bridge設計（Action実行・再照会・中断追跡まで実装）
+
+#195で[中断要求・結果・停止観測の追跡](ros-cancellation.md)を追加した。冪等cancel APIとbridge-requests、永続予算、中断証拠と介入/auditを接続し、受付・実行終端・停止を分ける。cancel受付は成功や排他解除ではなく、不確定時は人間判断へ渡す。
 
 #191で[Bridgeの起動・終了処理](ros-bridge.md)、#192で[ROS観測の変換と保存](ros-observations.md)を追加した。MQTT購読とROSの型付き照会を独立させ、設定検証・SQLiteの単一owner・受信commit後のPUBACK・終了時の記録保持を実装する。観測はtelemetry v3・専用ros_observationsへ保存し、DB receiptまで永続再送する。#194で[ROS command v3の受付・Action実行・結果保存・復旧](ros-command-journal.md)を追加した。構成・観測・排他・期限を検証して実行し、結果不明や停止未確認では次のcommandとOTAを保留する。
 

@@ -4,6 +4,8 @@ Issue #193で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)の構成�
 
 ## 能力と実使用情報
 
+#195の中断対応Bridgeは0.4.0とし、Adapter/interfaces 0.3.0、Profile 1.1.0を維持する。旧0.3.0は通常実行と履歴を維持し、中断APIだけを新versionへ限定する。詳細は[中断の追跡](ros-cancellation.md)を参照する。
+
 Capability Profile v1.1.0は型式reference_vehicle、RETURN_HOMEから専用ReturnHome Actionへの対応、相対Action名、map/base_link、ENU、m・m/s・rad/s、必要sensor、起動時homeの定義、制約とresultCacheMsを固定する。旧v1.0.0は履歴として読み取れるが、新規実行には使わない。REBOOTをnode再起動へ読み替えない。
 
 参照AdapterのGetConfiguration serviceから、実起動server UUID、home ID、既存Adapter設定digest、profile、Adapterの実package versionとsource digest、ROS distro/RMW/Python/architectureとbuild manifest digest、適用運用policy、安全設定を取得する。BridgeはGetRuntimeStateのdevice/server/config/homeと一致した新鮮な報告だけへ自身の実package version/source digestを加える。サービス照会は非同期・2秒期限で、MQTT callbackから待たない。

@@ -54,6 +54,8 @@ async function main(): Promise<void> {
     return result;
   };
   const outbox = createCommandOutbox(client, publish, outboxOptions);
+  const bridgeRepository = createBridgeRepository(db);
+  let cancelWork: Promise<void> | undefined;
   const otaMonitor =
     process.env.OTA_ENABLED === "true" &&
     process.env.OTA_RELEASE_DIR &&
@@ -69,7 +71,7 @@ async function main(): Promise<void> {
         )
       : undefined;
   const app = buildApi(createDeviceRepository(db), commandService, {
-    bridgeRepository: createBridgeRepository(db),
+    bridgeRepository,
     ...(process.env.OTA_RELEASE_DIR && process.env.OTA_TRUST_STORE_PATH
       ? {
           deploymentRepository: createDeploymentRepository(db, {
@@ -99,9 +101,20 @@ async function main(): Promise<void> {
   });
 
   outbox.start();
+  const cancelTimer = setInterval(() => {
+    if (!cancelWork)
+      cancelWork = bridgeRepository.cancellations
+        .dispatch(publish)
+        .catch(() => console.error("ROS中断要求を処理できませんでした"))
+        .finally(() => {
+          cancelWork = undefined;
+        });
+  }, 250);
   otaMonitor?.start();
   const shutdown = createShutdown(app, null, client, {
     async stop() {
+      clearInterval(cancelTimer);
+      await cancelWork;
       await Promise.all([outbox.stop(), otaMonitor?.stop()]);
     },
   });

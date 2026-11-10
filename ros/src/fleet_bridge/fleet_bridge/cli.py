@@ -13,6 +13,7 @@ import rclpy
 from .config import ConfigurationError, load_config
 from .command_journal import CommandJournal
 from .execution import Execution
+from .cancellation import Cancellation
 from .journal import Journal, JournalError
 from .ros_client import RosClient
 from .transport import MqttTransport, status_message
@@ -26,7 +27,7 @@ def health_file(config, state):
     os.replace(path, config.state_dir / "health.json")
 
 
-def receive_pending(transport, journal, deadline=None, commands=None):
+def receive_pending(transport, journal, deadline=None, commands=None, cancellations=None):
     for _ in range(transport.config.queue_limit):
         if deadline is not None and time.monotonic() >= deadline:
             break
@@ -37,8 +38,10 @@ def receive_pending(transport, journal, deadline=None, commands=None):
         handled = (commands is not None
                    and item[3] == f"fleet/v1/devices/{transport.config.device_id}/commands"
                    and commands.receive(item[4], time.time()))
+        if not handled and cancellations is not None and item[3].endswith("/bridge-requests"):
+            handled = cancellations.receive(item[4], time.time())
         if not handled:
-            reason = ("QUARANTINED_COMMAND" if item[3].endswith("/commands")
+            reason = ("QUARANTINED_COMMAND" if item[3].endswith(("/commands", "/bridge-requests"))
                       else "OPERATIONS_NOT_IMPLEMENTED")
             journal.receive(item[3], item[4], reason=reason)
         transport.acknowledge(item)  # SQLite commitより前にPUBACKしない
@@ -59,6 +62,7 @@ def run(config, stopping):
     ack_inflight = None
     commands = None
     execution = None
+    cancellations = None
     exit_code = 0
     try:
         journal = Journal(config)
@@ -66,10 +70,12 @@ def run(config, stopping):
         transport = MqttTransport(config)
         ros = RosClient(config)
         execution = Execution(commands, ros)
+        cancellations = Cancellation(commands, ros, execution)
         transport.start()
         while not stopping.is_set():
             mqtt_state = transport.snapshot()
             ready = execution.tick(mqtt_state["mqtt_subscribed"])
+            cancellations.tick()
             state = {"device_id": config.device_id, **transport.snapshot(), **ros.snapshot(),
                      **ros.observations.health(),
                      "ready": ready, "accepting_operations": ready,
@@ -86,7 +92,7 @@ def run(config, stopping):
                 print(json.dumps({"event": "BRIDGE_STATE", **state}), flush=True)
                 last = state
             receive_pending(transport, journal, deadline=time.monotonic() + 0.1,
-                            commands=commands)
+                            commands=commands, cancellations=cancellations)
             observation = ros.observations.snapshot()
             if observation is not None:
                 journal.observation(observation)
@@ -158,6 +164,8 @@ def run(config, stopping):
         print(json.dumps({"event": "BRIDGE_FAILED", "reason": "RUNTIME_UNAVAILABLE"}), flush=True)
         exit_code = 1
     finally:
+        if cancellations:
+            cancellations.close()
         if execution:
             execution.close()
         if transport:
@@ -170,7 +178,7 @@ def run(config, stopping):
                 health_file(config, state)
                 if transport:
                     receive_pending(transport, journal, deadline=time.monotonic() + 3,
-                                    commands=commands)
+                                    commands=commands, cancellations=cancellations)
                     if not transport.inbox.empty():
                         exit_code = 1
                         state["reason"] = "INBOX_PENDING_REDELIVERY"

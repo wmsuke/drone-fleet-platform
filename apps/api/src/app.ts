@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import { registerRosCancelRoutes } from "./ros-cancel-routes.js";
 import { registerBridgeRoutes } from "./bridge-routes.js";
 import type { BridgeRepository } from "@drone-fleet/database";
 import { registerDeploymentRoutes } from "./deployment-routes.js";
@@ -55,8 +56,10 @@ export function buildApi(
   } = {},
 ): FastifyInstance {
   const app = Fastify();
-  if (options.bridgeRepository)
+  if (options.bridgeRepository) {
     registerBridgeRoutes(app, options.bridgeRepository);
+    registerRosCancelRoutes(app, options.bridgeRepository.cancellations);
+  }
   if (options.deploymentRepository)
     registerDeploymentRoutes(app, options.deploymentRepository);
   if (options.releases) registerReleaseRoutes(app, options.releases);

@@ -5,6 +5,10 @@ import { auditLogs, fleetOperationTargets, fleetOperations } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 export type AuditAction =
+  | "command.cancel_requested"
+  | "command.cancel_replayed"
+  | "command.cancel_sent"
+  | "command.cancel_changed"
   | "bridge.desired_changed"
   | "deployment.intervention_started"
   | "deployment.intervention_completed"
@@ -52,6 +56,7 @@ export interface AuditEvent {
   targetId?: string | null;
   result?: "SUCCEEDED" | "REJECTED" | "FAILED";
   system?:
+    | "cancel-worker"
     | "telemetry-ingestor"
     | "alert-evaluator"
     | "operation-evaluator"

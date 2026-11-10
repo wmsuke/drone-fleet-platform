@@ -4,6 +4,8 @@ Issue #194。APIのRETURN_HOMEを参照ROS Actionへ渡し、受領・goal受付
 
 ## 通信契約
 
+#195で[中断APIと追跡](ros-cancellation.md)を追加した。以下の#194の実行契約を維持し、Bridge 0.4.0も実行対応版として受け入れる。SQLiteはschema 7で中断要求を非破壊追加した。実行結果と中断受付・停止観測は別記録であり、旧0.3.0の新規中断は有効にしない。
+
 `packages/protocol`の`rosCommandMessageSchema`で専用command v3を定義する。`RETURN_HOME`、`targetKind=ROS2`、構成snapshotの`expectedConfigurationId`、受付UTCから30秒の`expiresAt`、120秒の`resultDeadline`を必須にする。未知のActionやREBOOTを受け付けない。Python向けJSON Schemaを同じ定義から生成する。JSON Schemaへ変換されない期限の相関検証はPythonでも行う。
 
 既存`commandMessageSchema`はsimulator用v1/v2のままにする。APIは構成報告またはROS観測のあるdeviceをROS対象として識別し、Bridge/Adapter 0.3.0、Capability Profile 1.1.0へだけv3を作る。旧0.2.0/1.0.0構成は読み取れるが操作受付は409 ROS_UPGRADE_REQUIREDとする。報告の鮮度15秒未満、desired一致、ONLINE、新鮮で有効なbattery/LOCAL位置/飛行状態、battery 20%以上、対応能力を確認する。未停止・不確定goalとOTA予約も同じdevice row lockの下で検証し、command・固定構成参照・outboxを同時commitする。複数機体操作も同じ判定を使う。

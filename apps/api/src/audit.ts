@@ -17,6 +17,10 @@ function id(value: unknown) {
 }
 const routes: Record<string, [AuditEvent["action"], AuditEvent["targetKind"]]> =
   {
+    "POST /devices/:deviceId/commands/:commandId/cancel": [
+      "command.cancel_requested",
+      "command",
+    ],
     "PUT /devices/:deviceId/bridge-configuration/desired": [
       "bridge.desired_changed",
       "device",
@@ -84,15 +88,17 @@ export function registerAuditHooks(app: FastifyInstance, db: Database) {
         action,
         targetKind,
         targetId:
-          targetKind === "group"
-            ? groupId
-            : targetKind === "alert"
-              ? alertId
-              : targetKind === "device"
-                ? deviceId
-                : targetKind === "deployment"
-                  ? id(params.deploymentId)
-                  : null,
+          targetKind === "command"
+            ? id(params.commandId)
+            : targetKind === "group"
+              ? groupId
+              : targetKind === "alert"
+                ? alertId
+                : targetKind === "device"
+                  ? deviceId
+                  : targetKind === "deployment"
+                    ? id(params.deploymentId)
+                    : null,
         groupId,
         alertId,
         requestId: request.id,

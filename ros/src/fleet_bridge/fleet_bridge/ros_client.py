@@ -27,6 +27,7 @@ from rclpy.signals import SignalHandlerOptions
 from rclpy.event_handler import SubscriptionEventCallbacks
 from rclpy.duration import Duration
 from unique_identifier_msgs.msg import UUID
+from action_msgs.srv import CancelGoal
 
 from .adapter import matches_runtime
 from .observations import Observations
@@ -91,6 +92,9 @@ class RosClient:
         )
         self.result_client = self.node.create_client(
             ReturnHome.Impl.GetResultService, config.namespace + "/return_home/_action/get_result",
+            callback_group=self.group)
+        self.cancel_client = self.node.create_client(
+            CancelGoal, config.namespace + "/return_home/_action/cancel_goal",
             callback_group=self.group)
         self.heartbeat_publisher = self.node.create_publisher(
             BridgeHeartbeat, "bridge_heartbeat", QoSProfile(depth=1, deadline=Duration(seconds=2)))
@@ -268,6 +272,16 @@ class RosClient:
     def abandon_query(self, future):
         self.result_client.remove_pending_request(future)
         future.cancel()  # goal cancelではなくローカル照会の取消。
+
+    def cancel(self, goal_id):
+        request = CancelGoal.Request()
+        request.goal_info.goal_id = UUID(uuid=list(uuid.UUID(goal_id).bytes))
+        # timestampはzeroのまま。特定goal以外や時刻以前の全goalを中断しない。
+        return self.cancel_client.call_async(request)
+
+    def abandon_cancel(self, future):
+        self.cancel_client.remove_pending_request(future)
+        future.cancel()  # 中断要求を取り消すのではなくローカル待ちだけを解放する。
 
     def close(self):
         self.timer.cancel()

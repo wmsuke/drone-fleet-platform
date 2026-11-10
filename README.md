@@ -128,7 +128,7 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 - APIはcommandとoutboxを同時に保存し、202 / PENDINGで受付を返す。送信はバックグラウンドで期限内に再試行し、API再起動後も同じcommandIdを使う。`GET /command-outbox/status`で滞留件数・最古時刻・試行数・失敗数を確認できる。
 - モデル名とソフトウェアバージョンはPhase 1のメッセージに含まれないため、画面では未登録と表示する。
 - 長期切断での容量超過、ディスク故障・volume削除、SQLite commit前のサンプルは保持保証の対象外である。時計ずれや操作開始後の結果不明も自動で救済しない。設定と容量計算は[復旧デモと運用制約](docs/recovery-demo.md)を参照する。
-- 証明書の自動ローテーションと実機対応は後続とする。local simulator OTAとROS 2の観測・構成・RETURN_HOME Action実行/結果保存/再照会は実装済み。ROSのcancel受付と専用画面は後続とする。
+- 証明書の自動ローテーションと実機対応は後続とする。local simulator OTAとROS 2の観測・構成・RETURN_HOME Action実行/結果保存/再照会・中断追跡は実装済み。ROS専用画面は後続とする。
 
 ## 開発環境
 
@@ -487,6 +487,7 @@ docker compose down --volumes
 - [ROS 2の参照ノードと固定開発環境](docs/ros-reference.md)
 - [MQTT / ROS 2 Bridgeの起動・終了と接続状態](docs/ros-bridge.md)
 - [ROS commandの実行・保存と復旧](docs/ros-command-journal.md)（`corepack pnpm test:ros-commands`で実ActionからDB保存、再起動・再照会を検証する）
+- [ROS 2 Actionの中断と停止観測](docs/ros-cancellation.md)
 
 ## ライセンス
 

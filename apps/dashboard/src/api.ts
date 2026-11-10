@@ -55,6 +55,26 @@ export interface CommandResponse {
 }
 
 export interface CommandHistoryItem extends CommandResponse {
+  cancellation?: {
+    cancelId: string;
+    phase:
+      | "REQUESTED"
+      | "RECEIVED"
+      | "SEND_INTENT"
+      | "ACCEPTED"
+      | "REJECTED"
+      | "UNCERTAIN";
+    assessment:
+      | "PENDING"
+      | "REJECTED"
+      | "UNCERTAIN"
+      | "CANCELLED"
+      | "COMPLETED"
+      | "FAILED";
+    stopConfirmation: "OBSERVED" | "NOT_STARTED" | "UNKNOWN";
+    humanReviewRequired: boolean;
+    interventionId: string;
+  };
   executionStatus?:
     | "NOT_REPORTED"
     | "RUNNING"
@@ -245,6 +265,8 @@ function isCommandHistoryItem(input: unknown): input is CommandHistoryItem {
   }
   const command = input as unknown as Record<string, unknown>;
   return (
+    (command.cancellation === undefined ||
+      isCancellation(command.cancellation)) &&
     (command.executionStatus === undefined ||
       [
         "NOT_REPORTED",
@@ -267,5 +289,33 @@ function isCommandHistoryItem(input: unknown): input is CommandHistoryItem {
     (command.acknowledgementReceivedAt === null ||
       typeof command.acknowledgementReceivedAt === "string") &&
     (command.timedOutAt === null || typeof command.timedOutAt === "string")
+  );
+}
+function isCancellation(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.cancelId === "string" &&
+    typeof c.interventionId === "string" &&
+    [
+      "REQUESTED",
+      "RECEIVED",
+      "SEND_INTENT",
+      "ACCEPTED",
+      "REJECTED",
+      "UNCERTAIN",
+    ].includes(c.phase as string) &&
+    [
+      "PENDING",
+      "REJECTED",
+      "UNCERTAIN",
+      "CANCELLED",
+      "COMPLETED",
+      "FAILED",
+    ].includes(c.assessment as string) &&
+    ["OBSERVED", "NOT_STARTED", "UNKNOWN"].includes(
+      c.stopConfirmation as string,
+    ) &&
+    typeof c.humanReviewRequired === "boolean"
   );
 }

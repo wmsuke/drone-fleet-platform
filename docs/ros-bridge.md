@@ -6,6 +6,8 @@ Issue #191でPythonの`fleet_bridge`を追加した。MQTT transport、非同期
 
 ## ローカルで起動する
 
+#195で[中断要求と結果・停止の追跡](ros-cancellation.md)を追加した。Bridge 0.4.0は自機bridge-requestsも購読し、SQLite schema 7へ中断対応と予算を保存する。中断受付で元commandの終端や停止状態を変更しない。
+
 ```sh
 docker compose -p fleet-ros-bridge -f compose.ros-bridge.yaml up --build -d
 docker compose -p fleet-ros-bridge -f compose.ros-bridge.yaml logs -f bridge

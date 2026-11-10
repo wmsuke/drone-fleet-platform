@@ -3,6 +3,10 @@ import type { AuditEvent } from "@drone-fleet/database";
 type AuditAction = AuditEvent["action"];
 import { deviceIdSchema } from "./schema.js";
 export const auditActions = [
+  "command.cancel_requested",
+  "command.cancel_replayed",
+  "command.cancel_sent",
+  "command.cancel_changed",
   "bridge.desired_changed",
   "deployment.intervention_started",
   "deployment.intervention_completed",
@@ -63,6 +67,15 @@ export const publicMetadataSchema = z
   .strict();
 type Metadata = z.infer<typeof publicMetadataSchema>;
 const allowed: Record<AuditAction, readonly (keyof Metadata)[]> = {
+  "command.cancel_requested": ["interventionId", "reason"],
+  "command.cancel_replayed": ["interventionId", "reason"],
+  "command.cancel_sent": ["interventionId", "reason"],
+  "command.cancel_changed": [
+    "interventionId",
+    "reason",
+    "beforeStatus",
+    "afterStatus",
+  ],
   "bridge.desired_changed": ["reason"],
   "deployment.intervention_started": [
     "reason",

@@ -37,7 +37,7 @@ class MqttTransport:
         self.thread = None
         self.prefix = f"fleet/v1/devices/{config.device_id}/"
         self.topics = [self.prefix + "commands", self.prefix + "telemetry-receipts",
-                       self.prefix + "bridge-receipts"]
+                       self.prefix + "bridge-receipts", self.prefix + "bridge-requests"]
         self.validate = status_validator()
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, client_id=config.client_id,

@@ -12,7 +12,7 @@ services:
         "fleet_reference",
         "serve",
         "--config",
-        "/workspace/config/commands.json",
+        "${ROS_REFERENCE_CONFIG:-/workspace/config/commands.json}",
       ]
     ipc: shareable
     cap_drop: [ALL]

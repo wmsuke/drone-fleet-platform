@@ -19,8 +19,15 @@ run "bridge_events_and_receipts_are_directional" {
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[8].Action == "iot:Receive" &&
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[9].Action == "iot:Publish" &&
       jsondecode(aws_iot_policy.telemetry_ingestor.policy).Statement[9].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/bridge-receipts" &&
-      length(jsondecode(aws_iot_policy.api.policy).Statement) == 3
+      length(jsondecode(aws_iot_policy.api.policy).Statement) == 4 &&
+      jsondecode(aws_iot_policy.device.policy).Statement[11].Action == "iot:Subscribe" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[11].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topicfilter/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-requests" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[12].Action == "iot:Receive" &&
+      jsondecode(aws_iot_policy.device.policy).Statement[12].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/$${iot:Connection.Thing.ThingName}/bridge-requests" &&
+      alltrue([for s in slice(jsondecode(aws_iot_policy.device.policy).Statement, 11, 13) : s.Condition.Bool["iot:Connection.Thing.IsAttached"] == "true"]) &&
+      jsondecode(aws_iot_policy.api.policy).Statement[3].Action == "iot:Publish" &&
+      jsondecode(aws_iot_policy.api.policy).Statement[3].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/bridge-requests"
     )
-    error_message = "Bridge device/ingestor direction must stay scoped; no new API publish or wildcard device permission"
+    error_message = "Bridge device/ingestor/API direction must stay scoped; no wildcard device permission"
   }
 }

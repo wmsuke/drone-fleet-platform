@@ -45,7 +45,7 @@ run "ota_permissions_are_directional_and_device_scoped" {
     condition = (
       jsondecode(aws_iot_policy.api.policy).Statement[2].Action == "iot:Publish" &&
       jsondecode(aws_iot_policy.api.policy).Statement[2].Resource == "arn:aws:iot:ap-northeast-1:123456789012:topic/fleet/v1/devices/*/ota-requests" &&
-      length(jsondecode(aws_iot_policy.api.policy).Statement) == 3
+      length(jsondecode(aws_iot_policy.api.policy).Statement) == 4
     )
     error_message = "API must only publish non-retained OTA requests, without event/receipt impersonation"
   }

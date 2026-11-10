@@ -14,6 +14,8 @@ cleanup() {
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT json_build_object('\''commandId'\'',command_id,'\''state'\'',execution_status,'\''startedAt'\'',execution_started_at,'\''finishedAt'\'',execution_result_at) FROM commands ORDER BY created_at' > "$results/commands.jsonl" 2>/dev/null || true
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(t) FROM ros_command_targets t' > "$results/targets.jsonl" 2>/dev/null || true
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(e) FROM bridge_action_events e' > "$results/events.jsonl" 2>/dev/null || true
+  "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(c) FROM ros_command_cancels c' > "$results/cancellations.jsonl" 2>/dev/null || true
+  "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(e) FROM bridge_cancel_events e' > "$results/cancel-events.jsonl" 2>/dev/null || true
   "${compose[@]}" down --volumes --remove-orphans > "$results/cleanup.log" 2>&1 || status=1
   docker image rm "$ROS_BRIDGE_IMAGE" >> "$results/cleanup.log" 2>&1 || status=1
   echo "cleanup exit=$status project=$project" | tee -a "$results/cleanup.log"
