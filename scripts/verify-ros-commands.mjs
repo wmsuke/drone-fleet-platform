@@ -172,6 +172,8 @@ async function switchDevice(next, point = "") {
 async function switchReference(config, next) {
   referenceConfig = `/workspace/config/${config}.json`;
   compose("stop", "ros-bridge", "ros-bridge-peer");
+  // 停止済みpeerも旧referenceのnetwork/IPC IDを保持するため、切替前に除く。
+  compose("rm", "-f", "ros-bridge-peer");
   compose("up", "-d", "--no-deps", "--force-recreate", "ros-reference");
   await switchDevice(next);
 }
