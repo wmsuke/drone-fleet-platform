@@ -7,6 +7,7 @@ services:
     image: ${ROS_BRIDGE_IMAGE:?}
     environment:
       FASTRTPS_DEFAULT_PROFILES_FILE: /workspace/config/dds-udp-test.xml
+      ROS_AUTOMATIC_DISCOVERY_RANGE: SYSTEM_DEFAULT
     command:
       [
         "python3",
@@ -26,6 +27,7 @@ services:
       MQTT_HOST: mqtt
       BRIDGE_INTEGRATION: "true"
       FASTRTPS_DEFAULT_PROFILES_FILE: /workspace/config/dds-udp-test.xml
+      ROS_AUTOMATIC_DISCOVERY_RANGE: SYSTEM_DEFAULT
       LD_PRELOAD: /workspace/tools/dds_fault.so
       BRIDGE_TEST_FAULT: ${ROS_COMMAND_FAULT:-}
     network_mode: service:ros-reference

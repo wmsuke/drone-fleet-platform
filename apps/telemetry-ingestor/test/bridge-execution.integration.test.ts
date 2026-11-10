@@ -22,9 +22,11 @@ import {
   bridgeConfigurationEventSchema,
   bridgeActionEventSchema,
   bridgeCancelEventSchema,
+  bridgeHealthEventSchema,
   rosObservationMessageSchema,
 } from "@drone-fleet/protocol";
 import { report } from "../../../packages/protocol/test/fixtures/bridge.mjs";
+import { healthMessage } from "../../../packages/protocol/test/fixtures/bridge-health.mjs";
 import { buildApi } from "../../api/src/app.js";
 import { createDeviceRepository } from "../../api/src/repository.js";
 import { createCommandRepository } from "../../api/src/command-repository.js";
@@ -204,6 +206,34 @@ describe.skipIf(!enabled)(
         evidence,
       };
     }
+    it("health/action ID collision keeps evidence and prevents release of a rejected target", async () => {
+      const f = await fixture();
+      const rejection = f.event({
+        kind: "GOAL_REJECTED",
+        reason: "ACTION_REJECTED",
+      });
+      await f.repo.save(rejection, f.time(5));
+      expect(
+        (await f.repo.executionState(f.commandId))?.target.notStarted,
+      ).toBe(true);
+      const forged = bridgeHealthEventSchema.parse({
+        ...healthMessage,
+        deviceId: f.id,
+        eventId: rejection.eventId,
+        journalId: f.config.journalId,
+        configurationId: f.config.configurationId,
+        timestamp: f.time(5).toISOString(),
+      });
+      expect(await f.repo.save(forged, f.time(5))).toBeNull();
+      const state = await f.repo.executionState(f.commandId);
+      expect(state?.target).toMatchObject({
+        conflicted: true,
+        notStarted: false,
+        stopConfirmed: false,
+      });
+      expect(state?.recovery.humanReviewRequired).toBe(true);
+      expect(state?.events).toHaveLength(1);
+    });
     it("keeps idempotent cancel acceptance distinct from result/stop and preserves late responses", async () => {
       const f = await fixture(),
         path = `/devices/${f.id}/commands/${f.commandId}/cancel`;

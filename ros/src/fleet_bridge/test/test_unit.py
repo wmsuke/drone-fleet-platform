@@ -18,6 +18,17 @@ def settings(tmp_path, **extra):
                         **extra})
 
 
+def test_udp_profile_exception_requires_explicit_test_mode(tmp_path):
+    env = {"ROS_AUTOMATIC_DISCOVERY_RANGE": "SYSTEM_DEFAULT",
+           "FASTRTPS_DEFAULT_PROFILES_FILE": "/workspace/config/dds-udp-test.xml"}
+    with pytest.raises(ConfigurationError, match="ROS_DISCOVERY"):
+        settings(tmp_path, **env)
+    settings(tmp_path, **env, BRIDGE_INTEGRATION="true")
+    with pytest.raises(ConfigurationError, match="ROS_DISCOVERY"):
+        settings(tmp_path, **{**env, "FASTRTPS_DEFAULT_PROFILES_FILE": "/tmp/other.xml"},
+                 BRIDGE_INTEGRATION="true")
+
+
 def test_shared_wire_contract():
     validate = status_validator()
     fixtures = json.loads(Path("/workspace/contracts/status-fixtures.json").read_text())

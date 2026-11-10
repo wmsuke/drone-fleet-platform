@@ -12,6 +12,8 @@ import {
   bridgeConflicts,
   bridgeConfigurationHeads as heads,
   devices,
+  rosCommandTargets,
+  rosCommandCancels,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import { appendAudit } from "./audit.js";
@@ -30,6 +32,14 @@ export function createBridgeHealthRepository(db: Database) {
           .select()
           .from(events)
           .where(eq(events.eventId, message.eventId));
+        const [action] = await tx
+          .select()
+          .from(bridgeActionEvents)
+          .where(eq(bridgeActionEvents.eventId, message.eventId));
+        const [cancel] = await tx
+          .select()
+          .from(bridgeCancelEvents)
+          .where(eq(bridgeCancelEvents.eventId, message.eventId));
         const collision =
           (
             await tx
@@ -37,22 +47,32 @@ export function createBridgeHealthRepository(db: Database) {
               .from(bridgeReports)
               .where(eq(bridgeReports.eventId, message.eventId))
           ).length ||
-          (
-            await tx
-              .select()
-              .from(bridgeActionEvents)
-              .where(eq(bridgeActionEvents.eventId, message.eventId))
-          ).length ||
-          (
-            await tx
-              .select()
-              .from(bridgeCancelEvents)
-              .where(eq(bridgeCancelEvents.eventId, message.eventId))
-          ).length;
+          !!action ||
+          !!cancel;
         if (collision || (old && old.payloadHash !== payloadHash)) {
           await tx
             .insert(bridgeConflicts)
             .values({ eventId: message.eventId, payloadHash, receivedAt });
+          if (action) {
+            await tx
+              .select()
+              .from(devices)
+              .where(eq(devices.deviceId, action.deviceId))
+              .for("update");
+            await tx
+              .update(rosCommandTargets)
+              .set({
+                conflicted: true,
+                stopConfirmed: false,
+                notStarted: false,
+              })
+              .where(eq(rosCommandTargets.commandId, action.commandId));
+          }
+          if (cancel)
+            await tx
+              .update(rosCommandCancels)
+              .set({ assessment: "UNCERTAIN" })
+              .where(eq(rosCommandCancels.cancelId, cancel.cancelId));
           return null;
         }
         const receipt = (time: Date) => ({

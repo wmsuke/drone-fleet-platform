@@ -46,6 +46,8 @@ MQTT入力queueは最大100件・1packet 32 KiB、再接続は1〜8秒backoff。
 
 `ROS_COMMANDS_CASES=recovery corepack pnpm test:ros-commands`で障害ケースだけを実行できる。既定の`corepack pnpm test:ros-commands`は通常Action・中断も含む。参照制約は`corepack pnpm test:ros-reference`、Bridgeの永続・有界処理は`corepack pnpm test:ros-bridge`でも検証する。
 
-検証用ComposeだけDDSをUDPへ固定し、Bridgeの試験用preloadでUDP packetを遮断する。TCP/MQTTと参照機体processは生かし、host firewallや実機に触れない。遮断fileは専用volume内だけで、BRIDGE_INTEGRATION=trueのときだけ有効。通常Composeにはpreloadを設定しない。試験supervisorのHUPは参照子processを強制終了・再生成し、Bridgeとnetwork namespaceを維持してresult cache/世代喪失を作る。通常の参照起動にはsupervisorを使わない。
+検証用ComposeだけDDSをUDPへ固定し、Bridgeの試験用preloadでUDP packetを遮断する。Jazzyの[rmw実装](https://github.com/ros2/rmw_fastrtps/blob/jazzy/rmw_fastrtps_shared_cpp/src/participant.cpp)はLOCALHOST指定時にSHM transportも追加する。そのため試験だけSYSTEM_DEFAULTと[loopback whitelist](https://fast-dds.docs.eprosima.com/en/2.14.x/fastdds/transport/whitelist.html)・localhost peerの固定XMLを組み合わせ、SHMで迂回しない構成にする。Bridgeの例外許可はBRIDGE_INTEGRATION=trueと固定XML pathの組合せに限定し、通常起動はLOCALHOST以外を拒否する。
+
+TCP/MQTTと参照機体processは生かし、host firewallや実機に触れない。遮断fileは専用volume内だけで、BRIDGE_INTEGRATION=trueのときだけ有効。通常Composeにはpreloadを設定しない。試験supervisorのHUPは参照子processを強制終了・再生成し、Bridgeとnetwork namespaceを維持してresult cache/世代喪失を作る。通常の参照起動にはsupervisorを使わない。
 
 故障前後の実受理/実行回数、元goal UUID、CDR/hash、DB正本、health採否とcleanupを保存する。MQTT切断中の成功/LOW_BATTERY、DDSのみの遮断、node喪失、Bridge再起動、Action server世代変更を別ケースとし、欠測を復旧完了へ短絡しない。実行済みの環境・件数はPRへ記録する。
