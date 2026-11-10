@@ -1,0 +1,14 @@
+{
+  "devices": [
+    { "device_id": "ros-recovery-mqtt", "scenario": "success" },
+    {
+      "device_id": "ros-recovery-battery",
+      "scenario": "battery_drop",
+      "failure_after_sec": 2.5
+    },
+    { "device_id": "ros-recovery-dds", "scenario": "unresponsive" },
+    { "device_id": "ros-recovery-bridge", "scenario": "unresponsive" },
+    { "device_id": "ros-recovery-node", "scenario": "unresponsive" },
+    { "device_id": "ros-recovery-generation", "scenario": "unresponsive" }
+  ]
+}

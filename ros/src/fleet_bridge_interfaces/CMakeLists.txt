@@ -12,6 +12,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BridgeHeartbeat.msg"
   "srv/GetRuntimeState.srv"
   "srv/GetConfiguration.srv"
+  "srv/GetGoalDecision.srv"
   DEPENDENCIES std_msgs geometry_msgs builtin_interfaces unique_identifier_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)

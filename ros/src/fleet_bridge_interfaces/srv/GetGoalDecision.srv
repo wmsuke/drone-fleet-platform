@@ -1,0 +1,7 @@
+unique_identifier_msgs/UUID goal_id
+---
+bool found
+unique_identifier_msgs/UUID goal_id
+string server_instance_id
+string configuration_id
+string reason

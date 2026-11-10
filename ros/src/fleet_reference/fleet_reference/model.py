@@ -9,7 +9,7 @@ import re
 
 SCENARIOS = {
     "success", "reject", "abort", "unresponsive", "delayed_cancel",
-    "cancel_reject", "disconnect",
+    "cancel_reject", "disconnect", "battery_drop", "policy_violation", "sensor_stale",
 }
 
 

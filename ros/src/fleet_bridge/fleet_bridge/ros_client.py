@@ -10,6 +10,7 @@ import uuid
 import fastjsonschema
 from fleet_reference.configuration import component, digest
 from fleet_bridge_interfaces.srv import GetConfiguration
+from fleet_bridge_interfaces.srv import GetGoalDecision
 
 from diagnostic_msgs.msg import DiagnosticArray
 from fleet_bridge_interfaces.action import ReturnHome
@@ -84,6 +85,8 @@ class RosClient:
         )
         self.configuration_client = self.node.create_client(
             GetConfiguration, config.namespace + "/get_configuration", callback_group=self.group)
+        self.decision_client = self.node.create_client(
+            GetGoalDecision, config.namespace + "/get_goal_decision", callback_group=self.group)
         self.action = ActionClient(
             self.node, ReturnHome, config.namespace + "/return_home", callback_group=self.group,
             feedback_sub_qos_profile=QoSProfile(
@@ -279,6 +282,15 @@ class RosClient:
         request = ReturnHome.Impl.GetResultService.Request()
         request.goal_id = UUID(uuid=list(uuid.UUID(goal_id).bytes))
         return self.result_client.call_async(request)
+
+    def rejection(self, goal_id):
+        request = GetGoalDecision.Request()
+        request.goal_id = UUID(uuid=list(uuid.UUID(goal_id).bytes))
+        return self.decision_client.call_async(request)
+
+    def abandon_rejection(self, future):
+        self.decision_client.remove_pending_request(future)
+        future.cancel()
 
     def abandon_query(self, future):
         self.result_client.remove_pending_request(future)

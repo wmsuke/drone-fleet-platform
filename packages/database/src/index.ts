@@ -72,6 +72,7 @@ export {
   rosCommandTargets,
   rosCommandCancels,
   bridgeCancelEvents,
+  bridgeHealthEvents,
   bridgeActionEvents,
 } from "./schema.js";
 export * from "./bridge.js";

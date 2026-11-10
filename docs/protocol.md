@@ -60,6 +60,8 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 
 ### Phase 6のROS 2契約
 
+#196で[ROS_HEALTHと機体側拒否の証拠](ros-recovery.md)をbridge-events v1へ追加した。healthはcommandを捏造せず、接続・観測鮮度・未解決goal・欠損件数を分離する。DB receiptまで再送し、新Bridgeのreadyは新鮮なhealthでも検証する。GOAL_REJECTEDは照合できた場合だけadapterDecisionのreason/CDR/hashを持つ。
+
 #195で[中断通信](ros-cancellation.md)を追加した。bridge-requests v1のCANCEL_COMMANDは固定command/goal/config/serverとcancelId・10秒期限を持つ。bridge-events v1のCANCELで受領・送信意図・ROS受付/拒否・不確定を通知し、実行終端と停止観測は既存の別eventを使う。QUERY_COMMAND_STATEは未追加。
 
 #189の[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)にROS topic/Action、QoS、batteryの比率→%、LOCAL/GPSと欠測、ROS時刻/UTC、commandId/goal UUID、cancel/停止の対応を定めた。現行telemetry v1/v2とACK v3にはROSのLOCAL・非開始拒否・CANCELLEDを無理に詰め込まない。

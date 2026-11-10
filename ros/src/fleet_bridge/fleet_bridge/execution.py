@@ -29,6 +29,7 @@ class Execution:
         self.owner = commands.db.execute("SELECT journal FROM bridge_counters").fetchone()[0]
         self.commands.recovery()
         self.sends = {}
+        self.rejections = {}
         self.results = {}
         self.queries = {}
         self.next_query = {}
@@ -310,13 +311,41 @@ class Execution:
                                             "ACCEPTED")
                         self.results[command_id] = handle.get_result_async()
                     else:
-                        self.commands.event(command_id, "GOAL_REJECTED",
-                                            {"reason": "ACTION_REJECTED"},
-                                            "REJECTED")
+                        self.rejections[command_id] = (
+                            self.ros.rejection(value["goalId"]), time.monotonic() + 2)
                 elif time.monotonic() >= deadline:
                     future.cancel()
                     del self.sends[command_id]
                     self.begin_recovery(command_id)
+            rejection = self.rejections.get(command_id)
+            if rejection and (rejection[0].done() or time.monotonic() >= rejection[1]):
+                future, _ = self.rejections.pop(command_id)
+                fields = {"reason": "ACTION_REJECTED"}
+                try:
+                    if not future.done():
+                        self.ros.abandon_rejection(future)
+                    else:
+                        decision = future.result()
+                        reasons = {"INVALID_GOAL", "OWNER_MISMATCH", "DEVICE_BUSY",
+                                   "COMMAND_REPLAY_OR_FULL", "CONFIGURATION_MISMATCH",
+                                   "REJECTED_EXPIRED", "INVALID_DEADLINE", "INJECTED_REJECT",
+                                   "BRIDGE_WATCHDOG", "SENSOR_STALE", "LOW_BATTERY",
+                                   "POLICY_REJECTED"}
+                        if (decision.found and goal_id(decision.goal_id) == value["goalId"]
+                                and decision.server_instance_id
+                                == value["configuration"]["serverInstanceId"]
+                                and decision.configuration_id
+                                == value["configuration"]["adapterConfigurationId"]
+                                and decision.reason in reasons):
+                            raw = bytes(serialize_message(decision))
+                            if len(raw) <= 6144:
+                                fields["adapterDecision"] = {
+                                    "reason": decision.reason,
+                                    "cdr": base64.b64encode(raw).decode(),
+                                    "hash": hashlib.sha256(raw).hexdigest()}
+                except Exception:
+                    pass  # 明示rejectは既知だが、理由を取得できなければ補完しない。
+                self.commands.event(command_id, "GOAL_REJECTED", fields, "REJECTED")
             feedback = self.ros.latest_feedback(command_id)
             if feedback and time.monotonic() >= self.next_feedback.get(command_id, 0):
                 if (goal_id(feedback.goal_id) == value["goalId"]
@@ -372,5 +401,7 @@ class Execution:
             self.ros.abandon_query(future)
         for future, _ in self.sends.values():
             future.cancel()
+        for future, _ in self.rejections.values():
+            self.ros.abandon_rejection(future)
         for future in self.results.values():
             future.cancel()

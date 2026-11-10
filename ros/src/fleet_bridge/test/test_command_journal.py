@@ -35,6 +35,17 @@ def open_journal(tmp_path, device_id, **options):
     return journal, CommandJournal(journal)
 
 
+def test_recovery_capable_versions_keep_original_goal(tmp_path):
+    configuration, command, now = inputs()
+    configuration["bridge"]["version"] = "0.5.0"
+    configuration["adapter"]["version"] = "0.4.0"
+    command["expectedConfigurationId"] = digest(configuration)
+    journal, commands = open_journal(tmp_path, command["deviceId"])
+    value = commands.prepare(command, configuration, now)
+    assert commands.prepare(command, configuration, now)["goalId"] == value["goalId"]
+    journal.close()
+
+
 @pytest.mark.parametrize("boundary", ["READY", "SEND_INTENT", "ACCEPTED"])
 def test_restart_never_assigns_another_uuid(tmp_path, boundary):
     configuration, command, now = inputs()

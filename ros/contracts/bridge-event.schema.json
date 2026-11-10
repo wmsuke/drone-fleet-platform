@@ -2,6 +2,297 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "anyOf": [
     {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": { "type": "number", "const": 1 },
+            "deviceId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "kind": { "type": "string", "const": "ROS_HEALTH" },
+            "eventId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "sessionId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "journalId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "configurationId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "serverInstanceId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                },
+                { "type": "null" }
+              ]
+            },
+            "mqttConnected": { "type": "boolean" },
+            "mqttSubscribed": { "type": "boolean" },
+            "rosAvailable": { "type": "boolean" },
+            "observationsFresh": { "type": "boolean" },
+            "ready": { "type": "boolean", "const": false },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "READY",
+                "MQTT_UNAVAILABLE",
+                "ROS_UNAVAILABLE",
+                "OBSERVATIONS_STALE",
+                "GOAL_UNRESOLVED",
+                "ADAPTER_NOT_READY"
+              ]
+            },
+            "adapterReason": {
+              "anyOf": [
+                { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+                { "type": "null" }
+              ]
+            },
+            "pendingGoal": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "commandId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "goalId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "READY",
+                        "SEND_INTENT",
+                        "ACCEPTED",
+                        "RUNNING",
+                        "UNCERTAIN",
+                        "SUCCEEDED",
+                        "FAILED",
+                        "CANCELLED"
+                      ]
+                    },
+                    "reason": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "GOAL_ACCEPTED",
+                            "ACTION_REJECTED",
+                            "EXECUTION_STARTED",
+                            "FEEDBACK",
+                            "HOME_REACHED",
+                            "INJECTED_FAILURE",
+                            "BRIDGE_WATCHDOG",
+                            "SENSOR_STALE",
+                            "LOW_BATTERY",
+                            "POLICY_REJECTED",
+                            "REJECTED_EXPIRED",
+                            "CANCELLED",
+                            "SERVER_SHUTDOWN",
+                            "GOAL_ID_MISMATCH",
+                            "INVALID_GOAL",
+                            "RESULT_INVALID",
+                            "RESULT_UNKNOWN",
+                            "SERVER_CHANGED",
+                            "RESULT_TIMEOUT",
+                            "RESULT_CACHE_UNAVAILABLE",
+                            "RESULT_DEADLINE",
+                            "BRIDGE_RESTART",
+                            "CONFIGURATION_MISMATCH",
+                            "DEVICE_BUSY",
+                            "STOP_OBSERVED"
+                          ]
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "queryCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 5
+                    },
+                    "resultDeadline": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "humanReviewRequired": { "type": "boolean" }
+                  },
+                  "required": [
+                    "commandId",
+                    "goalId",
+                    "state",
+                    "reason",
+                    "queryCount",
+                    "resultDeadline",
+                    "humanReviewRequired"
+                  ],
+                  "additionalProperties": false
+                },
+                { "type": "null" }
+              ]
+            },
+            "telemetryDropped": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "recordLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "byteLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 33554432
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "deviceId",
+            "timestamp",
+            "kind",
+            "eventId",
+            "sessionId",
+            "journalId",
+            "sequence",
+            "configurationId",
+            "serverInstanceId",
+            "mqttConnected",
+            "mqttSubscribed",
+            "rosAvailable",
+            "observationsFresh",
+            "ready",
+            "reason",
+            "adapterReason",
+            "pendingGoal",
+            "telemetryDropped",
+            "recordLimit",
+            "byteLimit"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": { "type": "number", "const": 1 },
+            "deviceId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "kind": { "type": "string", "const": "ROS_HEALTH" },
+            "eventId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "sessionId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "journalId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "configurationId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "serverInstanceId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "mqttConnected": { "type": "boolean", "const": true },
+            "mqttSubscribed": { "type": "boolean", "const": true },
+            "rosAvailable": { "type": "boolean", "const": true },
+            "observationsFresh": { "type": "boolean", "const": true },
+            "ready": { "type": "boolean", "const": true },
+            "reason": { "type": "string", "const": "READY" },
+            "adapterReason": {
+              "anyOf": [
+                { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+                { "type": "null" }
+              ]
+            },
+            "pendingGoal": { "type": "null" },
+            "telemetryDropped": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "recordLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "byteLimit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 33554432
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "deviceId",
+            "timestamp",
+            "kind",
+            "eventId",
+            "sessionId",
+            "journalId",
+            "sequence",
+            "configurationId",
+            "serverInstanceId",
+            "mqttConnected",
+            "mqttSubscribed",
+            "rosAvailable",
+            "observationsFresh",
+            "ready",
+            "reason",
+            "adapterReason",
+            "pendingGoal",
+            "telemetryDropped",
+            "recordLimit",
+            "byteLimit"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    {
       "type": "object",
       "properties": {
         "schemaVersion": { "type": "number", "const": 1 },
@@ -499,7 +790,7 @@
                     },
                     "version": {
                       "type": "string",
-                      "enum": ["0.2.0", "0.3.0", "0.4.0"]
+                      "enum": ["0.2.0", "0.3.0", "0.4.0", "0.5.0"]
                     },
                     "releaseDigest": {
                       "type": "string",
@@ -747,7 +1038,7 @@
                     },
                     "version": {
                       "type": "string",
-                      "enum": ["0.2.0", "0.3.0", "0.4.0"]
+                      "enum": ["0.2.0", "0.3.0", "0.4.0", "0.5.0"]
                     },
                     "releaseDigest": {
                       "type": "string",
@@ -920,7 +1211,37 @@
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
             },
             "kind": { "type": "string", "const": "GOAL_REJECTED" },
-            "reason": { "type": "string", "const": "ACTION_REJECTED" }
+            "reason": { "type": "string", "const": "ACTION_REJECTED" },
+            "adapterDecision": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "INVALID_GOAL",
+                    "OWNER_MISMATCH",
+                    "DEVICE_BUSY",
+                    "COMMAND_REPLAY_OR_FULL",
+                    "CONFIGURATION_MISMATCH",
+                    "REJECTED_EXPIRED",
+                    "INVALID_DEADLINE",
+                    "INJECTED_REJECT",
+                    "BRIDGE_WATCHDOG",
+                    "SENSOR_STALE",
+                    "LOW_BATTERY",
+                    "POLICY_REJECTED"
+                  ]
+                },
+                "cdr": {
+                  "type": "string",
+                  "maxLength": 8192,
+                  "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+                },
+                "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "required": ["reason", "cdr", "hash"],
+              "additionalProperties": false
+            }
           },
           "required": [
             "schemaVersion",

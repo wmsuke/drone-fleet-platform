@@ -16,6 +16,7 @@ cleanup() {
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(e) FROM bridge_action_events e' > "$results/events.jsonl" 2>/dev/null || true
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(c) FROM ros_command_cancels c' > "$results/cancellations.jsonl" 2>/dev/null || true
   "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(e) FROM bridge_cancel_events e' > "$results/cancel-events.jsonl" 2>/dev/null || true
+  "${compose[@]}" exec -T postgres psql -U drone_fleet -d drone_fleet -At -c 'SELECT row_to_json(e) FROM bridge_health_events e' > "$results/health-events.jsonl" 2>/dev/null || true
   "${compose[@]}" down --volumes --remove-orphans > "$results/cleanup.log" 2>&1 || status=1
   docker image rm "$ROS_BRIDGE_IMAGE" >> "$results/cleanup.log" 2>&1 || status=1
   echo "cleanup exit=$status project=$project" | tee -a "$results/cleanup.log"

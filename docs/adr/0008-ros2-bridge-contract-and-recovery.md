@@ -154,6 +154,8 @@ command→goal対応がまだ確認できない受付直後やSEND_INTENT不明�
 
 ## 8. 通信断・独立した拒否・介入
 
+#196で[障害・拒否・引き継ぎの実装](../ros-recovery.md)を追加した。Bridge 0.5.0 / Adapter・interfaces 0.4.0、migration 0025を使い、ROS_HEALTHとgoalに照合した拒否理由を保存する。旧実行/中断契約を維持し、外部QUERY_COMMAND_STATEや安全未確認の予約解除は追加しない。以下の機体側制約と復旧境界は維持する。
+
 MQTT切断では既に受け付けたgoalを再投入せず、機体側の期限・制約の範囲で継続し、観測/結果をSQLiteへ蓄積する。Cloud切断をAction failureや停止成功にしない。DDS/参照node喪失ではMQTTがONLINEでもROS_UNAVAILABLEとし、新規操作を拒否する。Bridge再起動では保存goalを照会するだけで、Action server再起動は別server世代として扱う。
 
 参照serverはCloud/Bridgeとは独立に、許可frame/home、構成一致、開始/実行期限、battery有効かつ20%以上、sensor age 3秒未満、同時goalなし、ローカル領域（homeから10 m以内）を検査する。実行中の検査は10 Hz、Bridgeからの1 Hz runtime heartbeatが3秒以上途絶した場合やsensor/policy違反ではローカル更新を止め、ABORTEDと`BRIDGE_WATCHDOG` / `SENSOR_STALE` / `LOW_BATTERY` / `POLICY_REJECTED`等の理由と停止観測を記録する。MQTT切断だけではこのheartbeatを止めない。
@@ -166,7 +168,7 @@ Bridgeのjournal書込不能・owner喪失では新規操作を拒否してrunti
 
 ## 9. wire・DB・権限差分と更新順序
 
-新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。#194までにtelemetry・構成・ROS command・goal受付/feedback/実行終端/停止観測を実装し、#195でCANCELとbridge-requestsのCANCEL_COMMANDを追加した。通常実行はBridge 0.3.0/0.4.0・Adapter 0.3.0・Capability Profile 1.1.0、中断はBridge 0.4.0を条件とする。旧0.2.0/1.0.0は履歴読み取りだけを維持する。ROS_HEALTHと外部QUERY_COMMAND_STATEは後続計画であり、現在使えるAPI/topicとして案内しない。
+新規の事実を未知項目として旧schemaへ付加するとstrip/拒否される。#194までにtelemetry・構成・ROS command・goal受付/feedback/実行終端/停止観測を実装し、#195でCANCELとbridge-requestsのCANCEL_COMMAND、#196でROS_HEALTHと機体側拒否理由を追加した。通常実行はBridge 0.3.0〜0.5.0・Adapter 0.3.0/0.4.0・Capability Profile 1.1.0、中断はBridge 0.4.0以降を条件とする。旧0.2.0/1.0.0は履歴読み取りだけを維持する。外部QUERY_COMMAND_STATEは未追加で、現在使えるAPI/topicとして案内しない。
 
 | 経路                                | 採用する変更・責務                                                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

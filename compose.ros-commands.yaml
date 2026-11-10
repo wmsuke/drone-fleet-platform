@@ -5,12 +5,12 @@ services:
       OTA_TRUST_STORE_PATH: /tmp/unused-ros-e2e-trust.json
   ros-reference:
     image: ${ROS_BRIDGE_IMAGE:?}
+    environment:
+      FASTRTPS_DEFAULT_PROFILES_FILE: /workspace/config/dds-udp-test.xml
     command:
       [
-        "ros2",
-        "run",
-        "fleet_reference",
-        "serve",
+        "python3",
+        "/workspace/tools/reference_supervisor.py",
         "--config",
         "${ROS_REFERENCE_CONFIG:-/workspace/config/commands.json}",
       ]
@@ -25,6 +25,8 @@ services:
       BRIDGE_STATE_DIR: /data/fleet/${ROS_COMMAND_DEVICE:-ros-command-success}
       MQTT_HOST: mqtt
       BRIDGE_INTEGRATION: "true"
+      FASTRTPS_DEFAULT_PROFILES_FILE: /workspace/config/dds-udp-test.xml
+      LD_PRELOAD: /workspace/tools/dds_fault.so
       BRIDGE_TEST_FAULT: ${ROS_COMMAND_FAULT:-}
     network_mode: service:ros-reference
     ipc: service:ros-reference

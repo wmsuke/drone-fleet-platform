@@ -488,6 +488,7 @@ docker compose down --volumes
 - [MQTT / ROS 2 Bridgeの起動・終了と接続状態](docs/ros-bridge.md)
 - [ROS commandの実行・保存と復旧](docs/ros-command-journal.md)（`corepack pnpm test:ros-commands`で実ActionからDB保存、再起動・再照会を検証する）
 - [ROS 2 Actionの中断と停止観測](docs/ros-cancellation.md)
+- [ROS切断・再起動と機体側制約](docs/ros-recovery.md)
 
 ## ライセンス
 

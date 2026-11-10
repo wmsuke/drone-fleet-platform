@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="fleet_reference",
-    version="0.3.0",
+    version="0.4.0",
     packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/fleet_reference"]),

@@ -12,6 +12,7 @@ from fleet_bridge_interfaces.action import ReturnHome
 from fleet_bridge_interfaces.msg import BridgeHeartbeat, RuntimeState
 from fleet_bridge_interfaces.srv import GetRuntimeState
 from fleet_bridge_interfaces.srv import GetConfiguration
+from fleet_bridge_interfaces.srv import GetGoalDecision
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 import rclpy
@@ -73,15 +74,19 @@ class State:
         self.executions = 0
         self.reason = "BOOTING"
         self.commands = set()
+        self.rejections = {}
+        self.battery_percentage = config.battery_percentage
+        self.started_at = None
 
     def check(self):
         if time.monotonic() - self.heartbeat_at >= LIMITS["heartbeatTimeoutMs"] / 1000:
             return "BRIDGE_WATCHDOG"
         if time.monotonic() - self.last_sample >= LIMITS["sensorFreshnessMs"] / 1000:
             return "SENSOR_STALE"
-        if self.config.battery_percentage < LIMITS["minBatteryPercent"] / 100:
+        if not LIMITS["minBatteryPercent"] / 100 <= self.battery_percentage <= 1:
             return "LOW_BATTERY"
-        if self.vehicle.distance > LIMITS["maxDistanceMm"] / 1000:
+        if (not math.isfinite(self.vehicle.distance)
+                or self.vehicle.distance > LIMITS["maxDistanceMm"] / 1000):
             return "POLICY_REJECTED"
         return None
 
@@ -115,6 +120,10 @@ class ReferenceVehicle(Node):
 
     def publish_odometry(self):
         with self.state.lock:
+            if (self.state.config.scenario == "sensor_stale" and self.state.started_at
+                    and time.monotonic() - self.state.started_at
+                    >= self.state.config.failure_after_sec):
+                return
             stamp = self.get_clock().now().to_msg()
             message = Odometry()
             message.header.stamp = stamp
@@ -133,7 +142,7 @@ class ReferenceVehicle(Node):
             message.header.stamp = stamp
             message.header.frame_id = self.state.base_frame
             message.voltage = 12.0
-            message.percentage = float(self.state.config.battery_percentage)
+            message.percentage = float(self.state.battery_percentage)
             temperature = self.state.config.temperature
             message.temperature = float(temperature) if temperature is not None else math.nan
             message.present = True
@@ -170,6 +179,8 @@ class ReferenceAdapter(Node):
         )
         self.create_service(GetConfiguration, "get_configuration", self.get_configuration,
                             callback_group=group)
+        self.create_service(GetGoalDecision, "get_goal_decision", self.get_goal_decision,
+                            callback_group=group)
         feedback_qos = QoSProfile(
             depth=10, reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
@@ -185,6 +196,16 @@ class ReferenceAdapter(Node):
             response.valid = request.device_id == self.state.config.device_id
             if response.valid:
                 response.configuration_json = canonical(configuration(self.state))
+        return response
+
+    def get_goal_decision(self, request, response):
+        with self.state.lock:
+            decision = self.state.rejections.get(bytes(request.goal_id.uuid))
+            response.found = decision is not None
+            response.goal_id = request.goal_id
+            response.server_instance_id = self.state.server_id
+            response.configuration_id = self.state.config.digest
+            response.reason = decision or "DECISION_UNAVAILABLE"
         return response
 
     def heartbeat(self, message):
@@ -272,6 +293,12 @@ class ReferenceAdapter(Node):
                 s.accepted += 1
                 s.reason = "GOAL_ACCEPTED"
                 return GoalResponse.ACCEPT
+            key = bytes(request.goal_id.uuid)
+            # 拒否理由はgoal単位で先着固定。無制限な拒否履歴を作らない。
+            if key not in s.rejections:
+                if len(s.rejections) >= 100:
+                    del s.rejections[next(iter(s.rejections))]
+                s.rejections[key] = s.reason
             return GoalResponse.REJECT
 
     def cancel(self, handle):
@@ -313,12 +340,18 @@ class ReferenceAdapter(Node):
             if time.time() >= seconds(request.expires_at):
                 return self.finish(handle, "abort", "REJECTED_EXPIRED", None, 0.0)
             self.state.executions += 1
+            self.state.started_at = start
             self.state.vehicle.departure = list(self.state.vehicle.position)
             started = utc()
         while rclpy.ok() and not self.state.stopping:
             elapsed = time.monotonic() - start
             with self.state.lock:
                 s = self.state
+                if elapsed >= s.config.failure_after_sec:
+                    if s.config.scenario == "battery_drop":
+                        s.battery_percentage = 0.1
+                    if s.config.scenario == "policy_violation":
+                        s.vehicle.position[0] = s.vehicle.home[0] + 11
                 if elapsed >= 60 or time.time() >= seconds(request.result_deadline):
                     return self.finish(handle, "abort", "RESULT_DEADLINE", started, 0.0)
                 if s.check():
@@ -328,7 +361,7 @@ class ReferenceAdapter(Node):
                     os._exit(72)
                 if s.config.scenario == "abort" and elapsed >= s.config.failure_after_sec:
                     return self.finish(handle, "abort", "INJECTED_FAILURE", started, 0.0)
-                if s.config.scenario != "unresponsive":
+                if s.config.scenario not in ("unresponsive", "sensor_stale"):
                     s.vehicle.move_home(elapsed)
                     if handle.is_cancel_requested:
                         cancel_since = cancel_since or time.monotonic()
