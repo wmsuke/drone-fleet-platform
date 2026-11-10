@@ -170,14 +170,39 @@ export async function verifyRecovery({
     const cloud = (await api(`/commands/${node.id}/bridge-execution`)).body;
     assert.equal(cloud.target.stopConfirmed, false);
     assert.notEqual(cloud.command.executionStatus, "FAILED");
+    assert.equal(
+      (await api(`/devices/${device}/commands`, { type: "RETURN_HOME" }))
+        .status,
+      409,
+    );
   } finally {
     signal("SIGCONT");
   }
-  await execution(node.id, ["FAILED"]);
+  await until(
+    async () => (await health()).latest?.message.rosAvailable === true,
+    "ROS node available again",
+    15,
+  );
   await duplicate(node);
+  // 再開時のheartbeatとwatchdogの順序で、元のgoalは継続または実結果で終了する。
+  // node喪失だけを根拠にFAILEDや停止確認を要求しない。
+  const nodeResult = (await api(`/commands/${node.id}/bridge-execution`)).body;
+  if (nodeResult.command.executionStatus === "FAILED") {
+    assert(
+      nodeResult.events.some((e) => e.message.reason === "BRIDGE_WATCHDOG"),
+    );
+  } else {
+    assert.equal(nodeResult.target.stopConfirmed, false);
+    assert.equal(
+      (await api(`/devices/${device}/commands`, { type: "RETURN_HOME" }))
+        .status,
+      409,
+    );
+  }
   evidence.push({
     case: "ros-node-loss-does-not-imply-stop",
     commandId: node.id,
+    executionStatus: nodeResult.command.executionStatus,
     executionCount: runtime().executionCount,
   });
 
