@@ -34,9 +34,9 @@ const executionLabels = {
   CANCELLED: "実行中断",
 } as const;
 const cancelLabels = {
-  REQUESTED: "中断要求・送信待ち",
+  REQUESTED: "中断要求を保存（端末受領は未確認）",
   RECEIVED: "中断要求をBridgeが受領",
-  SEND_INTENT: "ROSへ中断要求を送信",
+  SEND_INTENT: "ROSへの中断送信意図を記録（送信結果は未確認）",
   ACCEPTED: "ROSが中断を受付（終端・停止は未確定）",
   REJECTED: "ROSの中断受付なし（理由は証拠で確認）",
   UNCERTAIN: "中断応答が不明",
