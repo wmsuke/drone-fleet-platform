@@ -32,6 +32,7 @@ class Execution:
         self.rejections = {}
         self.results = {}
         self.queries = {}
+        self.unknowns = {}
         self.next_query = {}
         self.next_feedback = {}
         self.stop_since = {}
@@ -82,6 +83,7 @@ class Execution:
 
     def uncertain(self, value, reason, raw=None):
         command_id = value["commandId"]
+        self.unknowns.pop(command_id, None)
         progress = self.commands.progress(command_id)
         if progress["terminalEvent"]:
             return
@@ -192,6 +194,25 @@ class Execution:
         if runtime and runtime.server_instance_id != value["configuration"]["serverInstanceId"]:
             self.uncertain(value, "SERVER_CHANGED")
             return
+        elapsed = now - progress["queryStarted"] if progress["queryStarted"] is not None else 0
+        if runtime is None:
+            # 起動直後/通信断の未確認serverへUUID照会を出さない。既存予算は延長しない。
+            if (elapsed >= 30 or elapsed < -5
+                    or (progress["queryCount"] >= 5 and command_id not in self.queries)):
+                self.uncertain(value, "RESULT_TIMEOUT")
+            return
+        if runtime.configuration_id != value["configuration"]["adapterConfigurationId"]:
+            self.uncertain(value, "CONFIGURATION_MISMATCH")
+            return
+        unknown = self.unknowns.get(command_id)
+        if unknown:
+            # UNKNOWNにはserver UUIDがない。応答後の新しいruntime照会で世代を再確認する。
+            serial, reason = unknown
+            if self.ros.runtime_probe_serial() > serial:
+                self.uncertain(value, reason)
+            elif elapsed >= 30 or elapsed < -5:
+                self.uncertain(value, "RESULT_TIMEOUT")
+            return
         cache_window_elapsed = now - (progress["sendAt"] or instant(
             value["command"]["timestamp"])) >= (
                 value["configuration"]["profile"]["definition"]["resultCacheMs"] / 1000)
@@ -206,8 +227,9 @@ class Execution:
                     self.next_query[command_id] = mono + min(2**progress["queryCount"], 8)
                     return
                 if response.status == 0:
-                    self.uncertain(value, "RESULT_CACHE_UNAVAILABLE" if cache_window_elapsed
-                                   else "RESULT_UNKNOWN")
+                    self.unknowns[command_id] = (
+                        self.ros.runtime_probe_serial(),
+                        "RESULT_CACHE_UNAVAILABLE" if cache_window_elapsed else "RESULT_UNKNOWN")
                 else:
                     self.process_result(value, response)  # SQLite例外を隠さない。
                 return

@@ -14,6 +14,8 @@ Issue #196。[実行journal](ros-command-journal.md)と[中断追跡](ros-cancel
 
 GetResultは同じgoalへ同時1件、1回2秒、1〜8秒backoff、最大5回/最初の照会から30秒で打ち切る。回数・最初のUTCは再起動しても戻さない。結果の元期限はAPI受付から120秒。参照serverのresult cacheは既定900秒・最大900秒で、process再起動時は失う。期限だけから実際のcache消失や成否を推定しない。
 
+起動直後やROS不通でserver/configを照合できない間はGetResultを送らない。照会済みの30秒予算や元120秒期限は延長しない。UNKNOWN応答にはserver UUIDがないため、応答後の新しいruntime照会で世代を再確認してから理由を確定する。世代が変わればSERVER_CHANGED、同じ世代で取得不能ならRESULT_UNKNOWN / RESULT_CACHE_UNAVAILABLEとし、いずれも停止成功や再投入へ読み替えない。
+
 前goalが継続し得る間、CloudとBridge、参照機体の三層で新操作を拒否する。終端が得られても停止観測が欠ければ予約を残す。停止観測は同じserver/goal/config、終端後5秒以内、新鮮なIDLE・速度0.05 m/s以下の1秒継続を必要とし、遮断前の観測や単なる速度0で補完しない。後着結果は保存しても元期限内の成功へ書き換えない。
 
 ## 接続と引き継ぎの記録

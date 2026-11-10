@@ -225,6 +225,10 @@ class RosClient:
                 return None
             return copy.deepcopy(self.runtime_state)
 
+    def runtime_probe_serial(self):
+        with self.guard:
+            return self.last_response
+
     def permit_heartbeat(self, owner_id, state):
         with self.guard:
             previous = self.owner_permission
