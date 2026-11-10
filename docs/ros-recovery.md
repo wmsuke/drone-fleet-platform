@@ -24,7 +24,7 @@ ingestorは`bridge_health_events`へ原文・canonical hash・採否・受信UTC
 
 `GET /devices/:deviceId/bridge-health?limit=100`は最新の採用記録、fresh/ready、人間判断要否と件数制限付き履歴を返す。送信UTCと受信UTCの両方が15秒未満であることを必要とし、古いoutboxが再到着しても復旧済みにしない。Bridge 0.5.0の新規commandには新鮮なready報告と現在server UUIDの一致も必要とする。旧0.3.0/0.4.0の実行・中断契約は維持する。
 
-`GET /commands/:commandId/bridge-execution`の`recovery`は、保存済みの結果不明・矛盾・停止未確認を人間へ引き継ぐ。証拠event、理由、`automaticResubmit=false`、`RECONCILE_EVIDENCE_AND_INSPECT_DEVICE`を返す。接続復帰でこの判断を解除せず、実機・保存証拠・機体側制約の確認を求める。本Issueは安全性を確認できない予約の強制解除APIを作らない。
+`GET /commands/:commandId/bridge-execution`の`recovery`は、保存済みの結果不明・矛盾・終端後5秒を過ぎた停止未確認を人間へ引き継ぐ。停止観測を正常に待つ最初の5秒は人間対応必須としない。証拠event、RESULT_DEADLINE / EVENT_CONFLICT / STOP_UNCONFIRMED等の理由、`automaticResubmit=false`、`RECONCILE_EVIDENCE_AND_INSPECT_DEVICE`を返す。接続復帰でこの判断を解除せず、実機・保存証拠・機体側制約の確認を求める。本Issueは安全性を確認できない予約の強制解除APIを作らない。
 
 接続理由・判断要否の変化は`bridge.health_changed`として既存auditへ記録し、未解決commandがあれば関連付ける。これはsystemが記録した引き継ぎ要求であり、操作者の本人認証や作業開始/終了ではない。作業完了時刻・人間の所要時間・費用は未報告nullのままとする。OTA専用の介入へ混在させない。専用ROS画面は#197の範囲。
 

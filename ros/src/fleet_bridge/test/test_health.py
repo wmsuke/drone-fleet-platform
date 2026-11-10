@@ -1,6 +1,7 @@
 """healthは実行終端/停止と別の永続eventで、DB receiptまで残す。"""
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -50,4 +51,27 @@ def test_health_is_durable_receipted_and_not_a_stop(tmp_path):
     with pytest.raises(JournalError):
         health.tick(mqtt, False)
     assert journal.pending_bridge_events() == events
+    journal.close()
+
+
+@pytest.mark.parametrize("age,required", [(0, False), (6, True)])
+def test_handoff_waits_for_stop_observation_window(tmp_path, age, required):
+    source = json.loads(Path("/workspace/contracts/configuration-fixtures.json").read_text())[0][
+        "message"]
+    config = load_config({"BRIDGE_DEVICE_ID": source["deviceId"],
+                          "BRIDGE_STATE_DIR": str(tmp_path)})
+    journal = Journal(config)
+    journal.configuration_report(source["configuration"])
+    stamp = (datetime.now(timezone.utc) - timedelta(seconds=age)).isoformat().replace("+00:00", "Z")
+    value = {"commandId": source["eventId"], "goalId": source["sessionId"],
+             "state": "SUCCEEDED", "reason": "HOME_REACHED",
+             "command": {"resultDeadline": source["timestamp"]}}
+    commands = SimpleNamespace(open_commands=lambda: [value], progress=lambda _: {
+        "queryCount": 0, "terminalEvent": json.dumps({"timestamp": stamp})})
+    ros = SimpleNamespace(runtime_snapshot=lambda: None,
+                          observations=SimpleNamespace(execution_sample=lambda: None))
+    Health(journal, commands, ros).tick({"mqtt_connected": True, "mqtt_subscribed": True}, False)
+    event = json.loads(journal.pending_bridge_events()[-1][1])
+    assert event["pendingGoal"]["humanReviewRequired"] is required
+    assert "stopConfirmed" not in event
     journal.close()

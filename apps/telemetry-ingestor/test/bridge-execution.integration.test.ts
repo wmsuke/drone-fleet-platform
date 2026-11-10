@@ -232,6 +232,7 @@ describe.skipIf(!enabled)(
         stopConfirmed: false,
       });
       expect(state?.recovery.humanReviewRequired).toBe(true);
+      expect(state?.recovery.reason).toBe("EVENT_CONFLICT");
       expect(state?.events).toHaveLength(1);
     });
     it("keeps idempotent cancel acceptance distinct from result/stop and preserves late responses", async () => {

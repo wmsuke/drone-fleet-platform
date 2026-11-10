@@ -525,7 +525,9 @@ export function createBridgeExecutionRepository(db: Database) {
         (["SUCCEEDED", "FAILED", "CANCELLED"].includes(
           state.command.executionStatus,
         ) &&
-          !state.target.stopConfirmed) ||
+          !state.target.stopConfirmed &&
+          !!state.command.executionResultAt &&
+          Date.now() - state.command.executionResultAt.getTime() >= 5000) ||
         state.target.conflicted;
       return {
         ...state,
@@ -533,7 +535,16 @@ export function createBridgeExecutionRepository(db: Database) {
           humanReviewRequired: handoff,
           automaticResubmit: false,
           evidenceEventId: last?.eventId ?? null,
-          reason: last?.message.reason ?? null,
+          reason: state.target.conflicted
+            ? "EVENT_CONFLICT"
+            : state.command.executionStatus === "UNCERTAIN"
+              ? last?.message.kind === "EXECUTION" &&
+                last.message.status === "UNCERTAIN"
+                ? last.message.reason
+                : "RESULT_DEADLINE"
+              : handoff
+                ? "STOP_UNCONFIRMED"
+                : null,
           nextAction: handoff ? "RECONCILE_EVIDENCE_AND_INSPECT_DEVICE" : null,
           completedAt: null,
           durationMs: null,

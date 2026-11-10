@@ -5,6 +5,8 @@ import uuid
 
 from fleet_reference.configuration import canonical, digest
 from .observations import utc
+from .command_journal import instant
+import json
 
 
 class Health:
@@ -25,7 +27,9 @@ class Health:
                        "state": value["state"], "reason": value["reason"],
                        "queryCount": progress["queryCount"],
                        "resultDeadline": value["command"]["resultDeadline"],
-                       "humanReviewRequired": bool(progress["terminalEvent"])}
+                       "humanReviewRequired": bool(progress["terminalEvent"]) and (
+                           value["state"] == "UNCERTAIN" or time.time() >= instant(
+                               json.loads(progress["terminalEvent"])["timestamp"]) + 5)}
         reason = ("ROS_UNAVAILABLE" if runtime is None else
                   "OBSERVATIONS_STALE" if sample is None else
                   "GOAL_UNRESOLVED" if pending else
