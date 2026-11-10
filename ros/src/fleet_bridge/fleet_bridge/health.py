@@ -30,6 +30,9 @@ class Health:
                        "humanReviewRequired": bool(progress["terminalEvent"]) and (
                            value["state"] == "UNCERTAIN" or time.time() >= instant(
                                json.loads(progress["terminalEvent"])["timestamp"]) + 5)}
+        # execution.tick後にも鮮度・接続は変わる。古いreadyで矛盾したeventを保存しない。
+        ready = bool(ready and runtime is not None and sample is not None and not pending
+                     and mqtt["mqtt_connected"] and mqtt["mqtt_subscribed"])
         reason = ("ROS_UNAVAILABLE" if runtime is None else
                   "OBSERVATIONS_STALE" if sample is None else
                   "GOAL_UNRESOLVED" if pending else

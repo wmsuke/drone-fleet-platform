@@ -54,6 +54,30 @@ def test_health_is_durable_receipted_and_not_a_stop(tmp_path):
     journal.close()
 
 
+@pytest.mark.parametrize("lost", ["runtime", "observations", "mqtt"])
+def test_ready_is_revoked_if_dependencies_expire_after_execution_tick(tmp_path, lost):
+    value = json.loads(Path("/workspace/contracts/configuration-fixtures.json").read_text())[0][
+        "message"]["configuration"]
+    config = load_config({"BRIDGE_DEVICE_ID": value["deviceId"],
+                          "BRIDGE_STATE_DIR": str(tmp_path)})
+    journal = Journal(config)
+    journal.configuration_report(value)
+    runtime = SimpleNamespace(server_instance_id="11111111-1111-4111-8111-111111111111",
+                              reason="READY")
+    ros = SimpleNamespace(runtime_snapshot=lambda: None if lost == "runtime" else runtime,
+                          observations=SimpleNamespace(
+                              execution_sample=lambda: None if lost == "observations" else {}))
+    commands = SimpleNamespace(open_commands=lambda: [])
+    Health(journal, commands, ros).tick(
+        {"mqtt_connected": lost != "mqtt", "mqtt_subscribed": lost != "mqtt"}, True)
+    event = json.loads(journal.pending_bridge_events()[-1][1])
+    assert event["ready"] is False
+    assert event["reason"] == {"runtime": "ROS_UNAVAILABLE",
+                               "observations": "OBSERVATIONS_STALE",
+                               "mqtt": "MQTT_UNAVAILABLE"}[lost]
+    journal.close()
+
+
 @pytest.mark.parametrize("age,required", [(0, False), (6, True)])
 def test_handoff_waits_for_stop_observation_window(tmp_path, age, required):
     source = json.loads(Path("/workspace/contracts/configuration-fixtures.json").read_text())[0][
