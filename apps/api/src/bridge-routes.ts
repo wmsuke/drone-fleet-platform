@@ -13,6 +13,23 @@ export function registerBridgeRoutes(
   app: FastifyInstance,
   repository: BridgeRepository,
 ) {
+  app.get<{ Params: { deviceId: string }; Querystring: { limit?: string } }>(
+    "/devices/:deviceId/bridge-health",
+    async (request, reply) => {
+      const id = deviceIdSchema.safeParse(request.params.deviceId);
+      const limit = telemetryLimitSchema.safeParse(
+        request.query.limit ?? "100",
+      );
+      if (!id.success || !limit.success)
+        return reply.code(400).send({ error: "INVALID_QUERY" });
+      if (!(await repository.get(id.data)))
+        return reply.code(404).send({ error: "DEVICE_NOT_FOUND" });
+      return {
+        ...(await repository.health.get(id.data)),
+        events: await repository.health.history(id.data, limit.data),
+      };
+    },
+  );
   app.get<{ Params: { deviceId: string } }>(
     "/devices/:deviceId/bridge-configuration",
     async (request, reply) => {

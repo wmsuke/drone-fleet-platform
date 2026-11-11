@@ -6,6 +6,7 @@ import { setTimeout } from "node:timers/promises";
 import process from "node:process";
 import console from "node:console";
 import { verifyCancellations } from "./verify-ros-cancels.mjs";
+import { verifyRecovery } from "./verify-ros-recovery.mjs";
 import { Buffer } from "node:buffer";
 /* global fetch */
 
@@ -199,6 +200,31 @@ async function barrier(id) {
   }, `fault ${fault}`);
 }
 const evidence = [];
+async function recoveryCases() {
+  await switchReference("recovery", "ros-recovery-mqtt");
+  await verifyRecovery({
+    api,
+    send,
+    switchDevice,
+    execution,
+    compose,
+    until,
+    sql,
+    publish,
+    evidence,
+    kill,
+    restart,
+    runtime,
+  });
+}
+if (process.env.ROS_COMMANDS_CASES === "recovery") {
+  await recoveryCases();
+  await writeFile(
+    `${results}/action-evidence.json`,
+    JSON.stringify(evidence, null, 2),
+  );
+  process.exit(0);
+}
 if (process.env.ROS_COMMANDS_CASES === "cancel") {
   await switchReference("cancels", "ros-cancel-normal");
   await verifyCancellations({
@@ -296,6 +322,11 @@ for (const [name, state, count] of [
     assert.equal(result.command.executionStartedAt, null);
     assert.equal(result.target.notStarted, true);
     assert.equal(result.target.stopConfirmed, false);
+    assert.equal(
+      result.events.find((e) => e.message.kind === "GOAL_REJECTED")?.message
+        .adapterDecision?.reason,
+      "INJECTED_REJECT",
+    );
   } else
     assert.equal(
       result.events.find((e) => e.message.status === "FAILED").message.reason,
@@ -533,6 +564,7 @@ await until(
   "late rejection history",
 );
 assert.equal(runtime().executionCount, 0);
+await recoveryCases();
 await writeFile(
   `${results}/action-evidence.json`,
   JSON.stringify(evidence, null, 2),

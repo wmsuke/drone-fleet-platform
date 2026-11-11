@@ -3,7 +3,7 @@
     {
       "device_id": "ros-cancel-normal",
       "scenario": "delayed_cancel",
-      "cancel_delay_sec": 1.5
+      "cancel_delay_sec": 0
     },
     {
       "device_id": "ros-cancel-race",

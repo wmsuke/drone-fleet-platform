@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
+from concurrent.futures import Future
+from unittest.mock import Mock
 
 import fastjsonschema
 from builtin_interfaces.msg import Time
@@ -137,4 +139,52 @@ def test_critical_capacity_failure_rolls_back_state_and_event(tmp_path):
             "status": "UNCERTAIN", "reason": "RESULT_TIMEOUT"}, "UNCERTAIN")
     assert commands.get(value["commandId"])["state"] == "ACCEPTED"
     assert journal.pending_bridge_events() == before
+    journal.close()
+
+
+def test_recovery_does_not_query_an_unconfirmed_server(tmp_path):
+    journal, commands, execution, value, _ = fixture(tmp_path)
+    execution.ros.query = Mock()
+    execution.reconcile(value, None)
+    assert commands.progress(value["commandId"])["queryCount"] == 0
+    execution.ros.query.assert_not_called()
+    execution.reconcile(value, SimpleNamespace(server_instance_id=str(uuid.uuid4())))
+    assert commands.get(value["commandId"])["reason"] == "SERVER_CHANGED"
+    execution.ros.query.assert_not_called()
+    journal.close()
+
+
+def test_normal_result_wait_unknown_reconciles_instead_of_invalid_result(tmp_path):
+    journal, commands, execution, value, _ = fixture(tmp_path)
+    execution.consume_result(value, SimpleNamespace(status=0))
+    assert commands.get(value["commandId"])["state"] == "UNCERTAIN"
+    assert commands.progress(value["commandId"])["terminalEvent"] is None
+    execution.reconcile(commands.get(value["commandId"]),
+                        SimpleNamespace(server_instance_id=str(uuid.uuid4())))
+    assert commands.get(value["commandId"])["reason"] == "SERVER_CHANGED"
+    assert not commands.progress(value["commandId"])["stopConfirmed"]
+    journal.close()
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_unknown_result_requires_a_new_generation_probe(tmp_path, changed):
+    journal, commands, execution, value, now = fixture(tmp_path)
+    serial = [1]
+    execution.ros.runtime_probe_serial = lambda: serial[0]
+    commands.query_attempt(value["commandId"], now.timestamp())
+    future = Future()
+    future.set_result(SimpleNamespace(status=0))
+    execution.queries[value["commandId"]] = (future, 0)
+    runtime = SimpleNamespace(server_instance_id=value["configuration"]["serverInstanceId"],
+                              configuration_id=value["configuration"]["adapterConfigurationId"])
+    execution.reconcile(value, runtime)
+    assert commands.progress(value["commandId"])["terminalEvent"] is None
+    serial[0] += 1
+    if changed:
+        runtime.server_instance_id = str(uuid.uuid4())
+    execution.reconcile(value, runtime)
+    assert commands.get(value["commandId"])["reason"] == (
+        "SERVER_CHANGED" if changed else "RESULT_UNKNOWN")
+    assert commands.progress(value["commandId"])["queryCount"] == 1
+    assert not commands.progress(value["commandId"])["stopConfirmed"]
     journal.close()

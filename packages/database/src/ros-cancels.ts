@@ -16,6 +16,7 @@ import {
   commands,
   devices,
   bridgeConflicts,
+  bridgeHealthEvents,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import { appendAudit, auditContext } from "./audit.js";
@@ -180,7 +181,7 @@ export function createRosCancelRepository(db: Database) {
           );
         if (
           configuration!.snapshot.bridge.status !== "KNOWN" ||
-          configuration!.snapshot.bridge.version !== "0.4.0"
+          !["0.4.0", "0.5.0"].includes(configuration!.snapshot.bridge.version)
         )
           throw new RosCancelError(409, "ROS_CANCEL_UPGRADE_REQUIRED");
         const cancelId = randomUUID(),
@@ -372,7 +373,11 @@ export function createRosCancelRepository(db: Database) {
             timestamp: old.receivedAt.toISOString(),
           };
         }
-        for (const table of [bridgeReports, bridgeActionEvents]) {
+        for (const table of [
+          bridgeReports,
+          bridgeActionEvents,
+          bridgeHealthEvents,
+        ]) {
           if (
             (
               await tx

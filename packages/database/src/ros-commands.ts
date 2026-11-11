@@ -12,6 +12,7 @@ import {
   otaReservations,
 } from "./schema.js";
 import type { Database } from "./connection.js";
+import { createBridgeHealthRepository } from "./bridge-health.js";
 export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export class RosCommandError extends Error {}
 
@@ -79,9 +80,9 @@ export async function rosReadiness(
   const snapshot = configuration.snapshot;
   if (
     snapshot.bridge.status !== "KNOWN" ||
-    !["0.3.0", "0.4.0"].includes(snapshot.bridge.version) ||
+    !["0.3.0", "0.4.0", "0.5.0"].includes(snapshot.bridge.version) ||
     snapshot.adapter.status !== "KNOWN" ||
-    snapshot.adapter.version !== "0.3.0" ||
+    !["0.3.0", "0.4.0"].includes(snapshot.adapter.version) ||
     snapshot.profile.definition.version !== "1.1.0"
   )
     throw new RosCommandError("ROS_UPGRADE_REQUIRED");
@@ -108,6 +109,20 @@ export async function rosReadiness(
   )
     throw new RosCommandError("ROS_OBSERVATION_UNAVAILABLE");
   await assertNoRosExecution(tx, [deviceId]);
+  if (
+    snapshot.bridge.status === "KNOWN" &&
+    snapshot.bridge.version === "0.5.0"
+  ) {
+    const health = await createBridgeHealthRepository(tx as Database).get(
+      deviceId,
+      now,
+    );
+    if (
+      !health.ready ||
+      health.latest?.message.serverInstanceId !== snapshot.serverInstanceId
+    )
+      throw new RosCommandError("ROS_HEALTH_UNAVAILABLE");
+  }
   if (
     (
       await tx

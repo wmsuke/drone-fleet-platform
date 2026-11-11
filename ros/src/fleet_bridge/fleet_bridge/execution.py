@@ -29,8 +29,10 @@ class Execution:
         self.owner = commands.db.execute("SELECT journal FROM bridge_counters").fetchone()[0]
         self.commands.recovery()
         self.sends = {}
+        self.rejections = {}
         self.results = {}
         self.queries = {}
+        self.unknowns = {}
         self.next_query = {}
         self.next_feedback = {}
         self.stop_since = {}
@@ -81,6 +83,7 @@ class Execution:
 
     def uncertain(self, value, reason, raw=None):
         command_id = value["commandId"]
+        self.unknowns.pop(command_id, None)
         progress = self.commands.progress(command_id)
         if progress["terminalEvent"]:
             return
@@ -106,6 +109,14 @@ class Execution:
         pending = self.results.pop(command_id, None)
         if pending:
             pending.cancel()  # GetResult待ちを破棄するだけでgoalはcancelしない。
+
+    def consume_result(self, value, response):
+        if response.status == 0:
+            # 通常のGoalHandle待ちにもserver再起動後のUNKNOWNが届き得る。
+            # 不正resultとして確定せず、元UUIDと新鮮な世代の再照合へ移る。
+            self.begin_recovery(value["commandId"])
+        else:
+            self.process_result(value, response)
 
     def process_result(self, value, response):
         result = response.result
@@ -191,6 +202,25 @@ class Execution:
         if runtime and runtime.server_instance_id != value["configuration"]["serverInstanceId"]:
             self.uncertain(value, "SERVER_CHANGED")
             return
+        elapsed = now - progress["queryStarted"] if progress["queryStarted"] is not None else 0
+        if runtime is None:
+            # 起動直後/通信断の未確認serverへUUID照会を出さない。既存予算は延長しない。
+            if (elapsed >= 30 or elapsed < -5
+                    or (progress["queryCount"] >= 5 and command_id not in self.queries)):
+                self.uncertain(value, "RESULT_TIMEOUT")
+            return
+        if runtime.configuration_id != value["configuration"]["adapterConfigurationId"]:
+            self.uncertain(value, "CONFIGURATION_MISMATCH")
+            return
+        unknown = self.unknowns.get(command_id)
+        if unknown:
+            # UNKNOWNにはserver UUIDがない。応答後の新しいruntime照会で世代を再確認する。
+            serial, reason = unknown
+            if self.ros.runtime_probe_serial() > serial:
+                self.uncertain(value, reason)
+            elif elapsed >= 30 or elapsed < -5:
+                self.uncertain(value, "RESULT_TIMEOUT")
+            return
         cache_window_elapsed = now - (progress["sendAt"] or instant(
             value["command"]["timestamp"])) >= (
                 value["configuration"]["profile"]["definition"]["resultCacheMs"] / 1000)
@@ -205,8 +235,9 @@ class Execution:
                     self.next_query[command_id] = mono + min(2**progress["queryCount"], 8)
                     return
                 if response.status == 0:
-                    self.uncertain(value, "RESULT_CACHE_UNAVAILABLE" if cache_window_elapsed
-                                   else "RESULT_UNKNOWN")
+                    self.unknowns[command_id] = (
+                        self.ros.runtime_probe_serial(),
+                        "RESULT_CACHE_UNAVAILABLE" if cache_window_elapsed else "RESULT_UNKNOWN")
                 else:
                     self.process_result(value, response)  # SQLite例外を隠さない。
                 return
@@ -310,13 +341,41 @@ class Execution:
                                             "ACCEPTED")
                         self.results[command_id] = handle.get_result_async()
                     else:
-                        self.commands.event(command_id, "GOAL_REJECTED",
-                                            {"reason": "ACTION_REJECTED"},
-                                            "REJECTED")
+                        self.rejections[command_id] = (
+                            self.ros.rejection(value["goalId"]), time.monotonic() + 2)
                 elif time.monotonic() >= deadline:
                     future.cancel()
                     del self.sends[command_id]
                     self.begin_recovery(command_id)
+            rejection = self.rejections.get(command_id)
+            if rejection and (rejection[0].done() or time.monotonic() >= rejection[1]):
+                future, _ = self.rejections.pop(command_id)
+                fields = {"reason": "ACTION_REJECTED"}
+                try:
+                    if not future.done():
+                        self.ros.abandon_rejection(future)
+                    else:
+                        decision = future.result()
+                        reasons = {"INVALID_GOAL", "OWNER_MISMATCH", "DEVICE_BUSY",
+                                   "COMMAND_REPLAY_OR_FULL", "CONFIGURATION_MISMATCH",
+                                   "REJECTED_EXPIRED", "INVALID_DEADLINE", "INJECTED_REJECT",
+                                   "BRIDGE_WATCHDOG", "SENSOR_STALE", "LOW_BATTERY",
+                                   "POLICY_REJECTED"}
+                        if (decision.found and goal_id(decision.goal_id) == value["goalId"]
+                                and decision.server_instance_id
+                                == value["configuration"]["serverInstanceId"]
+                                and decision.configuration_id
+                                == value["configuration"]["adapterConfigurationId"]
+                                and decision.reason in reasons):
+                            raw = bytes(serialize_message(decision))
+                            if len(raw) <= 6144:
+                                fields["adapterDecision"] = {
+                                    "reason": decision.reason,
+                                    "cdr": base64.b64encode(raw).decode(),
+                                    "hash": hashlib.sha256(raw).hexdigest()}
+                except Exception:
+                    pass  # 明示rejectは既知だが、理由を取得できなければ補完しない。
+                self.commands.event(command_id, "GOAL_REJECTED", fields, "REJECTED")
             feedback = self.ros.latest_feedback(command_id)
             if feedback and time.monotonic() >= self.next_feedback.get(command_id, 0):
                 if (goal_id(feedback.goal_id) == value["goalId"]
@@ -343,7 +402,7 @@ class Execution:
                 except Exception:
                     self.begin_recovery(command_id)
                 else:
-                    self.process_result(self.commands.get(command_id), response)
+                    self.consume_result(self.commands.get(command_id), response)
             value = self.commands.get(command_id)
             if (self.unresolved(value) and not progress["terminalEvent"]
                     and value["state"] != "READY"):
@@ -372,5 +431,7 @@ class Execution:
             self.ros.abandon_query(future)
         for future, _ in self.sends.values():
             future.cancel()
+        for future, _ in self.rejections.values():
+            self.ros.abandon_rejection(future)
         for future in self.results.values():
             future.cancel()

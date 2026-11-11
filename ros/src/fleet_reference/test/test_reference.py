@@ -24,6 +24,7 @@ from diagnostic_msgs.msg import DiagnosticArray
 from fleet_bridge_interfaces.action import ReturnHome
 from fleet_bridge_interfaces.msg import BridgeHeartbeat
 from fleet_bridge_interfaces.srv import GetRuntimeState
+from fleet_bridge_interfaces.srv import GetGoalDecision
 from fleet_reference.model import Config, Vehicle, load_configs, namespace
 from fleet_reference.nodes import ros_uuid, sensor_qos, state_qos, utc
 
@@ -321,3 +322,39 @@ def test_invalid_goal_and_domain_isolation(runtime):
     start([{"device_id": "other-domain"}], domain=43)
     service = node.create_client(GetRuntimeState, namespace("other-domain") + "/get_runtime_state")
     assert not service.wait_for_service(timeout_sec=2)
+
+
+@pytest.mark.parametrize("scenario,reason", [
+    ("battery_drop", "LOW_BATTERY"), ("policy_violation", "POLICY_REJECTED"),
+    ("sensor_stale", "SENSOR_STALE"),
+])
+def test_vehicle_constraints_do_not_require_cloud(runtime, scenario, reason):
+    node, start = runtime
+    device = "local-" + scenario
+    start([{"device_id": device, "scenario": scenario}])
+    probe = Probe(node, device)
+    handle = probe.send()
+    assert handle.accepted
+    response = probe.result(handle)
+    assert response.status == GoalStatus.STATUS_ABORTED
+    assert response.result.reason == reason
+    assert response.result.final_velocity.twist.linear.x == 0
+    assert probe.get_state().execution_count == 1
+
+
+def test_frame_rejection_reason_is_correlated_to_exact_goal(runtime):
+    node, start = runtime
+    device = "reject-decision"
+    start([{"device_id": device}])
+    probe = Probe(node, device)
+    rejected = probe.send(lambda goal: setattr(goal, "frame_id", "other-device/map"))
+    assert not rejected.accepted
+    client = node.create_client(GetGoalDecision, namespace(device) + "/get_goal_decision")
+    assert client.wait_for_service(timeout_sec=10)
+    decision = completed(client.call_async(GetGoalDecision.Request(goal_id=rejected.goal_id)))
+    assert decision.found and decision.goal_id == rejected.goal_id
+    assert decision.reason == "CONFIGURATION_MISMATCH"
+    assert decision.server_instance_id == probe.state.server_instance_id
+    unknown = completed(client.call_async(GetGoalDecision.Request(goal_id=ros_uuid(uuid.uuid4()))))
+    assert not unknown.found and unknown.reason == "DECISION_UNAVAILABLE"
+    assert probe.get_state().execution_count == 0

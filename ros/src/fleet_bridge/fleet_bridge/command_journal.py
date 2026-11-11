@@ -114,8 +114,8 @@ class CommandJournal:
         for name in ("bridge", "adapter", "runtime", "operatingPolicy", "safetyConfig"):
             if configuration[name]["status"] != "KNOWN":
                 raise JournalError("CAPABILITY_UNKNOWN")
-        if (configuration["bridge"]["version"] not in ("0.3.0", "0.4.0")
-                or configuration["adapter"]["version"] != "0.3.0"
+        if (configuration["bridge"]["version"] not in ("0.3.0", "0.4.0", "0.5.0")
+                or configuration["adapter"]["version"] not in ("0.3.0", "0.4.0")
                 or configuration["profile"]["definition"]["version"] != "1.1.0"):
             raise JournalError("CAPABILITY_UPGRADE_REQUIRED")
         expected = {"command": "RETURN_HOME",

@@ -14,6 +14,7 @@ from .config import ConfigurationError, load_config
 from .command_journal import CommandJournal
 from .execution import Execution
 from .cancellation import Cancellation
+from .health import Health
 from .journal import Journal, JournalError
 from .ros_client import RosClient
 from .transport import MqttTransport, status_message
@@ -71,6 +72,7 @@ def run(config, stopping):
         ros = RosClient(config)
         execution = Execution(commands, ros)
         cancellations = Cancellation(commands, ros, execution)
+        health = Health(journal, commands, ros)
         transport.start()
         while not stopping.is_set():
             mqtt_state = transport.snapshot()
@@ -106,6 +108,7 @@ def run(config, stopping):
                     journal.configuration_report(reported[1])
                     report_serial = reported[0]
                     next_report = time.monotonic() + 5
+            health.tick(transport.snapshot(), ready)
             if telemetry_epoch != state["mqtt_epoch"]:
                 telemetry_epoch = state["mqtt_epoch"]
                 telemetry_due.clear()

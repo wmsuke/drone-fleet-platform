@@ -19,6 +19,24 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+export const bridgeHealthEvents = pgTable(
+  "bridge_health_events",
+  {
+    eventId: uuid("event_id").primaryKey(),
+    deviceId: varchar("device_id", { length: 64 }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    message: jsonb("message")
+      .$type<import("@drone-fleet/protocol").BridgeHealthEvent>()
+      .notNull(),
+    disposition: text("disposition").notNull(),
+    receivedAt: timestamp("received_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+  },
+  (t) => [index("bridge_health_device_idx").on(t.deviceId, t.receivedAt)],
+);
+
 export const rosCommandCancels = pgTable(
   "ros_command_cancels",
   {

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>fleet_bridge_interfaces</name>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <description>参照ROS機体のActionと稼働状態。MQTT wire schemaとは別の契約。</description>
   <maintainer email="maintainers@example.invalid">Fleet Platform</maintainer>
   <license>MIT</license>

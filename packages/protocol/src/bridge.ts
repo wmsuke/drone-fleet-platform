@@ -26,7 +26,7 @@ const component = z.discriminatedUnion("status", [
     .object({
       status: z.literal("KNOWN"),
       id,
-      version: z.enum(["0.2.0", "0.3.0", "0.4.0"]),
+      version: z.enum(["0.2.0", "0.3.0", "0.4.0", "0.5.0"]),
       releaseDigest: digest,
     })
     .strict(),
@@ -191,6 +191,20 @@ export const bridgeReasonSchema = z.enum([
   "DEVICE_BUSY",
   "STOP_OBSERVED",
 ]);
+export const adapterRejectionReasonSchema = z.enum([
+  "INVALID_GOAL",
+  "OWNER_MISMATCH",
+  "DEVICE_BUSY",
+  "COMMAND_REPLAY_OR_FULL",
+  "CONFIGURATION_MISMATCH",
+  "REJECTED_EXPIRED",
+  "INVALID_DEADLINE",
+  "INJECTED_REJECT",
+  "BRIDGE_WATCHDOG",
+  "SENSOR_STALE",
+  "LOW_BATTERY",
+  "POLICY_REJECTED",
+]);
 export const bridgeResultEvidenceSchema = z
   .object({
     cdr: z
@@ -241,6 +255,17 @@ export const bridgeActionEventSchema = z.union([
     .extend({
       kind: z.literal("GOAL_REJECTED"),
       reason: z.literal("ACTION_REJECTED"),
+      adapterDecision: z
+        .object({
+          reason: adapterRejectionReasonSchema,
+          cdr: z
+            .string()
+            .regex(/^[A-Za-z0-9+/]+={0,2}$/)
+            .max(8192),
+          hash: digest,
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   eventBase
@@ -427,7 +452,75 @@ export const bridgeCancelEventSchema = eventBase
   });
 export type BridgeCancelRequest = z.infer<typeof bridgeCancelRequestSchema>;
 export type BridgeCancelEvent = z.infer<typeof bridgeCancelEventSchema>;
+const bridgeHealthBaseSchema = z
+  .object({
+    ...messageBaseSchema.shape,
+    kind: z.literal("ROS_HEALTH"),
+    eventId: uuid,
+    sessionId: uuid,
+    journalId: uuid,
+    sequence: counter,
+    configurationId: digest,
+    serverInstanceId: uuid.nullable(),
+    mqttConnected: z.boolean(),
+    mqttSubscribed: z.boolean(),
+    rosAvailable: z.boolean(),
+    observationsFresh: z.boolean(),
+    ready: z.boolean(),
+    reason: z.enum([
+      "READY",
+      "MQTT_UNAVAILABLE",
+      "ROS_UNAVAILABLE",
+      "OBSERVATIONS_STALE",
+      "GOAL_UNRESOLVED",
+      "ADAPTER_NOT_READY",
+    ]),
+    adapterReason: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]{0,63}$/)
+      .nullable(),
+    pendingGoal: z
+      .object({
+        commandId: uuid,
+        goalId: uuid,
+        state: z.enum([
+          "READY",
+          "SEND_INTENT",
+          "ACCEPTED",
+          "RUNNING",
+          "UNCERTAIN",
+          "SUCCEEDED",
+          "FAILED",
+          "CANCELLED",
+        ]),
+        reason: bridgeReasonSchema.nullable(),
+        queryCount: z.number().int().min(0).max(5),
+        resultDeadline: messageBaseSchema.shape.timestamp,
+        humanReviewRequired: z.boolean(),
+      })
+      .strict()
+      .nullable(),
+    telemetryDropped: metric,
+    recordLimit: z.number().int().min(1).max(10000),
+    byteLimit: z.number().int().min(1).max(33554432),
+  })
+  .strict();
+export const bridgeHealthEventSchema = z.discriminatedUnion("ready", [
+  bridgeHealthBaseSchema.extend({ ready: z.literal(false) }),
+  bridgeHealthBaseSchema.extend({
+    ready: z.literal(true),
+    reason: z.literal("READY"),
+    mqttConnected: z.literal(true),
+    mqttSubscribed: z.literal(true),
+    rosAvailable: z.literal(true),
+    observationsFresh: z.literal(true),
+    serverInstanceId: uuid,
+    pendingGoal: z.null(),
+  }),
+]);
+export type BridgeHealthEvent = z.infer<typeof bridgeHealthEventSchema>;
 export const bridgeEventMessageSchema = z.union([
+  bridgeHealthEventSchema,
   bridgeCancelEventSchema,
   bridgeConfigurationEventSchema,
   bridgeActionEventSchema,

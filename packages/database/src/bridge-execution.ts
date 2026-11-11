@@ -15,12 +15,19 @@ import {
   devices,
   bridgeCancelEvents,
   rosCommandCancels,
+  bridgeHealthEvents,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import type { Transaction } from "./ros-commands.js";
 import { appendAudit } from "./audit.js";
 const hash = (v: unknown) =>
   createHash("sha256").update(canonicalBridgeJson(v)).digest("hex");
+const hashBytes = (cdr: string) => {
+  const bytes = Buffer.from(cdr, "base64");
+  return bytes.toString("base64") === cdr
+    ? createHash("sha256").update(bytes).digest("hex")
+    : null;
+};
 const terminal = ["SUCCEEDED", "FAILED", "REJECTED", "CANCELLED"];
 
 // API受付時の不変report/configを使い、実ROS startedAtが得られたときだけ作る。
@@ -59,6 +66,19 @@ export function createBridgeExecutionRepository(db: Database) {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bridge-event:${message.eventId}`},0))`,
         );
+        if (
+          (
+            await tx
+              .select()
+              .from(bridgeHealthEvents)
+              .where(eq(bridgeHealthEvents.eventId, message.eventId))
+          ).length
+        ) {
+          await tx
+            .insert(conflicts)
+            .values({ eventId: message.eventId, payloadHash, receivedAt });
+          return null;
+        }
         const [cancelEvent] = await tx
           .select()
           .from(bridgeCancelEvents)
@@ -185,8 +205,12 @@ export function createBridgeExecutionRepository(db: Database) {
                 .update(targets)
                 .set({ acceptedAt: timestamp })
                 .where(eq(targets.commandId, target.commandId));
-          } else if (message.kind === "GOAL_REJECTED") next = "REJECTED";
-          else if (message.kind === "FEEDBACK") {
+          } else if (message.kind === "GOAL_REJECTED") {
+            const evidence = message.adapterDecision;
+            if (evidence && hashBytes(evidence.cdr) !== evidence.hash)
+              disposition = "CONFLICT";
+            next = "REJECTED";
+          } else if (message.kind === "FEEDBACK") {
             // feedbackは開始証拠になるが、進捗から成功は作らない。
             next = "RUNNING";
             startedAt = new Date(message.startedAt);
@@ -486,13 +510,47 @@ export function createBridgeExecutionRepository(db: Database) {
         )
         .where(eq(targets.commandId, commandId));
       if (!state) return null;
+      const evidence = await db
+        .select()
+        .from(events)
+        .where(eq(events.commandId, commandId))
+        .orderBy(asc(events.receivedAt), asc(events.eventId));
+      const last = evidence
+        .filter(
+          (e) => e.disposition === "APPLIED" && e.message.kind === "EXECUTION",
+        )
+        .at(-1);
+      const handoff =
+        state.command.executionStatus === "UNCERTAIN" ||
+        (["SUCCEEDED", "FAILED", "CANCELLED"].includes(
+          state.command.executionStatus,
+        ) &&
+          !state.target.stopConfirmed &&
+          !!state.command.executionResultAt &&
+          Date.now() - state.command.executionResultAt.getTime() >= 5000) ||
+        state.target.conflicted;
       return {
         ...state,
-        events: await db
-          .select()
-          .from(events)
-          .where(eq(events.commandId, commandId))
-          .orderBy(asc(events.receivedAt), asc(events.eventId)),
+        recovery: {
+          humanReviewRequired: handoff,
+          automaticResubmit: false,
+          evidenceEventId: last?.eventId ?? null,
+          reason: state.target.conflicted
+            ? "EVENT_CONFLICT"
+            : state.command.executionStatus === "UNCERTAIN"
+              ? last?.message.kind === "EXECUTION" &&
+                last.message.status === "UNCERTAIN"
+                ? last.message.reason
+                : "RESULT_DEADLINE"
+              : handoff
+                ? "STOP_UNCONFIRMED"
+                : null,
+          nextAction: handoff ? "RECONCILE_EVIDENCE_AND_INSPECT_DEVICE" : null,
+          completedAt: null,
+          durationMs: null,
+          cost: null,
+        },
+        events: evidence,
       };
     },
   };

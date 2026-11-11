@@ -5,6 +5,7 @@ export const auditActions = [
   "command.cancel_sent",
   "command.cancel_changed",
   "bridge.desired_changed",
+  "bridge.health_changed",
   "deployment.intervention_started",
   "deployment.intervention_completed",
   "deployment.recovery_requested",

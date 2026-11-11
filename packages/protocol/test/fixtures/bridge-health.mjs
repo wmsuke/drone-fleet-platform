@@ -1,0 +1,37 @@
+export const healthMessage = {
+  schemaVersion: 1,
+  deviceId: "ros-health-test",
+  kind: "ROS_HEALTH",
+  eventId: "c1111111-1111-4111-8111-111111111111",
+  sessionId: "c2222222-2222-4222-8222-222222222222",
+  journalId: "c3333333-3333-4333-8333-333333333333",
+  sequence: 1,
+  configurationId: "a".repeat(64),
+  timestamp: "2026-11-10T03:00:00.000Z",
+  serverInstanceId: null,
+  mqttConnected: true,
+  mqttSubscribed: true,
+  rosAvailable: false,
+  observationsFresh: false,
+  ready: false,
+  reason: "ROS_UNAVAILABLE",
+  adapterReason: null,
+  pendingGoal: null,
+  telemetryDropped: 0,
+  recordLimit: 10000,
+  byteLimit: 33554432,
+};
+export const healthFixtures = [
+  { message: { ...healthMessage, ready: true }, valid: false },
+  { message: healthMessage, valid: true },
+  {
+    message: {
+      ...healthMessage,
+      commandId: "c4444444-4444-4444-8444-444444444444",
+    },
+    valid: false,
+  },
+  { message: { ...healthMessage, reason: "STOPPED" }, valid: false },
+  { message: { ...healthMessage, telemetryDropped: -1 }, valid: false },
+  { message: { ...healthMessage, recordLimit: 10001 }, valid: false },
+];

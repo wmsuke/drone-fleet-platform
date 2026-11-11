@@ -51,7 +51,11 @@ def load_config(env=None):
     if env.get("BRIDGE_ROS_NAMESPACE", ns) != ns:
         raise ConfigurationError("BRIDGE_ROS_NAMESPACE")
     integer(env, "ROS_DOMAIN_ID", 42, 0, 101)
-    if (env.get("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST") != "LOCALHOST"
+    discovery = env.get("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
+    test_udp = (env.get("BRIDGE_INTEGRATION") == "true" and discovery == "SYSTEM_DEFAULT"
+                and env.get("FASTRTPS_DEFAULT_PROFILES_FILE")
+                == "/workspace/config/dds-udp-test.xml")
+    if ((discovery != "LOCALHOST" and not test_udp)
             or env.get("ROS_STATIC_PEERS", "")
             or env.get("RMW_IMPLEMENTATION", "rmw_fastrtps_cpp") != "rmw_fastrtps_cpp"):
         raise ConfigurationError("ROS_DISCOVERY")

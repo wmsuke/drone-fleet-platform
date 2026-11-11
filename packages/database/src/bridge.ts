@@ -21,11 +21,13 @@ import {
   rosCommandTargets,
   bridgeCancelEvents,
   rosCommandCancels,
+  bridgeHealthEvents,
 } from "./schema.js";
 import type { Database } from "./connection.js";
 import { appendAudit } from "./audit.js";
 import { createBridgeExecutionRepository } from "./bridge-execution.js";
 import { createRosCancelRepository } from "./ros-cancels.js";
+import { createBridgeHealthRepository } from "./bridge-health.js";
 import { rosReadiness, RosCommandError } from "./ros-commands.js";
 
 export function bridgeDigest(value: unknown) {
@@ -69,8 +71,10 @@ function documents(
 export function createBridgeRepository(db: Database) {
   const executions = createBridgeExecutionRepository(db);
   const cancellations = createRosCancelRepository(db);
+  const health = createBridgeHealthRepository(db);
   return {
     cancellations,
+    health,
     executionState: executions.get,
     expireExecutions: executions.expire,
     async readiness(deviceId: string) {
@@ -93,6 +97,8 @@ export function createBridgeRepository(db: Database) {
     },
     async save(input: BridgeEventMessage, receivedAt: Date) {
       const message = bridgeEventMessageSchema.parse(input);
+      if (message.kind === "ROS_HEALTH")
+        return health.save(message, receivedAt);
       if (message.kind === "CANCEL")
         return cancellations.save(message, receivedAt);
       if (message.kind !== "CONFIGURATION")
@@ -109,6 +115,19 @@ export function createBridgeRepository(db: Database) {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bridge-event:${message.eventId}`},0))`,
         );
+        if (
+          (
+            await tx
+              .select()
+              .from(bridgeHealthEvents)
+              .where(eq(bridgeHealthEvents.eventId, message.eventId))
+          ).length
+        ) {
+          await tx
+            .insert(conflicts)
+            .values({ eventId: message.eventId, payloadHash, receivedAt });
+          return null;
+        }
         const [cancelEvent] = await tx
           .select()
           .from(bridgeCancelEvents)

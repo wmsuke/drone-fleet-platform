@@ -43,7 +43,7 @@ export async function verifyCancellations({
     }, "actual goal accepted/running");
     return command;
   }
-  const normal = await start("ros-cancel-normal"),
+  const normal = await start("ros-cancel-normal", "", false),
     key = randomUUID();
   assert.equal(
     (await api(path(normal.id), { reason: "OPERATOR_REQUEST" })).status,
@@ -55,9 +55,8 @@ export async function verifyCancellations({
     const r = await state(normal.id);
     return r.phase === "ACCEPTED" ? r : false;
   }, "cancel accepted before terminal");
-  assert.equal(pending.assessment, "PENDING");
-  assert.equal(pending.stopConfirmation, "UNKNOWN");
-  assert.notEqual(pending.terminalStatus, "CANCELLED");
+  // 通常中断は実終端まで進める。HTTPで観測する前に終了しても異常ではない。
+  assert.equal(pending.cancelId, accepted.body.cancelId);
   const duplicate = await post(normal.id, key);
   assert.equal(duplicate.status, 202);
   assert.equal(duplicate.body.cancelId, accepted.body.cancelId);
@@ -148,10 +147,13 @@ export async function verifyCancellations({
   const timeout = await start("ros-cancel-timeout", "", false);
   const timing = await post(timeout.id, randomUUID());
   assert.equal(timing.status, 202);
-  await until(
-    async () => (await state(timeout.id)).phase === "ACCEPTED",
-    "unresponsive goal accepts cancel",
-  );
+  const acceptedOnly = await until(async () => {
+    const r = await state(timeout.id);
+    return r.phase === "ACCEPTED" ? r : false;
+  }, "unresponsive goal accepts cancel");
+  assert.equal(acceptedOnly.assessment, "PENDING");
+  assert.equal(acceptedOnly.stopConfirmation, "UNKNOWN");
+  assert.notEqual(acceptedOnly.terminalStatus, "CANCELLED");
   const unknown = await until(
     async () => {
       const r = await state(timeout.id);
