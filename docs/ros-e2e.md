@@ -31,6 +31,8 @@ corepack pnpm test:ros-e2e
 
 画面試験はHTTP/MQTT/ROSをmockしないが、rendererはReact/jsdomであり、実ブラウザのlayout・全WCAG監査・物理操作の検証ではない。試験用DDS feedback publisherはBRIDGE_INTEGRATION=trueと試験device名を必要とし、goalやheartbeatを送らない。通常Composeへは組み込まない。
 
+成功と中断の競合では、元goalのSUCCEEDED正本がcancelで上書きされないことを必須とする。結果と停止証拠が10秒以内にそろえばCOMPLETED、遅延で欠ければUNCERTAIN・人間判断待ちであることを受信時刻から照合する。後者で停止不明なら次commandは拒否される。試験の待機予算はmonotonic clockで測り、OS時計の変更で短縮しない。
+
 ## レポートと後片付け
 
 入口が表示する`Results:`の一時ディレクトリへ以下を保存する。

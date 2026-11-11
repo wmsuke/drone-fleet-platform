@@ -147,16 +147,50 @@ export async function verifyCancellations({
     async () => (await state(race.id)).phase === "ACCEPTED",
     "delayed cancel accepted",
   );
-  await execution(race.id, ["SUCCEEDED"], true);
+  const raceResult = await execution(race.id, ["SUCCEEDED"]);
+  assert.equal(raceResult.target.conflicted, false);
   const raced = await until(async () => {
     const r = await state(race.id);
-    return r.assessment === "COMPLETED" ? r : false;
+    return ["COMPLETED", "UNCERTAIN"].includes(r.assessment) ? r : false;
   }, "success wins delayed cancellation");
   assert.equal(raced.terminalStatus, "SUCCEEDED");
+  if (raced.assessment === "COMPLETED") {
+    assert.equal(raced.stopConfirmation, "OBSERVED");
+    assert.equal(raced.humanReviewRequired, false);
+  } else {
+    // 実行成功は後着しても正本にできるが、10秒以内の確認が欠ければ
+    // 中断成功へ昇格しない。遅延そのものを隠してCOMPLETEDにしない。
+    assert(Date.now() >= Date.parse(raced.expiresAt));
+    assert.equal(raced.humanReviewRequired, true);
+    const applied = raceResult.events.filter(
+      (e) => e.disposition === "APPLIED",
+    );
+    const timelyResult = applied.some(
+      (e) =>
+        e.message.kind === "EXECUTION" &&
+        e.message.status === "SUCCEEDED" &&
+        Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
+    );
+    const timelyStop = applied.some(
+      (e) =>
+        e.message.kind === "STOP_OBSERVATION" &&
+        Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
+    );
+    assert(!timelyResult || !timelyStop);
+    if (raced.stopConfirmation === "UNKNOWN")
+      assert.equal(
+        (await api(`/devices/${current}/commands`, { type: "RETURN_HOME" }))
+          .status,
+        409,
+      );
+  }
   evidence.push({
     case: "completion-wins-delayed-cancel",
     commandId: race.id,
     cancelId: racing.body.cancelId,
+    assessment: raced.assessment,
+    stopConfirmation: raced.stopConfirmation,
+    resultReceivedAt: raceResult.command.executionResultReceivedAt,
   });
 
   const timeout = await start("ros-cancel-timeout", "", false);

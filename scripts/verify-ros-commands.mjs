@@ -105,9 +105,9 @@ async function api(path, body, extra = {}) {
   }
 }
 async function until(check, name, seconds = 45) {
-  const deadline = Date.now() + seconds * 1000;
+  const deadline = performance.now() + seconds * 1000;
   let last;
-  while (Date.now() < deadline) {
+  while (performance.now() < deadline) {
     try {
       const result = await check();
       if (result) return result;
