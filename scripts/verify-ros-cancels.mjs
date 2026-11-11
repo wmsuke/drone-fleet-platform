@@ -147,14 +147,28 @@ export async function verifyCancellations({
     async () => (await state(race.id)).phase === "ACCEPTED",
     "delayed cancel accepted",
   );
-  const raceResult = await execution(race.id, ["SUCCEEDED"]);
-  assert.equal(raceResult.target.conflicted, false);
+  await execution(race.id, ["SUCCEEDED"]);
   const raced = await until(async () => {
     const r = await state(race.id);
     return ["COMPLETED", "UNCERTAIN"].includes(r.assessment) ? r : false;
   }, "success wins delayed cancellation");
+  const raceResult = await execution(race.id, ["SUCCEEDED"]);
+  assert.equal(raceResult.target.conflicted, false);
   assert.equal(raced.terminalStatus, "SUCCEEDED");
+  const applied = raceResult.events.filter((e) => e.disposition === "APPLIED");
+  const timelyResult = applied.some(
+    (e) =>
+      e.message.kind === "EXECUTION" &&
+      e.message.status === "SUCCEEDED" &&
+      Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
+  );
+  const timelyStop = applied.some(
+    (e) =>
+      e.message.kind === "STOP_OBSERVATION" &&
+      Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
+  );
   if (raced.assessment === "COMPLETED") {
+    assert(timelyResult && timelyStop);
     assert.equal(raced.stopConfirmation, "OBSERVED");
     assert.equal(raced.humanReviewRequired, false);
   } else {
@@ -162,20 +176,6 @@ export async function verifyCancellations({
     // 中断成功へ昇格しない。遅延そのものを隠してCOMPLETEDにしない。
     assert(Date.now() >= Date.parse(raced.expiresAt));
     assert.equal(raced.humanReviewRequired, true);
-    const applied = raceResult.events.filter(
-      (e) => e.disposition === "APPLIED",
-    );
-    const timelyResult = applied.some(
-      (e) =>
-        e.message.kind === "EXECUTION" &&
-        e.message.status === "SUCCEEDED" &&
-        Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
-    );
-    const timelyStop = applied.some(
-      (e) =>
-        e.message.kind === "STOP_OBSERVATION" &&
-        Date.parse(e.receivedAt) < Date.parse(raced.expiresAt),
-    );
     assert(!timelyResult || !timelyStop);
     if (raced.stopConfirmation === "UNKNOWN")
       assert.equal(
