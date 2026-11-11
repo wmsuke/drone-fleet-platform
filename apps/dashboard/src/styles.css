@@ -798,3 +798,19 @@ select:focus-visible,
   outline: 3px solid #176b54;
   outline-offset: 3px;
 }
+.ros-evidence {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ros-panel {
+  overflow-wrap: anywhere;
+}
+.ros-panel select,
+.ros-panel input {
+  max-width: 100%;
+}
+.ros-panel select {
+  width: 100%;
+}

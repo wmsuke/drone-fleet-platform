@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, fetchDevice, type LatestTelemetry } from "./api.js";
 import { CommandControls } from "./command-controls.js";
 import { CommandHistory } from "./command-history.js";
+import { RosObservationDetails } from "./ros-observation.js";
 
 export const DEVICE_DETAIL_REFRESH_INTERVAL_MS = 5_000;
 
@@ -98,6 +99,9 @@ export function DeviceDetailPage({
       </Link>
       <p className="eyebrow">Device detail</p>
       <h2 id="device-title">{deviceId}</h2>
+      <Link to={`/devices/${encodeURIComponent(deviceId)}/ros`}>
+        ROS観測・実行・理由付き中断を追跡
+      </Link>
       <Link to={`/alerts?deviceId=${encodeURIComponent(deviceId)}`}>
         この機体のalert
       </Link>
@@ -147,9 +151,23 @@ export function DeviceDetailPage({
               <dd>{device.data.softwareVersion ?? "未登録"}</dd>
             </div>
           </dl>
-          <CommandControls apiBaseUrl={apiBaseUrl} deviceId={deviceId} />
+          {device.data.latestObservation ? (
+            <p>
+              ROS機体の操作は、能力と鮮度を確認できる
+              <Link to={`/devices/${encodeURIComponent(deviceId)}/ros`}>
+                ROS専用画面
+              </Link>
+              で行います。
+            </p>
+          ) : (
+            <CommandControls apiBaseUrl={apiBaseUrl} deviceId={deviceId} />
+          )}
           <CommandHistory apiBaseUrl={apiBaseUrl} deviceId={deviceId} />
-          {device.data.latestTelemetry === null ? (
+          {device.data.latestObservation ? (
+            <RosObservationDetails
+              observation={device.data.latestObservation}
+            />
+          ) : device.data.latestTelemetry === null ? (
             <div className="empty-state">
               <strong>テレメトリはまだありません。</strong>
               <span>機体から最初のデータが届くまでお待ちください。</span>

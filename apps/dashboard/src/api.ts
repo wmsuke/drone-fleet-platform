@@ -25,6 +25,7 @@ export interface LatestTelemetry {
 }
 
 export interface DeviceDetail {
+  latestObservation?: { receivedAt: string; message: RosObservationMessage };
   deviceId: string;
   model: string | null;
   softwareVersion: string | null;
@@ -212,7 +213,19 @@ function isDeviceDetail(input: unknown): input is DeviceDetail {
     (item.lastReceivedAt === null || typeof item.lastReceivedAt === "string") &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string" &&
+    (item.latestObservation === undefined ||
+      isRosObservation(item.latestObservation)) &&
     (item.latestTelemetry === null || isLatestTelemetry(item.latestTelemetry))
+  );
+}
+
+function isRosObservation(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.receivedAt === "string" &&
+    Number.isFinite(Date.parse(v.receivedAt)) &&
+    rosObservationMessageSchema.safeParse(v.message).success
   );
 }
 
@@ -319,3 +332,7 @@ function isCancellation(value: unknown): boolean {
     typeof c.humanReviewRequired === "boolean"
   );
 }
+import {
+  rosObservationMessageSchema,
+  type RosObservationMessage,
+} from "@drone-fleet/protocol";

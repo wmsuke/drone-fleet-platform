@@ -96,6 +96,12 @@ function CommandHistoryRow({ command }: { command: CommandHistoryItem }) {
         </div>
       )}
       <p>
+        <Link
+          to={`/devices/${encodeURIComponent(command.deviceId)}/ros?commandId=${encodeURIComponent(command.commandId)}`}
+        >
+          ROS goal・実行証拠・理由付き中断
+        </Link>
+        {" / "}
         <Link to={`/audit-logs?commandId=${command.commandId}`}>
           監査ログ {command.commandId}
         </Link>

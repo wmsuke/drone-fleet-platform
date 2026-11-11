@@ -39,7 +39,7 @@ CANCEL eventはRECEIVED / SEND_INTENT / ACCEPTED / REJECTED / UNCERTAINを区別
 
 停止観測は#194の同server/goal/config、終端後5秒以内、freshなIDLEと速度0.05 m/s以下の1秒継続を使う。中断responseではこの条件を緩めない。停止未確認/実行不確定の排他を時間だけで解除しない。参照モデルの停止観測であり、実機の物理安全停止の証明ではない。
 
-通常command履歴の画面にも、要求受付・中断評価・停止未確認/観測・人間判断待ちと介入IDを別表示する。中断の送信操作は今回HTTP APIとし、ROS専用の操作画面は#197の範囲とする。
+通常command履歴の画面にも、要求受付・中断評価・停止未確認/観測・人間判断待ちと介入IDを別表示する。#197で[ROS専用画面](ros-dashboard.md)からの理由付き中断と証拠・auditへの導線を追加した。
 
 ## 更新・検証
 

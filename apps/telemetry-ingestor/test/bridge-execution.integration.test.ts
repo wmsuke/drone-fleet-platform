@@ -32,6 +32,12 @@ import { createDeviceRepository } from "../../api/src/repository.js";
 import { createCommandRepository } from "../../api/src/command-repository.js";
 import { createCommandService } from "../../api/src/command-service.js";
 import { createCommandAcknowledgementRepository } from "../src/acknowledgement.js";
+import {
+  rosConfigurationSchema,
+  rosExecutionSchema,
+  rosHealthSchema,
+  rosCancelSchema,
+} from "../../dashboard/src/ros-api.js";
 const enabled = process.env.DATABASE_INTEGRATION === "true";
 const database = enabled ? createDatabase() : undefined;
 const ids: string[] = [],
@@ -206,6 +212,60 @@ describe.skipIf(!enabled)(
         evidence,
       };
     }
+    it("serves dashboard contracts, rejects unsupported operations and records reasoned cancellation", async () => {
+      const f = await fixture();
+      const configuration = await f.app.inject({
+        url: `/devices/${f.id}/bridge-configuration`,
+      });
+      expect(configuration.statusCode).toBe(200);
+      expect(
+        rosConfigurationSchema.parse(configuration.json()).supportedOperations,
+      ).toEqual(["RETURN_HOME"]);
+      const unsupported = await f.app.inject({
+        method: "POST",
+        url: `/devices/${f.id}/commands`,
+        payload: { type: "REBOOT" },
+      });
+      expect(unsupported.statusCode).toBe(409);
+      expect(unsupported.json().error).toBe("ROS_CAPABILITY_UNSUPPORTED");
+      const state = await f.app.inject({
+        url: `/commands/${f.commandId}/bridge-execution`,
+      });
+      expect(state.statusCode).toBe(200);
+      expect(rosExecutionSchema.parse(state.json()).command.deviceId).toBe(
+        f.id,
+      );
+      const health = await f.app.inject({
+        url: `/devices/${f.id}/bridge-health`,
+      });
+      expect(rosHealthSchema.parse(health.json()).ready).toBe(false);
+      await f.repo.save(
+        f.event({
+          kind: "GOAL_ACCEPTED",
+          reason: "GOAL_ACCEPTED",
+          timestamp: f.time(1).toISOString(),
+        }),
+        f.time(1),
+      );
+      const cancel = await f.app.inject({
+        method: "POST",
+        url: `/devices/${f.id}/commands/${f.commandId}/cancel`,
+        headers: { "Idempotency-Key": randomUUID() },
+        payload: { reason: "OPERATOR_REQUEST" },
+      });
+      expect(cancel.statusCode).toBe(202);
+      const saved = rosCancelSchema.parse(cancel.json().state);
+      expect(saved.request.reason).toBe("OPERATOR_REQUEST");
+      expect(saved.phase).toBe("REQUESTED");
+      expect(saved.stopConfirmation).toBe("UNKNOWN");
+      expect(saved.intervention.actorKind).toBe("anonymous");
+      const reload = await f.app.inject({
+        url: `/devices/${f.id}/commands/${f.commandId}/cancel`,
+      });
+      expect(rosCancelSchema.parse(reload.json()).cancelId).toBe(
+        saved.cancelId,
+      );
+    });
     it("health/action ID collision keeps evidence and prevents release of a rejected target", async () => {
       const f = await fixture();
       const rejection = f.event({
