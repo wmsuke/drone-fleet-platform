@@ -16,9 +16,13 @@ const commandLabels: Record<CommandType, string> = {
 export function CommandControls({
   apiBaseUrl,
   deviceId,
+  supportedOperations = ["RETURN_HOME", "REBOOT"],
+  blockedReason,
 }: {
   apiBaseUrl: string;
   deviceId: string;
+  supportedOperations?: readonly CommandType[];
+  blockedReason?: string | undefined;
 }) {
   const queryClient = useQueryClient();
   const [selectedCommand, setSelectedCommand] = useState<CommandType | null>(
@@ -41,7 +45,11 @@ export function CommandControls({
   });
 
   const selectCommand = (type: CommandType) => {
-    if (command.isPending) {
+    if (
+      command.isPending ||
+      blockedReason ||
+      !supportedOperations.includes(type)
+    ) {
       return;
     }
     setLastCommand(null);
@@ -51,7 +59,13 @@ export function CommandControls({
   };
 
   const confirmCommand = () => {
-    if (selectedCommand === null || sendingRef.current || command.isPending) {
+    if (
+      selectedCommand === null ||
+      sendingRef.current ||
+      command.isPending ||
+      blockedReason ||
+      !supportedOperations.includes(selectedCommand)
+    ) {
       return;
     }
     if (selectedCommand === "REBOOT" && !rebootAccepted) {
@@ -72,7 +86,11 @@ export function CommandControls({
       <div className="command-actions">
         <button
           className="command-button command-return"
-          disabled={command.isPending}
+          disabled={
+            command.isPending ||
+            !!blockedReason ||
+            !supportedOperations.includes("RETURN_HOME")
+          }
           type="button"
           onClick={() => selectCommand("RETURN_HOME")}
         >
@@ -80,13 +98,21 @@ export function CommandControls({
         </button>
         <button
           className="command-button command-reboot"
-          disabled={command.isPending}
+          disabled={
+            command.isPending ||
+            !!blockedReason ||
+            !supportedOperations.includes("REBOOT")
+          }
           type="button"
           onClick={() => selectCommand("REBOOT")}
         >
           再起動する
         </button>
       </div>
+      {blockedReason && <p>{blockedReason}</p>}
+      {!supportedOperations.includes("REBOOT") && (
+        <p>この構成で再起動は非対応、または能力未確認です。</p>
+      )}
 
       {selectedCommand !== null && (
         <div
@@ -124,6 +150,8 @@ export function CommandControls({
               type="button"
               disabled={
                 command.isPending ||
+                !!blockedReason ||
+                !supportedOperations.includes(selectedCommand) ||
                 (selectedCommand === "REBOOT" && !rebootAccepted)
               }
               onClick={confirmCommand}

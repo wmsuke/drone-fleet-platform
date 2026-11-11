@@ -338,6 +338,8 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 #196で[切断・再起動・機体側拒否](ros-recovery.md)のROS_HEALTH、DB保存確認、鮮度付きAPI、引き継ぎ情報を追加した。MQTTとROSの不通、機体側の拒否、終端、停止観測を分け、前goal不明・停止未確認の予約を再接続だけで解除しない。
 
+#197で[ROS専用画面](ros-dashboard.md)を追加した。LOCAL/欠測、接続と鮮度、能力/構成version、進捗/終端/中断/停止を別表示し、既存APIへ理由付き中断を送る。要求のkeyと本文を保存し、応答喪失・再読込で無条件な新要求を作らない。
+
 #195で[中断要求・結果・停止観測の追跡](ros-cancellation.md)を追加した。冪等cancel APIとbridge-requests、永続予算、中断証拠と介入/auditを接続し、受付・実行終端・停止を分ける。cancel受付は成功や排他解除ではなく、不確定時は人間判断へ渡す。
 
 #191で[Bridgeの起動・終了処理](ros-bridge.md)、#192で[ROS観測の変換と保存](ros-observations.md)を追加した。MQTT購読とROSの型付き照会を独立させ、設定検証・SQLiteの単一owner・受信commit後のPUBACK・終了時の記録保持を実装する。観測はtelemetry v3・専用ros_observationsへ保存し、DB receiptまで永続再送する。#194で[ROS command v3の受付・Action実行・結果保存・復旧](ros-command-journal.md)を追加した。構成・観測・排他・期限を検証して実行し、結果不明や停止未確認では次のcommandとOTAを保留する。

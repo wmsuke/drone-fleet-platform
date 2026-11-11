@@ -7,6 +7,7 @@ import { GroupsPage } from "./groups.js";
 import { FleetOperationsPage } from "./fleet-operations.js";
 import { AlertsPage } from "./alerts.js";
 import { AuditPage } from "./audit.js";
+import { RosPage } from "./ros.js";
 const OtaPage = lazy(async () => ({
   default: (await import("./ota.js")).OtaPage,
 }));
@@ -81,6 +82,10 @@ export function DashboardApp({ apiBaseUrl }: DashboardAppProps) {
   return (
     <Layout>
       <Routes>
+        <Route
+          path="/devices/:deviceId/ros"
+          element={<RosPage apiBaseUrl={apiBaseUrl} />}
+        />
         <Route
           path="/deployments"
           element={<OtaRoute apiBaseUrl={apiBaseUrl} />}
