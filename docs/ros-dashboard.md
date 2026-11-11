@@ -26,4 +26,4 @@ Issue #197。機体詳細の「ROS観測・実行・理由付き中断を追跡�
 
 見出し・ラベル付き入力・native button/select/detailsを使う。確認時は送信buttonへfocusを移し、Escapeまたは「戻る」で確認を取り消して元buttonへ戻す。中断履歴が得られたら結果見出しへ移す。通信失敗はalert、受付/人間判断はstatusで示し、色だけで状態を区別しない。
 
-dashboardの振る舞いテストでfresh/unknown/失効、frame/単位、進捗、理由付き確認、keyboard focus、通信失敗・再読込・同一keyを検証する。PostgreSQL統合ではHTTP応答と画面のschemaの互換性、capability非対応のAPI拒否、中断の理由保存と再取得を確認する。実DDSの配送・停止保証を画面mockから主張しない。Phase全体の実ROS画面E2Eは#198、実機の安全認証・操作者認証は対象外とする。
+dashboardの振る舞いテストでfresh/unknown/失効、frame/単位、進捗、理由付き確認、keyboard focus、通信失敗・再読込・同一keyを検証する。PostgreSQL統合ではHTTP応答と画面のschemaの互換性、capability非対応のAPI拒否、中断の理由保存と再取得を確認する。#198で[実ROS/MQTTと画面の障害E2E](ros-e2e.md)を追加した。React/jsdomから実HTTP経路を使い、画面mockを実DDSの配送・停止保証へ読み替えない。実ブラウザlayout、実機の安全認証・操作者認証は別範囲とする。

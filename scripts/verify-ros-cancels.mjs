@@ -16,6 +16,7 @@ export async function verifyCancellations({
   kill,
   restart,
   barrier,
+  runUi,
 }) {
   let current;
   const state = async (id) =>
@@ -30,6 +31,19 @@ export async function verifyCancellations({
       },
     );
   async function start(device, fault = "", requireRunning = true) {
+    evidence.begin(
+      {
+        "ros-cancel-normal":
+          "cancel-accepted-not-terminal-then-cancelled-and-stop",
+        "ros-cancel-reject": "cancel-rejected-preserves-later-success",
+        "ros-cancel-race": "completion-wins-delayed-cancel",
+        "ros-cancel-timeout":
+          "cancel-accepted-without-terminal-remains-uncertain",
+        "ros-cancel-offline":
+          "offline-request-expiry-late-response-and-restart",
+        "ros-cancel-unknown": "actual-unknown-goal-response",
+      }[device],
+    );
     console.log(`Cancel E2E: ${device}`);
     current = device;
     await switchDevice(device, fault);
@@ -100,6 +114,7 @@ export async function verifyCancellations({
     terminalStatus: confirmed.terminalStatus,
     stopConfirmation: confirmed.stopConfirmation,
   });
+  if (runUi) await runUi("cancel", normal.id, current);
 
   const reject = await start("ros-cancel-reject");
   const rejectedRequest = await post(reject.id, randomUUID());

@@ -8,51 +8,101 @@ import console from "node:console";
 import { verifyCancellations } from "./verify-ros-cancels.mjs";
 import { verifyRecovery } from "./verify-ros-recovery.mjs";
 import { Buffer } from "node:buffer";
-/* global fetch */
+import { performance } from "node:perf_hooks";
+import { appendFileSync, readFileSync } from "node:fs";
+import { evidenceLog } from "./ros-e2e-report.mjs";
+import {
+  verifyNamespaceAndFeedback,
+  reconcile,
+} from "./verify-ros-boundaries.mjs";
+/* global fetch, AbortSignal */
 
 const [url, results, project] = process.argv.slice(2);
+const extended = process.env.ROS_E2E === "true";
 let device = "ros-command-success",
+  peerDevice = "ros-command-reject",
   fault = "",
   referenceConfig = "/workspace/config/commands.json";
 function compose(...args) {
-  return execFileSync(
-    "docker",
-    [
-      "compose",
-      "-p",
-      project,
-      "-f",
-      "compose.yaml",
-      "-f",
-      "compose.ros-commands.yaml",
-      ...args,
-    ],
-    {
-      encoding: "utf8",
-      timeout: 30000,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        ROS_COMMAND_DEVICE: device,
-        ROS_COMMAND_FAULT: fault,
-        ROS_REFERENCE_CONFIG: referenceConfig,
+  const execute = () =>
+    execFileSync(
+      "docker",
+      [
+        "compose",
+        "--env-file",
+        "/dev/null",
+        "-p",
+        project,
+        "-f",
+        "compose.yaml",
+        "-f",
+        "compose.ros-commands.yaml",
+        ...args,
+      ],
+      {
+        encoding: "utf8",
+        timeout: args[0] === "run" ? 150000 : 30000,
+        maxBuffer: 8 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          ROS_COMMAND_DEVICE: device,
+          ROS_COMMAND_FAULT: fault,
+          ROS_REFERENCE_CONFIG: referenceConfig,
+          ROS_PEER_DEVICE: peerDevice,
+        },
       },
-    },
-  );
+    );
+  if (args[0] !== "run") return execute();
+  try {
+    const output = execute();
+    appendFileSync(`${results}/ui-process.log`, output);
+    return output;
+  } catch (error) {
+    appendFileSync(
+      `${results}/ui-process.log`,
+      `${error.stdout ?? ""}\n${error.stderr ?? ""}\n${error.message}\n`,
+    );
+    throw error;
+  }
 }
 async function api(path, body, extra = {}) {
-  const response = await fetch(
-    url + path,
-    body === undefined
-      ? extra
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...extra.headers },
-          body: JSON.stringify(body),
-          ...extra,
-        },
-  );
-  return { status: response.status, body: await response.json() };
+  const start = performance.now();
+  try {
+    const response = await fetch(
+      url + path,
+      body === undefined
+        ? { signal: AbortSignal.timeout(5000), ...extra }
+        : {
+            method: "POST",
+            signal: AbortSignal.timeout(5000),
+            headers: { "Content-Type": "application/json", ...extra.headers },
+            body: JSON.stringify(body),
+            ...extra,
+          },
+    );
+    const result = { status: response.status, body: await response.json() };
+    appendFileSync(
+      `${results}/http.jsonl`,
+      JSON.stringify({
+        path,
+        method: body === undefined ? "GET" : "POST",
+        status: response.status,
+        durationMs: performance.now() - start,
+      }) + "\n",
+    );
+    return result;
+  } catch (error) {
+    appendFileSync(
+      `${results}/http.jsonl`,
+      JSON.stringify({
+        path,
+        error: error.name,
+        durationMs: performance.now() - start,
+      }) + "\n",
+    );
+    throw error;
+  }
 }
 async function until(check, name, seconds = 45) {
   const deadline = Date.now() + seconds * 1000;
@@ -74,7 +124,7 @@ async function ready() {
     return r.status === 200 && r.body.ready && r.body.fresh ? r.body : false;
   }, `${device} ready`);
 }
-function runtime(goal) {
+function runtime(goal, target = device) {
   return JSON.parse(
     compose(
       "exec",
@@ -84,7 +134,7 @@ function runtime(goal) {
       "/workspace/tools/entrypoint.sh",
       "python3",
       "/workspace/tools/probe_action.py",
-      device,
+      target,
       ...(goal ? [goal] : []),
     ),
   );
@@ -124,7 +174,7 @@ function payload(commandId) {
     sql(`SELECT payload FROM command_outbox WHERE command_id='${commandId}'`),
   );
 }
-function publish(kind, body) {
+function publish(kind, body, target = device) {
   compose(
     "exec",
     "-T",
@@ -135,7 +185,7 @@ function publish(kind, body) {
     "-q",
     "1",
     "-t",
-    `fleet/v1/devices/${device}/${kind}`,
+    `fleet/v1/devices/${target}/${kind}`,
     "-m",
     JSON.stringify(body),
   );
@@ -199,7 +249,56 @@ async function barrier(id) {
     return r.commandId === id && r.point === fault;
   }, `fault ${fault}`);
 }
-const evidence = [];
+const evidence = evidenceLog(`${results}/action-evidence.json`);
+async function runUi(mode, commandId, target = device) {
+  evidence.begin(
+    mode === "live"
+      ? "dashboard-live-cancel-uncertain"
+      : `dashboard-${mode}-evidence`,
+  );
+  const output = `/evidence/ui-${mode}.json`;
+  compose(
+    "run",
+    "--rm",
+    "--no-deps",
+    "-T",
+    "-v",
+    `${results}:/evidence`,
+    "-e",
+    "NODE_ENV=test",
+    "-e",
+    "ROS_E2E_UI=true",
+    "-e",
+    `ROS_E2E_DEVICE=${target}`,
+    "-e",
+    `ROS_E2E_COMMAND_ID=${commandId ?? ""}`,
+    "-e",
+    `ROS_E2E_UI_MODE=${mode}`,
+    "-e",
+    `ROS_E2E_UI_REPORT=${output}`,
+    "api",
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--no-file-parallelism",
+    "apps/dashboard/test/ros.e2e.test.tsx",
+  );
+  const report = JSON.parse(readFileSync(`${results}/ui-${mode}.json`, "utf8"));
+  assert.equal(report.status, "PASSED");
+  assert.equal(report.deviceId, target);
+  if (commandId) assert.equal(report.commandId, commandId);
+  if (mode === "live") {
+    assert.equal(runtime().acceptedCount, 1);
+    assert.equal(runtime().executionCount, 1);
+  }
+  evidence.push({
+    case:
+      mode === "live"
+        ? "dashboard-live-cancel-uncertain"
+        : `dashboard-${mode}-evidence`,
+    ...report,
+  });
+}
 async function recoveryCases() {
   await switchReference("recovery", "ros-recovery-mqtt");
   await verifyRecovery({
@@ -215,6 +314,8 @@ async function recoveryCases() {
     kill,
     restart,
     runtime,
+    extended,
+    runUi: extended ? runUi : undefined,
   });
 }
 if (process.env.ROS_COMMANDS_CASES === "recovery") {
@@ -250,6 +351,7 @@ if (process.env.ROS_COMMANDS_CASES === "cancel") {
   );
   process.exit(0);
 }
+evidence.begin("success-duplicates-quarantine");
 await ready();
 assert.equal(
   (await api(`/devices/${device}/commands`, { type: "REBOOT" })).status,
@@ -286,7 +388,25 @@ assert.equal(
   eventCount,
 );
 assert.equal(runtime().executionCount, 1);
+if (extended) {
+  await verifyNamespaceAndFeedback({
+    api,
+    compose,
+    until,
+    sql,
+    publish,
+    runtime,
+    done,
+    success,
+    evidence,
+    setPeer: (value) => {
+      peerDevice = value;
+    },
+  });
+  await runUi("success", success.id);
+}
 // 拒否した本文は永続隔離し、再起動後も操作候補にしない。
+evidence.begin("success-duplicates-quarantine");
 publish("commands", { ...success.wire, type: "REBOOT" });
 publish("commands", { ...success.wire, deviceId: "another-device" });
 publish("commands", {
@@ -313,6 +433,7 @@ for (const [name, state, count] of [
   ["reject", "REJECTED", 0],
   ["abort", "FAILED", 1],
 ]) {
+  evidence.begin(name);
   await switchDevice(`ros-command-${name}`);
   const command = await send(),
     result = await execution(command.id, [state], true);
@@ -340,6 +461,7 @@ for (const [name, point] of [
   ["sent", "AFTER_SEND_GOAL"],
   ["result", "AFTER_RESULT"],
 ]) {
+  evidence.begin(point);
   await switchDevice(`ros-command-${name}`, point);
   const command = await send();
   await barrier(command.id);
@@ -402,6 +524,7 @@ for (const [name, point] of [
     queryCount: journal(command.id).queryCount,
   });
 }
+evidence.begin("real-result-cache-expired");
 await switchDevice("ros-command-cache", "AFTER_SEND_GOAL");
 const cache = await send();
 await barrier(cache.id);
@@ -434,6 +557,7 @@ await barrier(missing.id);
 kill();
 const missingDevice = device;
 
+evidence.begin("fixed-denominator-aggregation");
 await switchDevice("ros-command-success");
 compose("up", "-d", "--no-deps", "ros-bridge-peer");
 await until(
@@ -473,6 +597,7 @@ evidence.push({
   operationId: op.body.operationId,
 });
 // 通常simulatorは引き続きv2で受領・実行結果を返す。
+evidence.begin("simulator-v2-coexistence");
 await until(
   async () => (await api("/devices/drone-001")).status === 200,
   "legacy simulator",
@@ -503,7 +628,9 @@ await verifyCancellations({
   kill,
   restart,
   barrier,
+  runUi: extended ? runUi : undefined,
 });
+evidence.begin("server-generation-changed");
 await switchReference("commands", "ros-command-generation");
 await switchDevice("ros-command-generation", "AFTER_SEND_GOAL");
 const changed = await send();
@@ -530,6 +657,7 @@ evidence.push({
   executionCount: runtime().executionCount,
 });
 
+evidence.begin("unreported-120-second-deadline");
 const unreported = await execution(missing.id, ["UNCERTAIN"], false, 130);
 assert.equal(unreported.command.executionStartedAt, null);
 assert.equal(unreported.target.stopConfirmed, false);
@@ -539,6 +667,7 @@ evidence.push({
   resultDeadline: missing.wire.resultDeadline,
 });
 await switchDevice("ros-command-success");
+evidence.begin("historical-configuration-retained");
 const historical = (await api(`/commands/${success.id}/bridge-configuration`))
   .body;
 assert.equal(
@@ -554,6 +683,15 @@ assert.notEqual(
   historical.configuration.serverInstanceId,
   currentRuntime.serverInstanceId,
 );
+if (extended)
+  evidence.push({
+    case: "historical-configuration-retained",
+    commandId: success.id,
+    goalId: done.target.goalId,
+    originalConfigurationId: historical.binding.configurationId,
+    originalServer: historical.configuration.serverInstanceId,
+    currentServer: currentRuntime.serverInstanceId,
+  });
 device = missingDevice;
 await restart();
 await until(
@@ -565,6 +703,14 @@ await until(
 );
 assert.equal(runtime().executionCount, 0);
 await recoveryCases();
+if (extended) {
+  await switchDevice("ros-e2e-ui");
+  await runUi("live");
+  await writeFile(
+    `${results}/reconciliation.json`,
+    JSON.stringify(reconcile(sql), null, 2),
+  );
+}
 await writeFile(
   `${results}/action-evidence.json`,
   JSON.stringify(evidence, null, 2),

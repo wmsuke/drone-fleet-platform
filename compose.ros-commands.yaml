@@ -39,8 +39,8 @@ services:
     image: ${ROS_BRIDGE_IMAGE:?}
     command: ["ros2", "run", "fleet_bridge", "run"]
     environment:
-      BRIDGE_DEVICE_ID: ros-command-reject
-      BRIDGE_STATE_DIR: /data/fleet/ros-command-reject
+      BRIDGE_DEVICE_ID: ${ROS_PEER_DEVICE:-ros-command-reject}
+      BRIDGE_STATE_DIR: /data/fleet/${ROS_PEER_DEVICE:-ros-command-reject}
       MQTT_HOST: mqtt
     network_mode: service:ros-reference
     ipc: service:ros-reference

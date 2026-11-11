@@ -9,6 +9,17 @@
     { "device_id": "ros-recovery-dds", "scenario": "unresponsive" },
     { "device_id": "ros-recovery-bridge", "scenario": "unresponsive" },
     { "device_id": "ros-recovery-node", "scenario": "unresponsive" },
-    { "device_id": "ros-recovery-generation", "scenario": "unresponsive" }
+    { "device_id": "ros-recovery-generation", "scenario": "unresponsive" },
+    {
+      "device_id": "ros-recovery-policy",
+      "scenario": "policy_violation",
+      "failure_after_sec": 2.5
+    },
+    {
+      "device_id": "ros-recovery-sensor",
+      "scenario": "sensor_stale",
+      "failure_after_sec": 0.4
+    },
+    { "device_id": "ros-e2e-ui", "scenario": "unresponsive" }
   ]
 }

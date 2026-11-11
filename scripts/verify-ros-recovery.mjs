@@ -15,11 +15,23 @@ export async function verifyRecovery({
   kill,
   restart,
   runtime,
+  extended = false,
+  runUi,
 }) {
   let device;
   const health = async () =>
     (await api(`/devices/${device}/bridge-health`)).body;
-  async function start(id) {
+  async function start(id, name) {
+    evidence.begin(
+      name ??
+        {
+          "ros-recovery-dds":
+            "dds-only-outage-watchdog-result-without-fabricated-stop",
+          "ros-recovery-bridge": "bridge-restart-queries-original-goal",
+          "ros-recovery-node": "ros-node-loss-does-not-imply-stop",
+          "ros-recovery-generation": "action-server-restart-no-goal-resubmit",
+        }[id],
+    );
     device = id;
     console.log(`Recovery E2E: ${device}`);
     await switchDevice(device);
@@ -55,8 +67,14 @@ export async function verifyRecovery({
   for (const [id, expected, reason] of [
     ["ros-recovery-mqtt", "SUCCEEDED", "HOME_REACHED"],
     ["ros-recovery-battery", "FAILED", "LOW_BATTERY"],
+    ...(extended
+      ? [
+          ["ros-recovery-policy", "FAILED", "POLICY_REJECTED"],
+          ["ros-recovery-sensor", "FAILED", "SENSOR_STALE"],
+        ]
+      : []),
   ]) {
-    const command = await start(id);
+    const command = await start(id, `mqtt-outage-${reason}`);
     compose("stop", "mqtt");
     try {
       await until(
@@ -236,6 +254,7 @@ export async function verifyRecovery({
     newServer: runtime().serverInstanceId,
     executionCount: 0,
   });
+  if (runUi) await runUi("uncertain", generation.id, device);
   console.log(
     "Independent MQTT/DDS/node/Bridge/server faults, local constraints and no duplicate execution: passed",
   );
