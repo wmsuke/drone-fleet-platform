@@ -120,6 +120,8 @@ corepack pnpm test:ros-e2e
 
 `test:ros-demo`は上の3シナリオとdashboard HTTPを専用UUID projectで実行し、成功/失敗/INT/TERMで専用資源を削除する。表示したResults directoryへsuccess/cancel/recovery JSON、commit、Docker/Node/ROS環境manifest、サービスログ、cleanup.jsonと残存照会を保存する。対話デモとは異なり、終了後に画面/DBを保持しない。これは実ブラウザのlayout検証ではない。
 
+対話デモを停止してから実行する。portを分けて並行起動する場合は`ROS_DEMO_API_PORT=31197 ROS_DEMO_DASHBOARD_PORT=5177 corepack pnpm test:ros-demo`を使う。対話デモの`API_PORT` / `DASHBOARD_PORT`とは別の試験用設定である。操作途中のcommandIdと中断key、失敗理由は各シナリオの`.log`へ残す。
+
 [#198のPR #210](https://github.com/wmsuke/drone-fleet-platform/pull/210)と[CI run](https://github.com/wmsuke/drone-fleet-platform/actions/runs/42944162226)にnative Linux ARM64/AMD64の33ケース成功、25 device（batch最大10台）、27 command/goal・18結果/構成binding・7介入、cleanup残存0を記録した。HTTP往復遅延はhost harnessの標本で、DDS/制御周期・大規模性能の保証ではない。[障害E2E](ros-e2e.md)のreportがPASSED/FAILED/NOT_EXECUTEDを分ける。artifactは14日保持であり、失効後は固定commitで再実行する。
 
 ROS専用checkは`ROS 2 reference and Bridge lifecycle smoke`（本デモを含む）と`ROS 2 DDS, MQTT and dashboard fault E2E`。通常品質checkは`Lint, typecheck, test, and build`。今回のcommit・実環境・試行と各checkの結果はPRへ記録し、上記の#198時点の結果と混同しない。
