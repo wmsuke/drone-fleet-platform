@@ -243,7 +243,7 @@ Phase 2のAWS IoT接続後に、ローカル構成の継続負荷とAWS経路の
 
 ROS 2とMQTTの間を接続するBridgeを追加する。
 
-親Issueは[#188](https://github.com/wmsuke/drone-fleet-platform/issues/188)。#189で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)を整備した。Jazzy / Ubuntu 24.04 / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使い、参照DDSをlocalhostへ閉じる。#196までの実装と専用Action/中断/障害E2E、#197で[ROS観測・実行・中断の画面](ros-dashboard.md)、#198で[実DDS・MQTT・DB・API・画面を横断する障害E2E](ros-e2e.md)を追加した。デモ整備は#199とする。実装順は参照環境#190→起動/終了#191→観測変換#192・能力/構成#193→Action#194→cancel#195→障害/機体側拒否#196→画面#197→実ROS E2E#198→デモ#199とする。
+親Issueは[#188](https://github.com/wmsuke/drone-fleet-platform/issues/188)。#189で[ADR 0008](adr/0008-ros2-bridge-contract-and-recovery.md)を整備した。Jazzy / Ubuntu 24.04 / Fast DDS / Python rclpyをLinux arm64/amd64 containerで使い、参照DDSをlocalhostへ閉じる。#196までの実装と専用Action/中断/障害E2E、#197で[ROS観測・実行・中断の画面](ros-dashboard.md)、#198で[実DDS・MQTT・DB・API・画面を横断する障害E2E](ros-e2e.md)、#199で[デモ・更新/削除・責務と保証範囲](ros-demo.md)と[v0.6.0リリースノート](releases/v0.6.0.md)を追加した。通常simulatorとOTAは維持する。実装順は参照環境#190→起動/終了#191→観測変換#192・能力/構成#193→Action#194→cancel#195→障害/機体側拒否#196→画面#197→実ROS E2E#198→デモ#199とする。
 
 RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへnode再起動等の別意味を流用しない。LOCAL位置はGPSに変えず、欠測は新観測schemaで表す。goal受付・実行終端・cancel受付・停止観測を分離し、不明なgoalを再投入しない。実行時のBridge/Adapter/runtime/policy/Capability Profileを不変参照で残し、汎用Task評価・executionContext全体・KPI集計はPhase 7以降へ渡す。Cloud/AIに依存しない参照機体側制約は用意するが、実機安全保証とは区別する。
 
@@ -275,6 +275,7 @@ RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへno
 - シミュレータとROS 2・Bridgeの接続
 - 位置、バッテリー、飛行状態、エラーの取得
 - 対応する遠隔操作の検証
+- Taskの期待結果・制約・観測証拠とexecutionContextの定義。ROS Action成功とTask成功を分ける
 
 ### 完了条件
 
@@ -295,6 +296,7 @@ RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへno
 - 異常が多い機体の抽出
 - 同じ型式や条件での類似事象の調査
 - 保守に向けた確認事項の提示
+- model/version・比較baselineとKPI評価。未報告の費用・人間作業時間を0で補完しない
 
 ### 完了条件
 

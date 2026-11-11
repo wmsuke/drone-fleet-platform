@@ -1,0 +1,55 @@
+services:
+  api:
+    environment:
+      OTA_RELEASE_DIR: /tmp/unused-ros-demo-releases
+      OTA_TRUST_STORE_PATH: /tmp/unused-ros-demo-trust.json
+  ros-demo-reference:
+    image: ${ROS_DEMO_IMAGE:-drone-fleet-ros-demo:local}
+    build:
+      context: ./ros
+      network: none
+    command:
+      [ros2, run, fleet_reference, serve, --config, /workspace/config/demo.json]
+    init: true
+    ipc: shareable
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  ros-demo-success: &bridge
+    image: ${ROS_DEMO_IMAGE:-drone-fleet-ros-demo:local}
+    init: true
+    command: [ros2, run, fleet_bridge, run]
+    network_mode: service:ros-demo-reference
+    ipc: service:ros-demo-reference
+    depends_on:
+      ros-demo-reference:
+        condition: service_started
+      mqtt:
+        condition: service_healthy
+    environment: &bridge-env
+      MQTT_HOST: mqtt
+      MQTT_TRANSPORT: local
+      BRIDGE_DEVICE_ID: ros-demo-success
+    volumes: [ros-demo-success-state:/data/fleet]
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 10s
+  ros-demo-cancel:
+    <<: *bridge
+    environment:
+      <<: *bridge-env
+      BRIDGE_DEVICE_ID: ros-demo-cancel
+    volumes: [ros-demo-cancel-state:/data/fleet]
+  ros-demo-recovery:
+    <<: *bridge
+    environment:
+      <<: *bridge-env
+      BRIDGE_DEVICE_ID: ros-demo-recovery
+    volumes: [ros-demo-recovery-state:/data/fleet]
+volumes:
+  ros-demo-success-state:
+  ros-demo-cancel-state:
+  ros-demo-recovery-state:

@@ -25,9 +25,10 @@ jobs:
           bash scripts/test-ros-reference.sh
           bash scripts/test-ros-bridge.sh
           bash scripts/test-ros-observations.sh
+          bash scripts/test-ros-demo.sh
         env:
           TMPDIR: ${{ runner.temp }}
-      - name: Upload ROS environment and observations
+      - name: Upload ROS environment, observations and demo
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -36,6 +37,7 @@ jobs:
             ${{ runner.temp }}/ros-reference-*/
             ${{ runner.temp }}/ros-bridge-*/
             ${{ runner.temp }}/ros-observations-*/
+            ${{ runner.temp }}/ros-demo-*/
           retention-days: 14
   ros-e2e:
     name: ROS 2 DDS, MQTT and dashboard fault E2E

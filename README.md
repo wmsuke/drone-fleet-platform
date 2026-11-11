@@ -6,7 +6,7 @@ TypeScriptで作った仮想ドローンからMQTTでデータを送り、位置
 
 ## 開発状況
 
-Phase 5のlocalアプリOTAまで実装し、`v0.5.0`の対象機能として次の範囲を利用できる。変更点と更新順序・互換性は[v0.5.0リリースノート](docs/releases/v0.5.0.md)を参照する。Git tag・GitHub Releaseの発行を意味しない。
+Phase 6のローカルROS 2 Bridgeまで実装し、`v0.6.0`の対象機能として次の範囲を利用できる。変更点・互換性・未検証範囲は[v0.6.0リリースノート](docs/releases/v0.6.0.md)を参照する。Git tag・GitHub Releaseの発行を意味しない。
 
 - pnpm workspaceとTypeScriptの共通設定
 - lint、型チェック、テスト、ビルドの共通コマンド
@@ -34,6 +34,11 @@ Phase 5のlocalアプリOTAまで実装し、`v0.5.0`の対象機能として次
 - 操作・状態変更のaudit log、検索APIと閲覧画面（操作者の認証は未実装）
 - 署名済みsimulator bundleの実更新、機体別supervisorと永続journal
 - OTA対象snapshot・段階承認、継続healthの証拠評価、停止確認・明示rollbackと介入記録
+- 固定Jazzy参照環境、Python/rclpy Bridge、LOCAL・欠測を保持するROS telemetry v3
+- 能力/実稼働versionと実行時構成の固定、RETURN_HOME専用Action・元goalの結果再照会
+- 理由付きcancel、停止観測・不確定/人間判断・介入/auditの追跡と実DDS/MQTT障害E2E
+
+[ROS 2デモと責務・復旧の保証範囲](docs/ros-demo.md)から、AWS・実機・host ROSなしで、参照node→Bridge→MQTT→DB→画面、帰還・中断・server再起動時の不確定を試せる。`corepack pnpm test:ros-demo`は専用3機体で手順を検証し、後片付けまで行う。通常の10台デモとOTAは維持する。参照モデルの停止観測を物理安全停止やTask成功へ読み替えない。
 
 [OTAの実更新・停止・復旧デモ](docs/ota-demo.md)は`corepack pnpm test:ota-fleet`で専用ローカル10台を起動する。1/3/6の段階配信と障害時の後続抑止、旧版回復を実MQTT/DB/Linuxで確認し、専用資源を削除する。通常の10台simulatorは維持し、OTAは明示設定時だけ有効である。実機・firmware・実AWSのOTA成功を示すものではない。
 
@@ -120,7 +125,7 @@ AWS接続はローカルデモとは別の手順で行う。selected Region、�
 
 - MosquittoはComposeネットワーク内で匿名接続を許可する開発用設定であり、外部公開を想定しない。
 - AWS IoT CoreはPhase 2の2台E2Eと#64の100台の短時間接続・クラウド経路に確認記録がある。Phase 3のreceipt・outboxを含む実AWSの復旧障害注入と実機は未検証である。
-- 操作できるコマンドは`RETURN_HOME`と`REBOOT`のみである。
+- simulatorの操作は`RETURN_HOME`と`REBOOT`。ROS参照機体は`RETURN_HOME`だけに対応し、REBOOTをnode再起動へ変換しない。
 - 受領ACKは実行完了ではない。ACK v3の実行結果を別に保存し、グループ操作画面で追跡する。仮想帰還・再接続の成功は実機の安全を証明しない。
 - グループ操作の受付は原子的だが、各機体の開始・成功は原子的ではない。受付後のキャンセル・自動再実行・全機体同時実行は提供しない。
 - HTTP操作者の認証・権限制御は未実装。auditは操作者の本人性や管理者改ざんへの耐性を保証しない。APIと画面はローカルまたは制限したネットワークで使う。
@@ -491,6 +496,7 @@ docker compose down --volumes
 - [ROS切断・再起動と機体側制約](docs/ros-recovery.md)
 - [ROS観測・実行進捗・理由付き中断の画面](docs/ros-dashboard.md)
 - [実ROS・MQTT・画面の障害E2E](docs/ros-e2e.md)（`corepack pnpm test:ros-e2e`、AWS不要）
+- [v0.6.0 ROSデモ・更新/削除手順・責務と保証範囲](docs/ros-demo.md)（`corepack pnpm test:ros-demo`）
 
 ## ライセンス
 

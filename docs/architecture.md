@@ -329,12 +329,16 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 
 ## 後続Phaseで扱うこと
 
-- ROS 2との接続
+- 実飛行シミュレータとROS 2 Adapterの接続、汎用Taskの期待結果と観測証拠の評価
 - 運用ログを使ったAIによる調査支援
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
 
 ## Phase 6のROS 2 Bridge設計（Action・中断・切断復旧の追跡）
+
+v0.6.0では#189〜#199のローカル参照連携を提供する。[ROSデモ](ros-demo.md)に専用3機体の起動・帰還・中断・世代喪失、通信対応、更新/削除と保証範囲をまとめた。Cloudは受付/保存・集約、Bridgeは検証/永続対応/照会、Adapterは能力と意味対応、参照nodeは機体側制約を担当する。Cloud/AIは制約を解除しない。Python/rclpyを使い、C++アプリは追加せず、interface生成だけament_cmakeに任せる。
+
+参照の停止/成功は物理安全停止・Task成功・model効果の証明ではない。Phase 7の実シミュレータ/Task評価、Phase 8のmodel/version/baseline/KPI、実機安全・認証・実AWS ROS経路・大規模性能は別範囲である。[リリースノート](releases/v0.6.0.md)は機能区分で、componentの実versionやRelease発行とは区別する。
 
 #196で[切断・再起動・機体側拒否](ros-recovery.md)のROS_HEALTH、DB保存確認、鮮度付きAPI、引き継ぎ情報を追加した。MQTTとROSの不通、機体側の拒否、終端、停止観測を分け、前goal不明・停止未確認の予約を再接続だけで解除しない。
 

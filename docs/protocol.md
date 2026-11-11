@@ -2,7 +2,7 @@
 
 ## 対象
 
-シミュレータとFleet Platformの間で使うMQTTメッセージを定義する。
+シミュレータ・ROS 2 BridgeとFleet Platformの間で使うMQTTメッセージを定義する。
 
 Phase 1では、テレメトリ、接続状態、コマンド、受領確認（ACK）を扱う。メッセージはUTF-8のJSONとし、型と検証処理を`packages/protocol`に置く。
 
@@ -17,6 +17,7 @@ MQTTを採用した背景とトレードオフは[ADR 0002](adr/0002-mqtt-protoc
 | `fleet/v1/devices/{deviceId}/telemetry` | デバイス | MQTT受信処理 |
 | `fleet/v1/devices/{deviceId}/telemetry-receipts` | MQTT受信処理 | デバイス |
 | `fleet/v1/devices/{deviceId}/bridge-events` | Bridge | MQTT受信処理 |
+| `fleet/v1/devices/{deviceId}/bridge-requests` | API | Bridge |
 | `fleet/v1/devices/{deviceId}/bridge-receipts` | MQTT受信処理 | Bridge |
 | `fleet/v1/devices/{deviceId}/status` | デバイス・ブローカーのLWT | MQTT受信処理 |
 | `fleet/v1/devices/{deviceId}/commands` | API | デバイス |
@@ -49,6 +50,9 @@ AWS IoT Coreの通常経路でもQoSとretainはこの文書の定義を維持�
 | 接続状態 | 1 | true |
 | コマンド | 1 | false |
 | ACK | 1 | false |
+| ROS telemetry / status / ACK / bridge-events / bridge-requests / 各receipt | 1 | false |
+
+接続状態のretain=trueは既存simulatorの契約。ROS Bridgeのstatus v1はretain=falseで、ONLINEはMQTT接続だけを示す。DB保存receipt、受領ACK、goal受付、実行終端、停止観測を区別する。Bridge topic生成は`createBridgeEventsTopic`、`createBridgeRequestsTopic`、`createBridgeReceiptsTopic`を使う。
 
 Phase 1の旧telemetryは欠損を許容する。Phase 3ではsimulatorがSQLite保存とQoS 1再送、ingestorがQoS 1購読・冪等保存・DB commit後のreceipt通知を行う。PUBACKだけでは削除せず、保存確認まで同じ最古行を再送する。容量・永続領域・復旧条件の保証境界は[ADR 0005](adr/0005-delivery-and-recovery.md)に従う。
 
@@ -59,6 +63,8 @@ QoS 1でも、操作が一度だけ実行されることや、ACKが必ず届く
 ## 共通項目
 
 ### Phase 6のROS 2契約
+
+v0.6.0の起動・通信対応表・更新順と責務/保証範囲は[ROSデモ](ros-demo.md)を入口とする。現在のBridge 0.5.0 / Adapter・interfaces 0.4.0 / Profile 1.1.0と、全体のv0.6.0は別の識別子である。wireと実行時検証の正は`packages/protocol`で、Pythonは生成schemaと共通fixtureを使う。
 
 #196で[ROS_HEALTHと機体側拒否の証拠](ros-recovery.md)をbridge-events v1へ追加した。healthはcommandを捏造せず、接続・観測鮮度・未解決goal・欠損件数を分離する。DB receiptまで再送し、新Bridgeのreadyは新鮮なhealthでも検証する。GOAL_REJECTEDは照合できた場合だけadapterDecisionのreason/CDR/hashを持つ。
 
