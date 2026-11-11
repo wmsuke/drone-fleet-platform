@@ -490,6 +490,7 @@ docker compose down --volumes
 - [ROS 2 Actionの中断と停止観測](docs/ros-cancellation.md)
 - [ROS切断・再起動と機体側制約](docs/ros-recovery.md)
 - [ROS観測・実行進捗・理由付き中断の画面](docs/ros-dashboard.md)
+- [実ROS・MQTT・画面の障害E2E](docs/ros-e2e.md)（`corepack pnpm test:ros-e2e`、AWS不要）
 
 ## ライセンス
 
