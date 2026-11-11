@@ -64,6 +64,19 @@ describe("ROS専用E2Eの完了・未実行・cleanup", () => {
       expect(summarize(value).errors).toContain("cleanup incomplete");
     }
   });
+  it("does not pass when the latency evidence is absent or invalid", () => {
+    for (const measurements of [
+      [],
+      [{ durationMs: -1 }],
+      [{ durationMs: null }],
+    ]) {
+      const report = summarize({ ...input(), measurements });
+      expect(report.status).toBe("FAILED");
+      expect(report.errors).toContain(
+        "HTTP latency measurements missing or invalid",
+      );
+    }
+  });
   it("persists completed cases before the next case can fail", () => {
     const directory = mkdtempSync(join(tmpdir(), "ros-evidence-test-"));
     try {

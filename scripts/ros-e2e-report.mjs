@@ -109,6 +109,12 @@ export function summarize({
     .filter((m) => Number.isFinite(m.durationMs))
     .map((m) => m.durationMs)
     .sort((a, b) => a - b);
+  if (
+    !elapsed.length ||
+    elapsed.length !== measurements.length ||
+    elapsed[0] < 0
+  )
+    errors.push("HTTP latency measurements missing or invalid");
   const percentile = (p) =>
     elapsed.length ? elapsed[Math.ceil(elapsed.length * p) - 1] : null;
   return {
