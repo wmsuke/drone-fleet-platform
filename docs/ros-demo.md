@@ -29,7 +29,7 @@ curl --fail "http://127.0.0.1:$API_PORT/devices/ros-demo-success/bridge-health"
 
 ## 2. 帰還と中断
 
-次のhelperは実APIへ一度だけPOSTし、実DDS/Action/MQTT/DBの証拠をboundedに待つ。通信mockやgoal再投入はしない。結果のJSONにcommandId・goalId・構成ID・介入ID・追跡画面URLを出す。失敗したPOSTを新しいkeyで自動再送しない。
+次のhelperは実APIへ一度だけPOSTし、実DDS/Action/MQTT/DBの証拠をboundedに待つ。通信mockやgoal再投入はしない。結果のJSONにcommandId・goalId・構成ID・介入ID・追跡画面URLを出す。待機失敗前にもcommandId、中断送信前には元のIdempotency-Keyと理由をstderrへ記録する。失敗したPOSTを新しいkeyで自動再送しない。command受付応答自体を失った場合は`GET /devices/:deviceId/commands`とauditから既存履歴を照合し、新commandで応答を取り直さない。
 
 ```sh
 node docs/examples/ros-demo.mjs success
@@ -54,6 +54,8 @@ node docs/examples/ros-demo.mjs recovery --restart-reference
 保存した元goal/config/serverを照合し、SERVER_CHANGED / UNCERTAIN・停止未確認・人間判断待ち、次commandの409拒否を確認する。新serverの受理/実行件数は0で、古いgoalを送って成功を作らない。実行時構成と過去結果は新serverへ差し替えない。画面ではhelperが出す元commandのURLから不確定の理由を読む。
 
 復旧判断では、通信状態、server世代、元goal UUID、結果cache、eventの採否・CDR/hash、停止観測、journal容量/欠損、実機側の状態を順に確認する。参照モデルの検証であり実機状態の確認手順を代替しない。安全を確認できない予約の強制解除API、履歴消去や新goalによる穴埋めは提供しない。auditの引き継ぎ要求は人間の対応完了ではない。
+
+MQTT単独切断後の蓄積/保存再開、同世代Bridge再起動後の元UUID結果照会は、第7節の`test:ros-e2e`の`mqtt-outage-HOME_REACHED` / `bridge-restart-queries-original-goal`で再現する。正常な保存再開と、停止未確認を残すケースを[復旧境界](ros-recovery.md)に沿って区別する。
 
 ## 4. ROSとMQTTの対応
 

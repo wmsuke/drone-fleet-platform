@@ -85,6 +85,13 @@ await until(
 const observation = (await request(prefix)).latestObservation;
 assert.equal(observation.message.payload.position.kind, "LOCAL");
 const command = await request(`${prefix}/commands`, { type: "RETURN_HOME" });
+console.error(
+  JSON.stringify({
+    phase: "COMMAND_ACCEPTED",
+    deviceId: device,
+    commandId: command.commandId,
+  }),
+);
 const path = `/commands/${command.commandId}/bridge-execution`;
 const accepted = await until(async () => {
   const r = await request(path);
@@ -102,6 +109,14 @@ let cancellation = null,
   newRuntime = null;
 if (mode === "cancel") {
   const key = randomUUID();
+  console.error(
+    JSON.stringify({
+      phase: "CANCEL_INTENT",
+      ...identity,
+      reason: "DEMO_OPERATOR_REQUEST",
+      idempotencyKey: key,
+    }),
+  );
   const cancel = await request(
     `${prefix}/commands/${command.commandId}/cancel`,
     { reason: "DEMO_OPERATOR_REQUEST" },

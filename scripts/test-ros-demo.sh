@@ -44,6 +44,6 @@ curl --fail --silent --max-time 10 "http://127.0.0.1:$DASHBOARD_PORT/devices/ros
 for mode in success cancel recovery; do
   args=("$mode")
   if [ "$mode" = recovery ]; then args+=(--restart-reference); fi
-  node docs/examples/ros-demo.mjs "${args[@]}" > "$results/$mode.json"
+  node docs/examples/ros-demo.mjs "${args[@]}" > "$results/$mode.json" 2> "$results/$mode.log"
   echo "ROS demo passed: $mode"
 done
