@@ -1,0 +1,16 @@
+{
+  "devices": [
+    { "device_id": "ros-demo-success", "seed": 199 },
+    {
+      "device_id": "ros-demo-cancel",
+      "seed": 200,
+      "scenario": "delayed_cancel",
+      "cancel_delay_sec": 0
+    },
+    {
+      "device_id": "ros-demo-recovery",
+      "seed": 201,
+      "scenario": "unresponsive"
+    }
+  ]
+}

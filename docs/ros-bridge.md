@@ -72,6 +72,6 @@ pnpm test:ros-bridge
 pnpm test:ros-observations
 ```
 
-wireの正は`packages/protocol`のZod定義。既存device ID検証を同じ正規表現へ保ったままJSON Schemaへ変換できる形にし、status v1のschemaと正常/不正fixtureを`ros/contracts`へ生成する。Vitestがschema/fixtureのdriftとZodの結果を検査し、Pythonは同じfixtureをfastjsonschemaで検査する。PythonへZod定義を手書き複製しない。command v3や相関検証はまだ追加していない。
+wireの正は`packages/protocol`のZod定義。既存device ID検証を同じ正規表現へ保ったままJSON Schemaへ変換できる形にし、status・観測・command v3・構成/実行/中断/healthのschemaと正常/不正fixtureを`ros/contracts`へ生成する。Vitestがschema/fixtureのdriftとZodの結果を検査し、Pythonは同じfixtureをfastjsonschemaで検査する。PythonへZod定義を手書き複製せず、schema外のID/期限/scope相関も検証する。現在の起動から操作・復旧までは[v0.6.0デモ](ros-demo.md)を参照する。
 
 追加Python依存は[hash固定wheel](../ros/vendor/README.md)を同梱し、ネットワークなしで展開・buildする。実Mosquittoと独立ROS/Bridge processで、2機体の分離、ROS単独停止/復帰、MQTT経路の切断/復帰、切断中のbroker queue、再起動後の記録保持、接続不能時の終了、設定不備の秘匿、local mTLSを試す。観測E2Eでは実PostgreSQL/APIへの到達と保存確認も検証する。テスト用project・container/image・volume・一時証明書を終了時に削除し、結果をCI artifactへ残す。実AWS・実機操作は証明対象ではない。

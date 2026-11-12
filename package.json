@@ -10,6 +10,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "test:ros-demo": "bash scripts/test-ros-demo.sh",
     "test:ros-e2e": "ROS_E2E=true bash scripts/test-ros-commands.sh",
     "test:ros-commands": "bash scripts/test-ros-commands.sh",
     "test:ros-observations": "bash scripts/test-ros-observations.sh",

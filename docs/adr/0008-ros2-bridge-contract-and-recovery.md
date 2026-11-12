@@ -1,6 +1,6 @@
 # ADR 0008: ROS 2 Bridgeの責務・通信契約・復旧境界
 
-- 状態: 採用する設計。#190で参照workspace、#191でBridgeの接続・終了基盤と既存statusの共通schema検証を追加した。観測変換・操作・新schema/API/DB・Cloud連携E2Eは#192〜#199で実装する
+- 状態: 採用・ローカル参照実装済み（#190〜#199）。観測・能力/構成・Action/cancel・切断復旧・画面と実DDS/MQTT/DB E2Eを備える。[v0.6.0デモと保証範囲](../ros-demo.md)を入口とする。実機・実AWS ROS経路・汎用Task/model/KPIは対象外
 - 決定日: 2026-11-05
 - 対象: [親Issue #188](https://github.com/wmsuke/drone-fleet-platform/issues/188)、#189〜#199、Phase 6 / v0.6.0
 - 前提: Phase 5の#176 / PR #200は完了。現行の[通信仕様](../protocol.md)、[command期限](../command-durability.md)、[実行結果](../command-results.md)、[ADR 0005](0005-delivery-and-recovery.md)を維持する
@@ -16,7 +16,7 @@ JazzyのNoble arm64/amd64とFast DDSの対応は[REP 2000](https://github.com/ro
 
 Python側でZod契約を手書き複製しない。`packages/protocol`をwire契約の正とし、#191以降でJSON Schemaの生成物・hashとPython validatorを固定し、同じ正常/不正fixtureを両言語で検証する。SQLiteとPython MQTTの実装は既存TypeScriptの部品を直接流用できないため、同じ保存/期限/receipt規則を共有fixtureで検査する。今回、依存追加やホストのROS導入は行わない。
 
-#191では[Bridge接続基盤](../ros-bridge.md)として、Paho 2.1.0とfastjsonschema 2.21.2のpure Python wheelをhash固定で追加した。pipを含まない固定OCIを更新せず、標準zipfileで検証済みwheelをオフライン展開する。status v1のZod→JSON Schemaと共通fixtureを両言語で検査する。操作の相関検証や重要eventのoutboxは後続Issueのままとし、接続statusの最新1行と区別する。
+#191では[Bridge接続基盤](../ros-bridge.md)として、Paho 2.1.0とfastjsonschema 2.21.2のpure Python wheelをhash固定で追加した。pipを含まない固定OCIを更新せず、標準zipfileで検証済みwheelをオフライン展開する。status v1に加え、#192〜#196の観測/command/構成/実行/中断/healthのZod→JSON Schemaと共通fixtureを両言語で検査する。重要eventはDB receiptまで保持し、接続statusの最新1行と区別する。
 
 JSON Schemaで表せない期限・scope相関・canonical JSON/hash・拒否規則も共通fixtureの対象にし、schemaの生成だけで同じ検証とみなさない。再取得可能なapt snapshotがない場合は検証済みdeb/OCI imageを保存し、version一覧だけで再build可能と主張しない。
 
@@ -60,7 +60,7 @@ BridgeはMultiThreadedExecutorと非同期clientを使い、ROS callback内で�
 
 QoSは両端で明示する。不適合なら接続しない場合があるため、受信ゼロを値0・成功とみなさない。[公式QoS](https://github.com/ros2/ros2_documentation/blob/jazzy/source/Concepts/Intermediate/About-Quality-of-Service-Settings.rst)の互換規則を使い、incompatible QoS eventとpublisher停止を別に記録する。QoS reliableは操作の永続性・exactly-once実行を保証しない。参照nodeは観測のdeadlineを2秒、Bridgeは最終受信のmonotonic age 3秒をstale境界とする。deadline/liveliness通知だけへ依存せずtimerでも検出する。Action statusは照会の補助であり終端result・停止観測の代替にしない。
 
-service照会は1回2秒、最大3回・合計10秒以内。Action goal応答は5秒、参照Actionの実行上限60秒、Cloudの結果確認期限は受付から120秒を初期値に固定する。これらは参照実装の設計値で、実測性能・機体安全値ではない。result待ちの期限でgoalを消去・再投入しない。
+現行実装ではruntime/configurationの非同期service照会は1回2秒で、失敗を重ねるとbackoffし、runtimeの3失敗後は8秒待つ。GetGoalDecisionは1回2秒だけ、GetResultは第6節の最大5回/30秒とする。Action goal応答待ちは2秒で、応答不明なら元goalの照合へ移る。参照Actionの実行上限60秒、Cloudの結果確認期限は受付から120秒。これらは設定上の境界で、実測性能・機体安全値ではない。result待ちの期限でgoalを消去・再投入しない。
 
 ## 4. 観測の意味変換と時計
 
@@ -99,7 +99,7 @@ Bridgeは最新値を最大5秒周期でまとめ、topic別queue上限はQoS de
 
 #193のCapability ProfileにprofileId/version/digest、型式、許可command→Action型/名前、単位/frame、必要sensor、home定義、制約を固定する。Bridge/Adapterのversion・release digest、ROS distro/RMW/Pythonのruntime manifest digest、運用policy ID/version/digest、安全設定ID/versionを報告する。運用policyはAWS IoT Policyではない。desiredとreportedを別にし、commandの開始時に報告構成の不変snapshotを保存する。同じID/別本文・古い報告・未知versionは拒否し、更新後も過去goalの参照を差し替えない。AI未使用はNOT_APPLICABLEとし、架空のmodel versionを加えない。
 
-#193で[構成報告の実装](../bridge-configuration.md)とGetConfiguration service、CONFIGURATION event/receipt v1、DB/APIを追加した。bindExecutionを不変なcommand/goal参照のDB境界として用意し、実Action開始時の呼出しは#194で接続する。操作readyは有効にしない。Bridge/Adapterは0.2.0、profileは1.0.0とし、実package/sourceとruntime manifestから識別を報告する。
+#193で[構成報告](../bridge-configuration.md)とGetConfiguration service、CONFIGURATION event/receipt v1、DB/APIを追加した。#194で実feedback/resultの開始証拠へbindExecutionを接続し、能力・鮮度・排他・期限からreadyを判断する。現在はBridge 0.5.0、Adapter/interfaces 0.4.0、Profile 1.1.0、SQLite schema 7。#193時点の0.2.0 / Profile 1.0.0は過去の構成として保持し、現在の実稼働versionに見せない。
 
 構成報告にはdevice journalで永続増加するconfigurationRevisionとreportSequenceを持たせる。再接続/Bridge起動sessionだけでは新旧を決めず、既保存以下の報告は履歴に残して現在構成を戻さない。journal消失でcounterを0へ戻した場合は自動上書きせず再登録・介入を必要とする。revision更新中にactive/不確定goalがあれば構成切替を拒否する。
 
@@ -135,7 +135,7 @@ Bridgeのcommand/goal履歴と重要eventは自動削除せず10,000件/32 MiB�
 
 #195で[中断API・永続配送・証拠/介入記録](../ros-cancellation.md)を実装した。Bridge 0.4.0、SQLite schema 7を使う。CANCEL_COMMANDだけを追加し、下記のQUERY_COMMAND_STATEは今回実装せず、Bridge内部の元UUID GetResult照会で復旧する。通常command履歴では受付・終端・停止・不確定/人間判断待ちを分けて表示する。
 
-#195で`POST /devices/:deviceId/commands/:commandId/cancel`を追加する。理由コード・Idempotency-Keyを必須にし、cancelId、対象command/goal UUID/server世代、作成/送信期限、操作者を固定する。cancel送信は作成後10秒以内、最大3回、同じcancelId/対象だけを再送する。全goal cancel（zero UUID）や時刻指定の一括cancelは禁止し、対象UUID＋zero timestampで特定goalだけを指定する。[CancelGoal契約](https://github.com/ros2/rcl_interfaces/blob/jazzy/action_msgs/srv/CancelGoal.srv)を参照する。
+#195で`POST /devices/:deviceId/commands/:commandId/cancel`を追加した。理由コード・Idempotency-Keyを必須にし、cancelId、対象command/goal UUID/server世代、作成/送信期限、操作者を固定する。cancel送信は作成後10秒以内、最大3回、同じcancelId/対象だけを再送する。全goal cancel（zero UUID）や時刻指定の一括cancelは禁止し、対象UUID＋zero timestampで特定goalだけを指定する。[CancelGoal契約](https://github.com/ros2/rcl_interfaces/blob/jazzy/action_msgs/srv/CancelGoal.srv)を参照する。
 
 command→goal対応がまだ確認できない受付直後やSEND_INTENT不明では、APIは409 GOAL_UNCONFIRMEDでcancelを実行せず、照会・人間判断へ進む。cancelのためにgoalを作り直さない。機体側から明示的に拒否されたgoalを、cancel再送で実行へ進めない。
 
@@ -175,7 +175,7 @@ Bridgeのjournal書込不能・owner喪失では新規操作を拒否してrunti
 | `telemetry` / `telemetry-receipts`  | #192のROS v3・専用観測行と共通identity台帳、receipt v1を維持。v1/v2を破壊しない                                                                                                                   |
 | `commands` / `command-acks`         | #194のROS command v3。受領/期限拒否ACK v2を維持し、goal受付と実行結果をACK受領へ混同しない                                                                                                        |
 | `bridge-events` / `bridge-receipts` | #193〜#196で各schemaVersion 1を追加。CONFIGURATION、GOAL_ACCEPTED/REJECTED、EXECUTION、FEEDBACK、CANCEL、STOP_OBSERVATION、ROS_HEALTHを区別し、ingestorが正本/拒否履歴と状態投影をcommit後receipt |
-| `bridge-requests`                   | #195のv1。kind=CANCEL_COMMANDまたはQUERY_COMMAND_STATE、requestId・期限・command/goal/config/server世代を固定。cancelだけcancelId必須。任意Action・zero UUID・期限なし要求を拒否                  |
+| `bridge-requests`                   | #195のv1。kind=CANCEL_COMMANDだけを実装。requestId=cancelId・期限・command/goal/config/server世代を固定。QUERY_COMMAND_STATE、任意Action・zero UUID・期限なし要求を受け付けない                   |
 
 新topicも`fleet/v1/devices/{deviceId}/`配下、QoS 1・retainなしとし、deviceは自機events publish・requests/receipts subscribe/receive、APIはrequests publish、ingestorはevents subscribe/receive・receipts publishだけを追加する。既存telemetry/command/status権限は維持し、他機体・wildcard publish・DDS公開権限を与えない。#191は既存topicだけで起動し、新topic利用は各schema/受信側・Policyを揃えてから許可する。実AWSへの適用は別途#64の費用・時間条件を確認し、このIssueでは行わない。
 
@@ -204,4 +204,6 @@ server受信UTCはingestorが付ける保存metadataで、Bridgeのwire本文・
 
 mockだけをROS通信検証としない。#198では独立processを使い、Bridgeだけを止めてもserverを動かす境界と、serverのcacheを失う境界を作る。実nodeの実行回数と保存goal UUID、ROS終端、DB正本とreceiptを照合し、再接続回数や画面表示だけで重複なし/成功としない。ARM64のlocalとAMD64のCI双方でnative Linux実行を確認し、emulationの結果は別記録にする。
 
-#189の検証は公式資料と現行コード/後続Issueとの整合、文書リンク、既存quality checkまでである。実ROS runtime、DDS到達性、QoS/timeout値、Action/cancel挙動、CPU間再現は未検証。実装前にその境界を越えた成功を主張しない。PX4/Gazebo/SLAM・制御アルゴリズム・実機・AIモデル・汎用Task評価/KPIは対象外である。後続PhaseでexecutionContextIdへ展開できる構成と証拠の関連を残すが、Task成功とROS Action成功を同一視しない。
+#189の初版時点では文書検証だけであった。#198でnative Linux ARM64/AMD64の実DDS/MQTT/DB/APIとReact/jsdomを全33ケースで確認した。[E2Eの環境・結果と未検証範囲](../ros-demo.md#7-検証記録と後続phase)を参照する。#199の専用3機体デモは通常構成で帰還・中断・世代喪失とcleanupを再現し、ROS専用checkへ加える。実ブラウザ全機能、PX4/Gazebo/SLAM・制御アルゴリズム・実機・実AWS ROS経路・AIモデル・汎用Task評価/KPI・大規模性能は対象外である。Phase 7へTaskの期待結果/観測証拠とexecutionContext、Phase 8へmodel/baseline/KPIを渡すが、Task成功とROS Action成功を同一視しない。
+
+Python/rclpyの採用は固定環境・非同期境界・検証可能な参照モデルを優先したもので、hard realtimeや性能比較に基づくものではない。独自C++アプリは追加せず、ament_cmake/rosidlによるinterface生成に限定する。試験用UDP fault shimはCであり、BRIDGE_INTEGRATIONを使う障害試験以外へロードしない。
