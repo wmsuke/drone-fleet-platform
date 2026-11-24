@@ -87,7 +87,9 @@ docs/
 │   ├── 0004-aws-iot-connection-and-credentials.md
 │   ├── 0005-delivery-and-recovery.md
 │   ├── 0006-fleet-operations-alerts-and-audit.md
-│   └── 0007-ota-update-evaluation-and-recovery.md
+│   ├── 0007-ota-update-evaluation-and-recovery.md
+│   ├── 0008-ros2-bridge-contract-and-recovery.md
+│   └── 0009-flight-simulation-task-evaluation-and-recovery.md
 ├── aws/
 ├── load-testing/
 ├── releases/
@@ -333,6 +335,22 @@ AWS向け実行では月間200,000件を自主上限とし、当月の使用済�
 - 運用ログを使ったAIによる調査支援
 
 実装順序と完了条件は[ロードマップ](roadmap.md)に記載する。
+
+## Phase 7の飛行シミュレータとTask評価（設計・選定試験）
+
+#220の[ADR 0009](adr/0009-flight-simulation-task-evaluation-and-recovery.md)で、Ubuntu 24.04 / Jazzyを維持し、Gazebo Harmonic 8.15.0・標準multicopter制御・X3・ros_gz 1.0.25を選定した。[選定試験](experiments/gazebo-selection/README.md)は別のLinux arm64 containerでheadless起動、ROS指令による上昇/hover、odometry/clockと終了を確認する。Fleetとの接続やTask機能は#221〜#231で実装する予定であり、選定試験をPhase 7 E2E完了とは扱わない。
+
+```text
+Task API / outbox → MQTT → 永続Bridge → simulation Adapter → ROS / ros_gz → Gazebo
+Task Evaluation ← PostgreSQL ← ingestor ← MQTT ← 実行・構成・連続観測/接触の証拠
+                                              機体側制約・watchdog / HOLD
+```
+
+CloudはTaskの意図・期限・排他・固定構成・証拠評価と制限付き復旧を担当する。Bridgeは既存のcommand/goal対応と再照会/保存再送、Adapterはframe・能力・専用Actionの意味と機体側制約、Gazebo標準pluginは姿勢/速度制御・ローター推力・物理運動を担当する。MQTTとCloudを制御周期や緊急停止の成立条件に入れない。
+
+初期Taskは既知の空中homeへ戻りhoverするRETURN_HOMEのみ。Action成功とTask評価、cancel受付とHOLD/停止証拠を分ける。Task/attempt/evaluation/context/recovery/interventionを独立に保存し、再試行は確かな失敗・停止・fresh観測・排他・永続予算を満たす場合だけ追加1回まで許可する。前goal不明や時計resetではUNCERTAINを保持し、人間へ渡す。着陸やdisarmへ読み替えない。
+
+既存Phase 6の固定imageと34ケース、通常simulator/OTAを維持する。Gazeboの資産・全依存を別imageへ固定し、GPUなしのnative arm64/amd64試験を#221で整備する。Task用追加DB、sim専用Profile/HOLD、bridge-events v2の連続証拠は後続の契約で、現在利用可能なAPI/schemaではない。旧telemetry v1/v2/v3・command v3・ROS event v1を維持し、LOCALをGPSへ補完しない。更新順、評価表と障害試験はADRを参照する。実機はPhase 7.5 #212、AI/model・総合KPIはPhase 8へ分離する。
 
 ## Phase 6のROS 2 Bridge設計（Action・中断・切断復旧の追跡）
 
