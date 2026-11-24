@@ -269,7 +269,7 @@ RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへno
 
 リリース：`v0.7.0`
 
-親Issueは[#219](https://github.com/wmsuke/drone-fleet-platform/issues/219)。#220の[ADR 0009](adr/0009-flight-simulation-task-evaluation-and-recovery.md)でGazebo Harmonic 8.15.0＋標準multicopter/X3＋ros_gz 1.0.25を選定し、Linux arm64でheadless起動・ROS経由の上昇/hoverを[検証](experiments/gazebo-selection/README.md)する。既存のJazzy/Fast DDS固定環境と通常simulatorを維持し、飛行環境は別imageへ固定する。両CPU固定環境・Fleet連携は#221以降であり、まだ動作済みと扱わない。
+親Issueは[#219](https://github.com/wmsuke/drone-fleet-platform/issues/219)。#220の[ADR 0009](adr/0009-flight-simulation-task-evaluation-and-recovery.md)でGazebo Harmonic 8.15.0＋標準multicopter/X3＋ros_gz 1.0.25を選定し、Linux arm64でheadless起動・ROS経由の上昇/hoverを[検証](experiments/gazebo-selection/README.md)する。既存のJazzy/Fast DDS固定環境と通常simulatorを維持し、飛行環境は別imageへ固定する。#221では[固定環境の起動試験](flight-sim.md)を追加する。Fleet連携は#222で扱う。
 
 初期Taskは登録済みの空中homeへのRETURN_HOMEに絞る。着陸・disarmは含めない。Action結果と目的達成、cancel受付とHOLD/停止観測、同commandの配送再送と新attemptの再試行を分ける。未停止・不確定・時計resetを自動再投入しない。
 

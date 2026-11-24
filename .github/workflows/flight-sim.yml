@@ -1,0 +1,35 @@
+name: Flight simulator smoke
+
+on:
+  pull_request:
+    paths:
+      - "flight-sim/**"
+      - "docs/experiments/gazebo-selection/**"
+      - "scripts/test-flight-sim.sh"
+      - ".github/workflows/flight-sim.yml"
+  push:
+    branches: [main]
+    paths:
+      - "flight-sim/**"
+      - "docs/experiments/gazebo-selection/**"
+      - "scripts/test-flight-sim.sh"
+      - ".github/workflows/flight-sim.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-flight-sim.sh
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flight-sim-amd64
+          path: ${{ runner.temp }}/flight-sim.*/
+          if-no-files-found: error
