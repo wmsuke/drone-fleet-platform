@@ -1,6 +1,7 @@
 """E2E専用。HUPで子serverを強制終了・再起動しnetwork namespaceを維持する。"""
 
 import signal
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -22,13 +23,14 @@ def restart(_number, _frame):
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGHUP, restart)
-child = subprocess.Popen([sys.executable, "-m", "fleet_reference.cli", *sys.argv[1:]])
+command = [sys.executable, str(Path(__file__).with_name("reference_test_server.py")), *sys.argv[1:]]
+child = subprocess.Popen(command)
 while child.poll() is None and not stopping:
     if restarting:
         child.kill()
         child.wait(timeout=5)
         print("REFERENCE_TEST_COLD_RESTART", flush=True)
-        child = subprocess.Popen([sys.executable, "-m", "fleet_reference.cli", *sys.argv[1:]])
+        child = subprocess.Popen(command)
         restarting = False
     time.sleep(0.05)
 if child.poll() is None:

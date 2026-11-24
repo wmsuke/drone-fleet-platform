@@ -224,8 +224,40 @@ export async function verifyRecovery({
     executionCount: runtime().executionCount,
   });
 
-  const generation = await start("ros-recovery-generation");
-  const before = runtime();
+  evidence.begin("action-server-restart-no-goal-resubmit");
+  device = "ros-recovery-generation";
+  await switchDevice(device);
+  const generation = await send();
+  // 実execute開始時に参照process自身がSIGSTOPする。DDS probeの待機中に
+  // watchdog終端へ到達しない。閾値は変更せず、停止したprocessを実際に失う。
+  const before = await until(
+    () => {
+      const proof = JSON.parse(
+        compose(
+          "exec",
+          "-T",
+          "ros-reference",
+          "python3",
+          "-c",
+          "import json;from pathlib import Path;p=Path('/tmp/fleet-reference-execution-barrier.json');m=json.loads(p.read_text()) if p.exists() else None;print(json.dumps(dict(m,stopped=any(l.startswith('State:') and l.split()[1] in ('T','t') for l in Path('/proc/'+str(m['pid'])+'/status').read_text().splitlines())) if m else None))",
+        ),
+      );
+      return proof?.commandId === generation.id && proof.stopped
+        ? proof
+        : false;
+    },
+    "actual execution barrier and stopped server",
+    15,
+  );
+  assert.equal(before.deviceId, device);
+  assert.equal(before.rosStatus, 2); // 実ROS GoalStatus.EXECUTING
+  assert.equal(before.acceptedCount, 1);
+  assert.equal(before.executionCount, 1);
+  assert.equal(before.hasTerminal, false);
+  const pending = (await api(`/commands/${generation.id}/bridge-execution`))
+    .body;
+  assert.equal(pending.target.terminalEventId, null);
+  assert.equal(pending.target.stopConfirmed, false);
   signal("SIGHUP");
   const changed = await execution(generation.id, ["UNCERTAIN"]);
   assert.equal(
@@ -234,6 +266,7 @@ export async function verifyRecovery({
     "SERVER_CHANGED",
   );
   assert.equal(changed.target.stopConfirmed, false);
+  assert.equal(changed.target.goalId, before.goalId);
   assert.equal(changed.recovery.humanReviewRequired, true);
   await until(
     () => runtime().serverInstanceId !== before.serverInstanceId,
@@ -253,8 +286,73 @@ export async function verifyRecovery({
     oldServer: before.serverInstanceId,
     newServer: runtime().serverInstanceId,
     executionCount: 0,
+    executionBarrier: before,
   });
   if (runUi) await runUi("uncertain", generation.id, device);
+
+  const terminal = await start(
+    "ros-recovery-terminal",
+    "terminal-before-server-restart-preserved",
+  );
+  const saved = await execution(terminal.id, ["FAILED"], true);
+  const event = saved.events.find(
+    (e) => e.eventId === saved.target.terminalEventId,
+  );
+  assert.equal(event.message.reason, "INJECTED_FAILURE");
+  assert.equal(event.disposition, "APPLIED");
+  const oldServer = saved.configuration.serverInstanceId;
+  signal("SIGHUP");
+  const currentServer = await until(() => {
+    const r = runtime();
+    return r.serverInstanceId !== oldServer ? r : false;
+  }, "terminal case server changed");
+  await until(async () => {
+    const report = (await api(`/devices/${device}/bridge-configuration`)).body
+      .reported;
+    const h = await health();
+    return (
+      report?.configuration.serverInstanceId ===
+        currentServer.serverInstanceId &&
+      h.fresh &&
+      h.latest?.message.serverInstanceId === currentServer.serverInstanceId
+    );
+  }, "new server configuration and health");
+  publish("commands", terminal.wire);
+  await setTimeout(1000);
+  const retained = (await api(`/commands/${terminal.id}/bridge-execution`))
+    .body;
+  assert.equal(retained.command.executionStatus, "FAILED");
+  assert.equal(retained.target.goalId, saved.target.goalId);
+  assert.equal(retained.target.terminalEventId, saved.target.terminalEventId);
+  assert.equal(retained.target.stopConfirmed, true);
+  assert.equal(retained.target.conflicted, false);
+  assert.deepEqual(retained.configuration, saved.configuration);
+  assert.deepEqual(
+    retained.events.find((e) => e.eventId === event.eventId).message,
+    event.message,
+  );
+  assert.equal(
+    retained.events.filter(
+      (e) =>
+        e.disposition === "APPLIED" &&
+        e.message.kind === "EXECUTION" &&
+        ["FAILED", "SUCCEEDED", "CANCELLED"].includes(e.message.status),
+    ).length,
+    1,
+  );
+  const fresh = runtime();
+  assert.equal(fresh.acceptedCount, 0);
+  assert.equal(fresh.executionCount, 0);
+  evidence.push({
+    case: "terminal-before-server-restart-preserved",
+    commandId: terminal.id,
+    goalId: saved.target.goalId,
+    terminalEventId: event.eventId,
+    resultHash: event.message.result.hash,
+    oldServer,
+    newServer: fresh.serverInstanceId,
+    executionCount: fresh.executionCount,
+  });
   console.log(
     "Independent MQTT/DDS/node/Bridge/server faults, local constraints and no duplicate execution: passed",
   );

@@ -124,6 +124,8 @@ corepack pnpm test:ros-e2e
 
 [#198のPR #210](https://github.com/wmsuke/drone-fleet-platform/pull/210)と[CI run](https://github.com/wmsuke/drone-fleet-platform/actions/runs/42944162226)にnative Linux ARM64/AMD64の33ケース成功、25 device（batch最大10台）、27 command/goal・18結果/構成binding・7介入、cleanup残存0を記録した。HTTP往復遅延はhost harnessの標本で、DDS/制御周期・大規模性能の保証ではない。[障害E2E](ros-e2e.md)のreportがPASSED/FAILED/NOT_EXECUTEDを分ける。artifactは14日保持であり、失効後は固定commitで再実行する。
 
+#188の最終レビューで確定終端保持を追加し、現行の障害E2Eは34ケースである。世代喪失の実process停止barrierと、複数機体受付の同一key・有界再評価は上の障害E2E文書を参照する。33ケースの過去記録を現在の追加ケースの成功に読み替えない。
+
 ROS専用checkは`ROS 2 reference and Bridge lifecycle smoke`（本デモを含む）と`ROS 2 DDS, MQTT and dashboard fault E2E`。通常品質checkは`Lint, typecheck, test, and build`。今回のcommit・実環境・試行と各checkの結果はPRへ記録し、上記の#198時点の結果と混同しない。
 
 Python/rclpyは固定Jazzy環境で非同期clientと小さな参照モデルを扱うため採用した。性能比較やhard realtime要件による選択ではない。独自C++アプリは追加せず、ament_cmake/rosidlがinterface bindingを生成する。`ros/tools/dds_fault.c`は#198系の試験専用UDP fault shim（C）で、通常デモではロードしない。

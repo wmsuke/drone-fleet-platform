@@ -14,7 +14,7 @@ for path in Path("/proc").glob("[0-9]*/cmdline"):
     except (FileNotFoundError, ProcessLookupError):
         continue
     target = (any(a.endswith(b"/reference_supervisor.py") for a in args) if name == "SIGHUP"
-              else b"fleet_reference.cli" in args)
+              else any(a.endswith(b"/reference_test_server.py") for a in args))
     if target:
         pids.append(int(path.parent.name))
 assert len(pids) == 1, pids

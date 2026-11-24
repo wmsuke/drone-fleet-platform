@@ -1,6 +1,6 @@
 # 実ROS・MQTTのBridge障害E2E
 
-Issue #198。`corepack pnpm test:ros-e2e`で固定Jazzyの参照node、Bridge、Mosquitto、PostgreSQL、API、React画面を接続する。AWS認証情報、実機、PX4、Gazebo、host firewallを使わない。#194〜#196の24ケースを再利用し、9ケースを追加して全33ケースの実行を要求する。
+Issue #198。`corepack pnpm test:ros-e2e`で固定Jazzyの参照node、Bridge、Mosquitto、PostgreSQL、API、React画面を接続する。AWS認証情報、実機、PX4、Gazebo、host firewallを使わない。#194〜#196の24ケースと#198の追加9ケースに、#188最終レビューで確定終端の保持1ケースを加え、現在は全34ケースを必須とする。
 
 ## 実行と対象
 
@@ -10,7 +10,7 @@ Node.js 22、依存関係のインストール、Dockerが必要。ROSは固定L
 corepack pnpm test:ros-e2e
 ```
 
-`ROS_COMMANDS_CASES`による部分実行は専用E2Eでは拒否する。原因調査用の`corepack pnpm test:ros-commands`と`ROS_COMMANDS_CASES=cancel/recovery`は従来どおり利用できるが、部分試験を全33ケースの成功に読み替えない。
+`ROS_COMMANDS_CASES`による部分実行は専用E2Eでは拒否する。原因調査用の`corepack pnpm test:ros-commands`と`ROS_COMMANDS_CASES=cancel/recovery`は従来どおり利用できるが、部分試験を全34ケースの成功に読み替えない。
 
 参照nodeは設定を切り替え、1batch最大10台、Bridgeは同時最大2台とする。odometryは10 Hz、battery/diagnostics/runtime/heartbeatは1 Hz、保存feedbackは最大1 Hz。sensor DDSはBEST_EFFORT/volatile/depth 5、runtimeはRELIABLE/volatile/depth 1、MQTTはQoS 1。実行した構成のsource/依存lock・architectureはROS環境manifestへ記録する。これは大規模性能や厳密な制御周期の保証ではない。
 
@@ -33,11 +33,15 @@ corepack pnpm test:ros-e2e
 
 成功と中断の競合では、元goalのSUCCEEDED正本がcancelで上書きされないことを必須とする。結果と停止証拠が10秒以内にそろえばCOMPLETED、遅延で欠ければUNCERTAIN・人間判断待ちであることを受信時刻から照合する。後者で停止不明なら次commandは拒否される。試験の待機予算はmonotonic clockで測り、OS時計の変更で短縮しない。
 
+server世代喪失はE2E専用wrapperを使う。`BRIDGE_INTEGRATION=true`と対象deviceの明示設定時だけ、元executeが開始を記録した直後の制約検査境界でserver process自身をSIGSTOPする。command/goal/server・実ROS EXECUTING・受理/実行件数・未終端と、kernelの停止状態を照合してからsupervisorへHUPを送り、停止中の子をSIGKILL・再生成する。watchdog等の閾値や通常packageは変えず、通常Composeはwrapperを使わない。これによりprobe中に確定終端へ到達する競合を除く。別ケースでは故障前のFAILEDと停止観測を保存し、世代変更・重複配送後も元の終端event/hash・goal・実行時構成が不変で、新serverの受理/実行0であることを確認する。確定結果をUNCERTAINへ戻さない。
+
+複数機体operationは、group設定後に両対象のfresh/readyを取得し、同じIdempotency-Key・本文で受付する。APIが明示的に409のhealth/configuration/observation未準備を返した場合だけ、最大15秒・10 POSTの範囲で再評価する。応答不明、別の409や500を自動再試行せず、別keyへ変えない。期限内の各HTTPも残予算で打ち切り、受付済みなら同じoperationを追跡する。APIのhealth gateは変更しない。試行数・key・実測待機時間をcaseの証拠へ残す。
+
 ## レポートと後片付け
 
 入口が表示する`Results:`の一時ディレクトリへ以下を保存する。
 
-- `report.json`: 全33ケースのPASSED/FAILED/NOT_EXECUTED、process終了値、実測HTTP往復遅延、環境・保持しない保証範囲、cleanup。
+- `report.json`: 全34ケースのPASSED/FAILED/NOT_EXECUTED、process終了値、実測HTTP往復遅延、環境・保持しない保証範囲、cleanup。
 - `action-evidence.json` / `current-case.json`: 完了ごとの証拠と進行中ケース。途中失敗で、それ以降を成功扱いしない。
 - `metadata.json` / `environment-manifest.json`: commit/関連worktree差分、host/engine/ROSのarchitecture、Node/Python/固定依存、周期/QoS/照会予算、試行情報。
 - `http.jsonl`: host harnessが実測した各HTTP要求のstatus/所要ms。画面内HTTPやDDS全sampleの遅延を計測したものではない。p50/p95/maxはこの標本だけから求め、SLOや性能保証にしない。
@@ -52,6 +56,6 @@ corepack pnpm test:ros-e2e
 ROS_E2E_FAIL_AT=after-start corepack pnpm test:ros-e2e
 ```
 
-CIは参照node/Bridge lifecycle/観測のcheckと、全33ケースの`ROS 2 DDS, MQTT and dashboard fault E2E`を別jobにする。故障E2Eの結果とcleanupは失敗時もartifactへ保存する。入口未実行・中断・Docker構築失敗をROS成功へ読み替えない。通常の品質checkでskipされる画面E2Eも、専用jobでは必須のケースとして検証する。
+CIは参照node/Bridge lifecycle/観測のcheckと、全34ケースの`ROS 2 DDS, MQTT and dashboard fault E2E`を別jobにする。故障E2Eの結果とcleanupは失敗時もartifactへ保存する。入口未実行・中断・Docker構築失敗をROS成功へ読み替えない。通常の品質checkでskipされる画面E2Eも、専用jobでは必須のケースとして検証する。
 
 実機の安全停止、安全認証、PX4、AI、large-scale性能は未検証。実AWSは#64の別範囲とし、この試験では使用・課金しない。環境別の実行結果と未確認事項はPRへ記録する。
