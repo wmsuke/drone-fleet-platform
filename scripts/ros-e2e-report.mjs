@@ -28,6 +28,7 @@ export const requiredCases = [
   "bridge-restart-queries-original-goal",
   "ros-node-loss-does-not-imply-stop",
   "action-server-restart-no-goal-resubmit",
+  "terminal-before-server-restart-preserved",
   "two-device-namespace-routing",
   "delayed-feedback-does-not-rewind-terminal",
   "historical-configuration-retained",

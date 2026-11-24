@@ -11,6 +11,7 @@ import { Buffer } from "node:buffer";
 import { performance } from "node:perf_hooks";
 import { appendFileSync, readFileSync } from "node:fs";
 import { evidenceLog } from "./ros-e2e-report.mjs";
+import { acceptFleetOperation } from "./ros-e2e-acceptance.mjs";
 import {
   verifyNamespaceAndFeedback,
   reconcile,
@@ -573,16 +574,12 @@ for (const id of [device, "ros-command-reject"])
       .status,
     201,
   );
-const op = await api(
-  "/fleet-operations",
-  { groupId: group.body.groupId, type: "RETURN_HOME" },
-  {
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": randomUUID(),
-    },
-  },
-);
+const op = await acceptFleetOperation({
+  api,
+  devices: [device, "ros-command-reject"],
+  groupId: group.body.groupId,
+  key: randomUUID(),
+});
 assert.equal(op.status, 202, JSON.stringify(op.body));
 const summary = await until(async () => {
   const r = await api(`/fleet-operations/${op.body.operationId}`);
@@ -595,6 +592,7 @@ assert.equal(summary.unsuccessfulCount, 1);
 evidence.push({
   case: "fixed-denominator-aggregation",
   operationId: op.body.operationId,
+  acceptance: op.acceptance,
 });
 // 通常simulatorは引き続きv2で受領・実行結果を返す。
 evidence.begin("simulator-v2-coexistence");

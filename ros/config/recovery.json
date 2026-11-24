@@ -20,6 +20,7 @@
       "scenario": "sensor_stale",
       "failure_after_sec": 0.4
     },
-    { "device_id": "ros-e2e-ui", "scenario": "unresponsive" }
+    { "device_id": "ros-e2e-ui", "scenario": "unresponsive" },
+    { "device_id": "ros-recovery-terminal", "scenario": "abort" }
   ]
 }
