@@ -4,14 +4,16 @@ COPY docs/experiments/gazebo-selection/prepare.py docs/experiments/gazebo-select
 COPY flight-sim/packages.amd64.tsv /opt/flight/
 RUN arch=$(dpkg --print-architecture) && \
     lock="/opt/flight/packages.$arch.tsv" && test -s "$lock" && \
-    dpkg-query -W > /tmp/base-packages.tsv && \
-    awk 'NR==FNR {base[$1]=$2; next} base[$1]!=$2 {print $1 "=" $2}' \
+    sed -i 's|^URIs: .*|URIs: https://snapshot.ubuntu.com/ubuntu/20261124T070000Z/|' /etc/apt/sources.list.d/ubuntu.sources && \
+    dpkg-query -W | sed -E 's/:(amd64|arm64)\t/\t/' > /tmp/base-packages.tsv && \
+    awk 'NR==FNR {base[$1]=$2; next} {sub(/:(amd64|arm64)$/, "", $1)} base[$1]!=$2 {print $1 "=" $2}' \
       /tmp/base-packages.tsv "$lock" > /tmp/packages-to-install && \
     mapfile -t packages < /tmp/packages-to-install && \
     apt-get update -o APT::Update::Error-Mode=any && \
     apt-get install -y --no-install-recommends "${packages[@]}" && \
     dpkg-query -W > /opt/flight/packages.tsv && \
-    diff -u "$lock" /opt/flight/packages.tsv && \
+    diff -u <(sed -E 's/:(amd64|arm64)\t/\t/' "$lock" | LC_ALL=C sort) \
+      <(sed -E 's/:(amd64|arm64)\t/\t/' /opt/flight/packages.tsv | LC_ALL=C sort) && \
     source /opt/ros/jazzy/setup.bash && test "$(gz sim --versions)" = 8.15.0 && \
     rm -rf /var/lib/apt/lists/* /tmp/base-packages.tsv /tmp/packages-to-install
 RUN python3 /opt/flight/prepare.py && \
