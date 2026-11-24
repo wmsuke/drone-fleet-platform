@@ -1,0 +1,93 @@
+{
+  "issue": 220,
+  "scope": "構成選定の起動試験のみ。Fleet/Task機能は未検証",
+  "date": "2026-11-24",
+  "baseCommit": "b54a135",
+  "host": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "docker": "29.8.2",
+    "containerArchitecture": "aarch64"
+  },
+  "baseImage": "ros@sha256:8eed0a4669bbf43ee331878a4c39bd8ebddea8e3312a58b4fae8edb14526b617",
+  "versions": {
+    "gzSim": "8.15.0",
+    "rosGz": "1.0.25",
+    "python": "3.12.3",
+    "rosDistro": "jazzy",
+    "ubuntu": "24.04"
+  },
+  "assets": {
+    "gzSimRevision": "a7f89720bbcb1a5191e4eb53917fef048c26740c",
+    "worldSourceSha256": "836751d49d0049171586c5dbc58a18ad7a37ef8a475de9a796b5b1ff8168547b",
+    "probeWorldSha256": "207806dd9bd92cf3ab5e4e8a980225adee1b597cb136b105f7939386547925f8",
+    "modelRevision": 4,
+    "modelZipSha256": "c995a307936ce7df5a544e6c89b0396d054befa6ff5fbdbf262949b59cc12247",
+    "packagesSha256": "b7d43fbc83f82fee6209523e3e1c30d0fefca7e8885c0774ede6a095e20f1fbc"
+  },
+  "resources": {
+    "measurement": "実行中の1点。peakではない",
+    "cpuPercent": 80.69,
+    "memoryMiB": 137.6
+  },
+  "trials": [
+    {
+      "status": "PASSED",
+      "scope": "selection-only",
+      "before": {
+        "receivedMonotonic": 6853.210656385,
+        "stamp": 3.04,
+        "frame": "x3/odom",
+        "childFrame": "x3/base_footprint",
+        "position": [
+          2.0904848696758905e-15, -2.005853457908662e-16, 0.6178210381679615
+        ],
+        "speed": 0.0026326009736954425
+      },
+      "after": {
+        "receivedMonotonic": 6870.005359507,
+        "stamp": 10.06,
+        "frame": "x3/odom",
+        "childFrame": "x3/base_footprint",
+        "position": [
+          7.987620620265087e-15, -2.0247964333758128e-16, 1.5234176537973512
+        ],
+        "speed": 0.00021217394188255412
+      },
+      "riseM": 0.9055966156293896,
+      "odometrySamples": 503,
+      "clockSamples": 10074,
+      "simTimeRange": [0.002, 10.075],
+      "childExitCodes": [0, 0]
+    },
+    {
+      "status": "PASSED",
+      "scope": "selection-only",
+      "before": {
+        "receivedMonotonic": 6946.924893598,
+        "stamp": 3.06,
+        "frame": "x3/odom",
+        "childFrame": "x3/base_footprint",
+        "position": [
+          2.133111727412411e-15, -9.206328548437536e-17, 0.7738235315911445
+        ],
+        "speed": 0.0014638002558631236
+      },
+      "after": {
+        "receivedMonotonic": 6962.677102083,
+        "stamp": 10.06,
+        "frame": "x3/odom",
+        "childFrame": "x3/base_footprint",
+        "position": [
+          7.845661333579033e-15, 3.353054677336808e-17, 1.6839372217454789
+        ],
+        "speed": 0.00022011101581398407
+      },
+      "riseM": 0.9101136901543344,
+      "odometrySamples": 503,
+      "clockSamples": 10030,
+      "simTimeRange": [0.002, 10.078],
+      "childExitCodes": [0, 0]
+    }
+  ]
+}

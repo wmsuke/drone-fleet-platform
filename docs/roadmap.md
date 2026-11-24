@@ -10,6 +10,8 @@ Phase 5のlocal simulator OTAまで実装した。Docker Composeによるロー�
 
 日付による期限は設けず、各Phaseの完了条件を満たした時点で次へ進む。個別の作業と進捗はGitHub Issueで管理する。
 
+Phase 6 #188は#189〜#199とレビュー修正#218を完了した。Phase 7 #219は#220で構成選定・起動試験と[ADR 0009](adr/0009-flight-simulation-task-evaluation-and-recovery.md)を整備する段階であり、飛行Adapter・Task API・評価/復旧は後続実装とする。
+
 ## Phase 0：開発基盤
 
 TypeScriptのモノレポと、開発・検証に必要な環境を整える。
@@ -263,26 +265,37 @@ RETURN_HOMEは専用Actionで既知homeへの帰還として扱い、REBOOTへno
 
 参照node/BridgeはPython、ROS interface生成はament_cmakeを使う。C++アプリは必要になった範囲で別途検討する。
 
-## Phase 7：ドローンシミュレータ連携
+## Phase 7：飛行シミュレータ連携とTask評価・復旧
 
 リリース：`v0.7.0`
 
-飛行シミュレータの機体をFleet Platformへ接続する。
+親Issueは[#219](https://github.com/wmsuke/drone-fleet-platform/issues/219)。#220の[ADR 0009](adr/0009-flight-simulation-task-evaluation-and-recovery.md)でGazebo Harmonic 8.15.0＋標準multicopter/X3＋ros_gz 1.0.25を選定し、Linux arm64でheadless起動・ROS経由の上昇/hoverを[検証](experiments/gazebo-selection/README.md)する。既存のJazzy/Fast DDS固定環境と通常simulatorを維持し、飛行環境は別imageへ固定する。両CPU固定環境・Fleet連携は#221以降であり、まだ動作済みと扱わない。
+
+初期Taskは登録済みの空中homeへのRETURN_HOMEに絞る。着陸・disarmは含めない。Action結果と目的達成、cancel受付とHOLD/停止観測、同commandの配送再送と新attemptの再試行を分ける。未停止・不確定・時計resetを自動再投入しない。
+
+実装順は固定環境/再現scenario#221 → 観測/Action Adapter#222 → Task/attempt受付#223 → 実使用context固定#224 → 証拠評価#225 → 停止確認/予算付き復旧#226 → 中断/介入#227 → 画面#228 → 実飛行障害E2E#229 → 結果集計#230 → デモ/保証範囲#231とする。並行可能な範囲も各Issueの着手条件に従う。現在の#220は設計と選定試験のみを対象とする。
 
 ### 作業範囲
 
-- Gazebo、PX4 SITL、ArduPilot SITLなどから構成を選定
+- Gazeboをversion/資産/seed/物理設定で固定し、GPUなしheadlessのnative Linux arm64/amd64で検証
 - シミュレータとROS 2・Bridgeの接続
 - 位置、バッテリー、飛行状態、エラーの取得
 - 対応する遠隔操作の検証
-- Taskの期待結果・制約・観測証拠とexecutionContextの定義。ROS Action成功とTask成功を分ける
+- Task/attempt/evaluation/executionContextとrecovery/interventionの永続化。desiredと実使用構成、AI非使用と未知versionを分ける
+- 位置・速度・滞在時間・制約/衝突・証拠連続性による成功/失敗/不確定の評価
+- 確かな失敗/停止/HOLD・排他・回数/時間/費用枠に基づく追加1回までの再試行と人間引き継ぎ
+- sim clock reset、欠測、障害物停滞、MQTT/DDS/プロセス断の独立したscenarioと結果集計
 
 ### 完了条件
 
 - シミュレータ上の機体をダッシュボードで確認できる。
 - 飛行に伴う位置や状態の変化が反映される。
 - 対応するコマンドと制約が文書化されている。
-- 起動から操作までを再現できるデモがある。
+- Taskの評価からattempt/command/goal・実使用構成・根拠イベントを追跡でき、更新や再試行後も過去の参照が変わらない。
+- 未停止・不確定・古い観測では再試行せず、上限・中断・人間介入と不明な時間/費用を記録できる。
+- 起動から操作・評価・復旧までを再現するデモと実Gazebo E2Eがあり、必須case・未実行・資源・cleanupを記録している。
+
+Phase 6の34ケースと既存receipt/journal/構成snapshot/command排他を回帰検証する。継続障害はlocal、AWSを使う場合は#64の費用・件数・時間条件を適用する。実機接続・物理安全停止・操縦者の運用境界はPhase 7.5 [#212](https://github.com/wmsuke/drone-fleet-platform/issues/212)へ分離する。SLAM/制御器/障害物回避モデルの開発、AI modelと総合KPIダッシュボードはPhase 7に含めない。
 
 ## Phase 8：AIによる運用支援
 
