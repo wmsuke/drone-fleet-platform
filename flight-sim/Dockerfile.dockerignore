@@ -1,0 +1,5 @@
+*
+!flight-sim/smoke.py
+!docs/experiments/gazebo-selection/prepare.py
+!docs/experiments/gazebo-selection/packages.arm64.tsv
+!flight-sim/packages.amd64.tsv
