@@ -13,6 +13,7 @@ echo "Results: $results"
 cleanup() {
   local status=$?
   trap - EXIT
+  "${compose[@]}" cp flight-sim:/tmp/flight-results "$results/interrupted" >> "$results/copy.log" 2>&1 || true
   "${compose[@]}" logs --no-color > "$results/services.log" 2>&1 || true
   "${compose[@]}" down --volumes --remove-orphans --rmi local > "$results/cleanup.log" 2>&1 ||
     status=1
@@ -21,6 +22,14 @@ cleanup() {
       docker image rm "$image" >> "$results/cleanup.log" 2>&1 || status=1
     fi
   done
+  {
+    docker ps -aq --filter "label=com.docker.compose.project=$project" &&
+    docker volume ls -q --filter "label=com.docker.compose.project=$project" &&
+    docker network ls -q --filter "label=com.docker.compose.project=$project" &&
+    docker image ls -q "$project:*" &&
+    docker image ls --format '{{.Repository}}' | awk -v prefix="$project-" 'index($0, prefix)==1'
+  } > "$results/remaining.txt" || status=1
+  if [[ -s "$results/remaining.txt" ]]; then status=1; fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -34,7 +43,11 @@ docker build --network none -t "$ROS_BRIDGE_IMAGE" ros > "$results/bridge-build.
 for attempt in 1 2; do
   "${compose[@]}" exec -T flight-sim bash -c \
     'source /opt/ros/jazzy/setup.bash && exec python3 /opt/flight/smoke.py --fleet-device gazebo-x3' \
-    > "$results/flight-$attempt.log"
+    > "$results/flight-$attempt.log" 2>&1 || {
+      "${compose[@]}" cp flight-sim:/tmp/flight-results "$results/flight-$attempt" || true
+      exit 1
+    }
+  "${compose[@]}" cp flight-sim:/tmp/flight-results "$results/flight-$attempt"
   "${compose[@]}" exec -T flight-sim mv /tmp/flight-results "/tmp/flight-results-$attempt"
 done
-node scripts/verify-flight-observations.mjs "$API_PORT" | tee "$results/observations.json"
+node scripts/verify-flight-observations.mjs "$API_PORT" "$results" | tee "$results/observations.json"

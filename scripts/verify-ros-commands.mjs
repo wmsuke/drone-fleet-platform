@@ -191,8 +191,22 @@ function publish(kind, body, target = device) {
     JSON.stringify(body),
   );
 }
-async function send(type = "RETURN_HOME") {
-  const r = await api(`/devices/${device}/commands`, { type });
+async function send(type = "RETURN_HOME", refreshHealth = false) {
+  const path = `/devices/${device}/commands`;
+  let r = await api(path, { type });
+  // Only a definitive pre-acceptance rejection permits another POST.
+  // A transport error escapes directly, since acceptance could have occurred.
+  for (
+    let attempt = 1;
+    refreshHealth &&
+    attempt < 3 &&
+    r.status === 409 &&
+    r.body.error === "ROS_HEALTH_UNAVAILABLE";
+    attempt++
+  ) {
+    await ready();
+    r = await api(path, { type });
+  }
   assert.equal(r.status, 202, JSON.stringify(r.body));
   const wire = payload(r.body.commandId);
   assert.equal(wire.schemaVersion, 3);
@@ -631,7 +645,7 @@ await verifyCancellations({
 evidence.begin("server-generation-changed");
 await switchReference("commands", "ros-command-generation");
 await switchDevice("ros-command-generation", "AFTER_SEND_GOAL");
-const changed = await send();
+const changed = await send("RETURN_HOME", true);
 await barrier(changed.id);
 await until(() => runtime().acceptedCount === 1, "generation fixture accepted");
 const originalServer = runtime().serverInstanceId;

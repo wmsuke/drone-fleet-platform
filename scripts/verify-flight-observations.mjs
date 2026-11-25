@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
 /* global fetch, AbortSignal */
@@ -7,6 +9,21 @@ import { setTimeout } from "node:timers/promises";
 
 const base = `http://127.0.0.1:${process.argv[2]}/devices/gazebo-x3`;
 const namespace = `fleet/d_${Buffer.from("gazebo-x3").toString("hex")}`;
+const runs = await Promise.all(
+  [1, 2].map(async (attempt) => {
+    const path = join(process.argv[3], `flight-${attempt}`, "result.json");
+    return JSON.parse(await readFile(path, "utf8"));
+  }),
+);
+for (const run of runs) {
+  assert.equal(run.status, "PASSED");
+  assert.equal(run.scenario, "ascent-hover");
+  assert.deepEqual(run.childExitCodes, [0, 0]);
+  assert.equal(run.clockEpoch, 0); // Epoch local to each new world.
+  assert.match(run.worldInstanceId, /^[0-9a-f-]{36}$/);
+}
+assert.notEqual(runs[0].worldInstanceId, runs[1].worldInstanceId);
+assert.equal(runs[0].worldSha256, runs[1].worldSha256);
 const deadline = performance.now() + 15_000;
 while (performance.now() < deadline) {
   const response = await fetch(`${base}/observations?limit=100`, {
