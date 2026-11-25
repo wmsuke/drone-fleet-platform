@@ -18,3 +18,13 @@ Dockerに4 vCPU、8 GiBメモリ、20 GiB空きを確保する。これはビル
 結果ディレクトリにイメージID、CPU構成、パッケージ一覧、worldのSHA-256、観測、プロセス終了記録を保存する。各試行は外部ネットワークを持たないコンテナで動き、DDSはlocalhost、Gazebo Transportは試行固有のpartitionに閉じる。MQTTサービスは起動しない。終了時に専用コンテナと試験用イメージのタグを削除する。Dockerのビルドキャッシュは再利用する。
 
 ベースOCIはdigest指定。arm64は#220の実測一覧、amd64は同ベースと公式APTで解決した完全版一覧を使い、導入後に全パッケージを照合する。固定版が配布元から消えた場合はビルドを失敗させる。上流world、X3モデル、生成済みworldをSHA-256で照合する。Fleet向けの帰還Action、電池・接触の証拠とTask評価は後続Issueで扱う。
+
+## Fleetへの観測接続
+
+```bash
+bash scripts/test-flight-observations.sh
+```
+
+固定X3の3D odometryをROSで受け取り、既存Bridgeの観測契約に変換する。固定worldではGazeboのworld原点とFleetのLOCAL map原点、モデル原点とbase_linkがそれぞれ一致する。Gazeboの3D odometryはworld基準のposeと機体基準のtwistを出すため、この組に限定して変換する。入力frame・時刻表現・有限値を検証し、同じsim timestampをBridgeへ伝える。座標変換の根拠は[Gazebo OdometryPublisherの実装](https://github.com/gazebosim/gz-sim/blob/a7f89720bbcb1a5191e4eb53917fef048c26740c/src/systems/odometry_publisher/OdometryPublisher.cc)を参照。
+
+専用Compose内でDDSはlocalhostに閉じ、BridgeのMQTTはその試験専用brokerへ接続する。APIへの到達試験ではLOCAL/ENUの位置と速度の単位、飛行中の高度変化、battery欠測を確認する。この経路は観測専用で、飛行指令は固定シナリオのROS入力から送る。

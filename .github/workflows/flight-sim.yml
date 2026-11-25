@@ -33,3 +33,18 @@ jobs:
           name: flight-sim-amd64
           path: ${{ runner.temp }}/flight-sim.*/
           if-no-files-found: error
+
+  observations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-flight-observations.sh
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flight-observations-amd64
+          path: ${{ runner.temp }}/flight-observations.*/
+          if-no-files-found: error
