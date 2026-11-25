@@ -19,7 +19,7 @@ RUN arch=$(dpkg --print-architecture) && \
 RUN python3 /opt/flight/prepare.py && \
     echo '207806dd9bd92cf3ab5e4e8a980225adee1b597cb136b105f7939386547925f8  /tmp/flight-probe/probe.sdf' | sha256sum -c - && \
     chmod -R a+rX /tmp/flight-probe
-COPY flight-sim/smoke.py /opt/flight/smoke.py
+COPY flight-sim/smoke.py flight-sim/observations.py /opt/flight/
 ENV PYTHONDONTWRITEBYTECODE=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp HOME=/tmp ROS_HOME=/tmp/ros-home
 USER 10001:10001
 ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && exec python3 /opt/flight/smoke.py \"$@\"", "flight-sim"]

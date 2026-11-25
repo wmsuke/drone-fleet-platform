@@ -13,6 +13,7 @@ from pathlib import Path
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from observations import fleet_namespace, normalize_odometry, publisher as fleet_publisher
 import rclpy
 from rclpy.qos import qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
@@ -21,7 +22,10 @@ from rosgraph_msgs.msg import Clock
 root = Path('/tmp/flight-probe')
 parser = argparse.ArgumentParser()
 parser.add_argument('--expect-ready-timeout', action='store_true')
+parser.add_argument('--fleet-device')
 args = parser.parse_args()
+fleet_frame = fleet_namespace(args.fleet_device) if args.fleet_device else None
+fleet_output = None
 output = Path('/tmp/flight-results')
 output.mkdir()
 run_id = str(uuid.uuid4())
@@ -54,6 +58,10 @@ def launch(name, args):
 
 
 def odometry(message):
+    if fleet_output is not None:
+        observation = normalize_odometry(message, fleet_frame)
+        if observation is not None:
+            fleet_output.publish(observation)
     p, v = message.pose.pose.position, message.twist.twist.linear
     samples.append({'receivedMonotonic': time.monotonic(),
                     'stamp': message.header.stamp.sec + message.header.stamp.nanosec / 1e9,
@@ -92,6 +100,9 @@ try:
     ])
     rclpy.init()
     node = rclpy.create_node('flight_sim_smoke')
+    if fleet_frame is not None:
+        fleet_output = fleet_publisher(node, fleet_frame)
+
     odom_topic = '/missing/odometry' if args.expect_ready_timeout else '/model/x3/odometry'
     node.create_subscription(Odometry, odom_topic, odometry,
                              qos_profile_sensor_data)
@@ -100,7 +111,8 @@ try:
     publisher = node.create_publisher(Twist, '/X3/gazebo/command/twist', 10)
     deadline = time.monotonic() + (8 if args.expect_ready_timeout else 30)
     while (not samples or len(clocks) < 2 or clocks[-1] <= clocks[0]
-           or not publisher.get_subscription_count()):
+           or not publisher.get_subscription_count()
+           or (fleet_output is not None and not fleet_output.get_subscription_count())):
         if time.monotonic() >= deadline:
             raise TimeoutError('READY_TIMEOUT')
         spin(0.1)

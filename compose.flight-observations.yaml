@@ -1,0 +1,30 @@
+services:
+  flight-sim:
+    image: ${FLIGHT_SIM_IMAGE:?}
+    entrypoint: ["sleep", "infinity"]
+    ipc: shareable
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  flight-bridge:
+    image: ${ROS_BRIDGE_IMAGE:?}
+    command:
+      [
+        "ros2",
+        "run",
+        "fleet_bridge",
+        "run",
+        "--ros-args",
+        "-p",
+        "use_sim_time:=true",
+      ]
+    environment:
+      BRIDGE_DEVICE_ID: gazebo-x3
+      MQTT_HOST: mqtt
+      ROS_DOMAIN_ID: "43"
+    network_mode: service:flight-sim
+    ipc: service:flight-sim
+    volumes: [flight-observation-state:/data/fleet]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  flight-observation-state:
